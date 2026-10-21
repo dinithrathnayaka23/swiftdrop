@@ -141,7 +141,15 @@ swiftdrop/
 │   ├── src/main/java/com/swiftdrop/
 │   │   ├── common/              shared: api paths, exceptions, security (JWT), messaging, logging, CORS
 │   │   ├── identity/ user/ parcel/ dispatch/ merchant/ notification/ config/ reporting/
-│   │   │   └── controller/ service/ repository/ model/ dto/
+│   │   │   ├── package-info.java    module scope and boundaries
+│   │   │   ├── controller/          REST endpoints
+│   │   │   ├── service/             business logic (the module's public entry point)
+│   │   │   ├── repository/          Spring Data JPA (private to the module)
+│   │   │   ├── model/               JPA entities, enums
+│   │   │   ├── dto/request/  dto/response/
+│   │   │   ├── mapper/              entity <-> DTO mapping
+│   │   │   ├── exception/           module-specific exceptions
+│   │   │   └── event/               RabbitMQ publishers/listeners (parcel, dispatch, merchant, notification)
 │   │   └── SwiftDropApplication.java
 │   ├── src/main/resources/
 │   │   ├── application*.yml
