@@ -46,7 +46,9 @@ Small, focused commits are easier to review.
 ## 4. Code conventions
 
 ### Backend
-- Package by module: `com.swiftdrop.<module>.{controller,service,repository,model,dto}`.
+- Package by module: `com.swiftdrop.<module>.{controller,service,repository,model,dto.request,dto.response,mapper,exception}`
+  (+ `event` for modules that publish/consume RabbitMQ messages). Each module's `package-info.java` describes its scope.
+- Tests mirror the main packages: `src/test/java/com/swiftdrop/<module>/...`.
 - Controllers stay thin: validate input, call a service, map to a DTO. Business logic lives in services.
 - A module talks to another module through that module's **service** (or events), never its repository.
 - Use constructor injection (`@RequiredArgsConstructor`), not field `@Autowired`.
