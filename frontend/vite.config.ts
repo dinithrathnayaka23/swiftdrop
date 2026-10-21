@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       host: true,
+      // Needed for hot reload through Docker bind mounts (set by docker-compose.dev.yml).
+      watch: { usePolling: env.CHOKIDAR_USEPOLLING === 'true' },
       // In local dev, /api calls are forwarded to the Spring Boot backend.
       proxy: {
         '/api': {
