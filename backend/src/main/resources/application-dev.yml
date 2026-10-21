@@ -1,0 +1,31 @@
+# Local development profile (SPRING_PROFILES_ACTIVE=dev).
+spring:
+  config:
+    # Running from an IDE or ./mvnw, read the repo-root .env so you don't have to export variables.
+    # Real environment variables still win over values in this file.
+    import:
+      - optional:file:../.env[.properties]
+      - optional:file:.env[.properties]
+  flyway:
+    # Members create migrations in parallel (V3_001, V5_002, ...). Allow a lower version
+    # to be applied after a higher one on shared dev databases.
+    out-of-order: true
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+swiftdrop:
+  security:
+    public-api-docs: true
+
+logging:
+  level:
+    com.swiftdrop: DEBUG
