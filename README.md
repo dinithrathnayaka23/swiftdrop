@@ -1,92 +1,159 @@
+<div align="center">
+
 # SwiftDrop
 
-Parcel Delivery & Courier Management System.
-University of Moratuwa · IN3101 Enterprise Application Development · Group 32 "Code_Crafters".
+**Parcel delivery and courier management, from booking to doorstep.**
 
-Customers book parcel deliveries and track them, merchants push orders through an API,
-dispatchers assign couriers, couriers update status with proof of delivery, and everyone
-gets notified as parcels move.
+[![CI](https://github.com/dinithrathnayaka23/swiftdrop/actions/workflows/ci.yml/badge.svg)](https://github.com/dinithrathnayaka23/swiftdrop/actions/workflows/ci.yml)
+![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600?logo=rabbitmq&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-> **Status:** project skeleton. Infrastructure, security baseline and UI shell are in place;
-> feature modules are empty placeholders waiting for their owners.
+[Overview](#overview) •
+[Architecture](#architecture) •
+[Getting started](#getting-started) •
+[Development](#local-development) •
+[Testing](#testing) •
+[Contributing](#contributing)
+
+</div>
+
+---
+
+## Overview
+
+SwiftDrop is a web platform that connects everyone involved in getting a parcel from A to B:
+
+| Who | What they do |
+|-----|--------------|
+| **Customers** | Book deliveries, get an instant fee estimate and follow their parcels in real time |
+| **Merchants** | Push orders through a REST API with API keys and receive status updates via webhooks |
+| **Dispatchers / Admins** | Assign parcels to couriers, manage zones and pricing, approve merchants and view reports |
+| **Couriers** | See their jobs, update delivery status and record proof of delivery or failure reasons |
+| **Anyone** | Track a parcel publicly with its tracking number |
+
+Status changes flow through an event bus, so notifications (email, SMS, live updates) and merchant webhooks
+happen asynchronously without slowing down the core workflow.
+
+> [!NOTE]
+> The project is in its **foundation stage**: infrastructure, security baseline, module structure and the UI shell
+> are in place, and features are being built module by module.
 
 ## Architecture
 
-A **layered modular monolith**: one Spring Boot application split into feature modules,
-plus a separate React single-page app.
+SwiftDrop is a **layered modular monolith**: a single Spring Boot application divided into well-bounded
+feature modules, with a separate React single-page application in front of it.
 
+```mermaid
+flowchart LR
+    user([Browser]) --> fe["<b>frontend</b><br/>React SPA · Nginx"]
+    fe -- "/api/v1" --> be
+
+    subgraph be["<b>backend</b> · Spring Boot"]
+        direction TB
+        mods["identity · user · parcel · dispatch<br/>merchant · notification · config · reporting"]
+        common["common: security · errors · messaging · logging"]
+        mods --- common
+    end
+
+    be <--> db[("PostgreSQL<br/>schema via Flyway")]
+    be <-- "parcel events" --> mq[["RabbitMQ"]]
 ```
- Browser ──► frontend (Nginx: React SPA) ──/api──► backend (Spring Boot, /api/v1)
-                                                    │            │
-                                                    ▼            ▼
-                                             PostgreSQL     RabbitMQ
-                                             (Flyway)       (parcel events → notification, webhooks)
-```
 
-| Layer          | Tech                                                                                 |
-|----------------|--------------------------------------------------------------------------------------|
-| Backend        | Java 21, Spring Boot 3.5, Maven, Spring Security (JWT + Google OAuth), JPA, Flyway, AMQP, WebSocket, Mail, springdoc-openapi |
-| Frontend       | React 18, Vite 6, TypeScript, Tailwind CSS 3, React Router 6, Axios                  |
-| Data / messaging | PostgreSQL 16, RabbitMQ 3 (management)                                             |
-| Tests          | JUnit 5, Spring Boot Test, Testcontainers, JaCoCo · Vitest, React Testing Library    |
-| Runtime        | Docker Compose; GitHub Actions CI                                                    |
+**Design principles**
 
-Each backend module (`identity`, `user`, `parcel`, `dispatch`, `merchant`, `notification`, `config`, `reporting`)
-is a package under `com.swiftdrop` with `controller → service → repository` layers plus `model` and `dto`.
-Shared building blocks live in `com.swiftdrop.common` (error handling, security, messaging, logging, CORS).
-Modules talk to each other through services or RabbitMQ events, never through each other's repositories.
+- **Modules own their data.** Each module exposes services (and events); other modules never reach into its repositories or entities.
+- **Thin controllers, rich services.** Controllers validate and map DTOs; business rules live in services.
+- **Stateless and secure by default.** JWT authentication, role-based method security, and every route private unless explicitly public.
+- **Asynchronous side effects.** Parcel status changes are published to RabbitMQ; notifications and webhooks consume them, with a dead-letter queue for failures.
+- **Schema as code.** Flyway migrations are the single source of truth; Hibernate only validates.
+- **Privacy first.** No stack traces or personal data in API errors, and personal data is never logged.
 
-## Prerequisites
+### Backend modules
 
-| Tool | Version | Needed for |
-|------|---------|-----------|
-| Docker Desktop (with Compose v2) | recent | everything (DB, broker, full stack, integration tests) |
-| JDK | 21 (e.g. Temurin) | running/developing the backend locally |
-| Maven | 3.9+ (optional, `./mvnw` is included) | backend build |
-| Node.js | 22 LTS (20.19+ works) | frontend development |
+| Module | Responsibility |
+|--------|----------------|
+| `identity` | Sign-up, login, JWT issuing, Google OAuth |
+| `user` | Profiles, roles, merchant approval |
+| `parcel` | Booking, fee estimation, parcel lifecycle, public tracking |
+| `dispatch` | Courier assignment, status updates, proof of delivery and failures |
+| `merchant` | API keys, merchant order API, webhooks |
+| `notification` | Event consumers, email / SMS, live updates |
+| `config` | Delivery zones and pricing rules |
+| `reporting` | Operational and business reports |
 
-No local PostgreSQL or RabbitMQ install is needed; both run in Docker.
+## Tech stack
 
-## Quick start (everything in Docker)
+| Area | Technologies |
+|------|--------------|
+| **Backend** | Java 21, Spring Boot 3.5 (Web, Validation, Data JPA, Security, OAuth2 Client, AMQP, WebSocket, Mail, Actuator), springdoc-openapi, Lombok |
+| **Frontend** | React 18, TypeScript, Vite 6, Tailwind CSS 3, React Router 6, Axios |
+| **Data & messaging** | PostgreSQL 16, Flyway, RabbitMQ 3 |
+| **Testing** | JUnit 5, Spring Boot Test, Spring Security Test, Testcontainers, JaCoCo, Vitest, React Testing Library |
+| **Tooling** | Maven Wrapper, ESLint, Prettier, Docker Compose, GitHub Actions |
+
+## Getting started
+
+### Prerequisites
+
+| Tool | Version | Required for |
+|------|---------|--------------|
+| [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Compose v2+ | Running the stack and integration tests |
+| [JDK](https://adoptium.net/) | 21 | Backend development |
+| [Node.js](https://nodejs.org/) | 22 LTS (20.19+) | Frontend development |
+
+Maven is optional: the repository ships with the Maven Wrapper (`./mvnw`).
+PostgreSQL and RabbitMQ run in Docker; nothing else needs to be installed.
+
+### Run the full stack
 
 ```bash
-cp .env.example .env          # Windows PowerShell: Copy-Item .env.example .env
+git clone https://github.com/dinithrathnayaka23/swiftdrop.git
+cd swiftdrop
+cp .env.example .env            # PowerShell: Copy-Item .env.example .env
 docker compose up --build
 ```
 
-| What | URL |
-|------|-----|
-| Frontend | http://localhost:3000 |
-| Backend ping | http://localhost:8080/api/v1/health |
+Once all containers report **healthy**:
+
+| Service | URL |
+|---------|-----|
+| Web app | http://localhost:3000 |
+| API health | http://localhost:8080/api/v1/health |
+| API docs (Swagger UI, dev profile) | http://localhost:8080/swagger-ui.html |
 | Actuator health | http://localhost:8080/actuator/health |
-| Swagger UI (dev profile) | http://localhost:8080/swagger-ui.html |
-| RabbitMQ management | http://localhost:15672 (user/password from `.env`) |
-| PostgreSQL | `localhost:5432` (credentials from `.env`) |
+| RabbitMQ management | http://localhost:15672 |
+| PostgreSQL | `localhost:5432` |
 
-The login page has a temporary **"Dev only: sign in as a role"** panel so you can click through
-each role's screens before real authentication exists (`VITE_ENABLE_DEV_LOGIN`).
+Credentials for PostgreSQL and RabbitMQ are the ones in your `.env`.
 
-Stop with `docker compose down`. Add `-v` to also wipe the database and broker volumes.
+> [!TIP]
+> Until authentication is implemented, the login page offers a **dev-only role switcher** to explore each
+> role's screens. It is controlled by `VITE_ENABLE_DEV_LOGIN` and must be disabled for any real deployment.
 
-## Local development (backend/frontend on your machine)
+Stop everything with `docker compose down` (add `-v` to also delete the database and broker data).
 
-Run only the infrastructure in Docker:
+## Local development
+
+For day-to-day work, run the infrastructure in Docker and the applications on your machine:
 
 ```bash
-cp .env.example .env                    # once
 docker compose up -d postgres rabbitmq
 ```
 
-**Backend** (port 8080). The `dev` profile reads the repo-root `.env` automatically:
+**Backend** (http://localhost:8080). The `dev` profile automatically reads the repository's `.env`:
 
 ```bash
 cd backend
-./mvnw spring-boot:run -Dspring-boot.run.profiles=dev     # Windows: mvnw.cmd ...
+./mvnw spring-boot:run -Dspring-boot.run.profiles=dev     # Windows: mvnw.cmd
 ```
 
-In IntelliJ: run `SwiftDropApplication` with active profile `dev` and working directory `backend/`.
-
-**Frontend** (port 5173, proxies `/api` to `localhost:8080`):
+**Frontend** (http://localhost:5173, with `/api` proxied to the backend):
 
 ```bash
 cd frontend
@@ -94,128 +161,129 @@ npm install
 npm run dev
 ```
 
-**Hot reload inside Docker instead?**
-`docker compose -f docker-compose.yml -f docker-compose.dev.yml up` runs Vite with HMR on :5173 and the
-backend from source (restart the `backend` container to pick up Java changes).
-
-## Tests and coverage
+<details>
+<summary><b>Prefer hot reload inside Docker?</b></summary>
 
 ```bash
-# Backend: unit tests + Testcontainers integration tests (*IT, needs Docker) + JaCoCo
-cd backend
-./mvnw verify
-# Coverage report: backend/target/site/jacoco/index.html (XML: jacoco.xml)
-./mvnw test            # unit tests only (no Docker needed)
-
-# Frontend
-cd frontend
-npm run lint
-npm test               # Vitest
-npm run test:coverage  # coverage/index.html
-npm run build
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-CI ([.github/workflows/ci.yml](.github/workflows/ci.yml)) runs all of the above on every PR and push to `main`.
+Runs the Vite dev server with HMR on port 5173 and the backend from source.
+Restart the `backend` service to pick up Java changes.
 
-## Ports
-
-| Service | Port(s) |
-|---------|---------|
-| frontend (Nginx) | 3000 (`FRONTEND_PORT`) |
-| frontend (Vite dev) | 5173 |
-| backend | 8080 (`BACKEND_PORT`) |
-| postgres | 5432 |
-| rabbitmq | 5672 (AMQP), 15672 (management UI) |
+</details>
 
 ## Configuration
 
-All configuration comes from environment variables; see [.env.example](.env.example).
-Spring profiles: `application.yml` (base), `application-dev.yml` (Swagger on, reads `.env`, Flyway out-of-order),
-`application-test.yml` (used by tests). There are no secrets in the repository: `.env` is git-ignored.
+All configuration is supplied through environment variables; see [`.env.example`](.env.example) for the full list.
+Secrets are never committed: `.env` is git-ignored.
+
+| Variable | Purpose |
+|----------|---------|
+| `SPRING_PROFILES_ACTIVE` | `dev` locally (enables Swagger, reads `.env`) |
+| `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SPRING_DATASOURCE_URL` | Database connection |
+| `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Message broker connection |
+| `JWT_SECRET`, `JWT_EXPIRY` | Token signing key (≥ 32 chars) and lifetime in seconds |
+| `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Google sign-in |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Outgoing email |
+| `FRONTEND_URL` | Allowed CORS origin(s), comma-separated |
+| `VITE_ENABLE_DEV_LOGIN` | Shows the dev role switcher in Docker builds |
+
+> [!IMPORTANT]
+> The values in `.env.example` are for local development only. Generate a strong `JWT_SECRET`
+> (`openssl rand -base64 48`) and unique passwords for any shared or hosted environment.
+
+## Testing
+
+```bash
+# Backend: unit tests, Testcontainers integration tests and coverage (requires Docker)
+cd backend
+./mvnw verify
+
+# Frontend: lint, unit tests and production build
+cd frontend
+npm run lint
+npm test
+npm run build
+```
+
+| Report | Location |
+|--------|----------|
+| Backend coverage (JaCoCo) | `backend/target/site/jacoco/index.html` |
+| Frontend coverage | `frontend/coverage/index.html` (`npm run test:coverage`) |
+
+Every pull request is checked by [GitHub Actions](.github/workflows/ci.yml): backend build and tests with coverage,
+frontend lint, format, test and build, and Docker image builds.
 
 ## Project structure
 
 ```
 swiftdrop/
-├── backend/                     Spring Boot app
+├── backend/                         Spring Boot application
 │   ├── src/main/java/com/swiftdrop/
-│   │   ├── common/              shared: api paths, exceptions, security (JWT), messaging, logging, CORS
-│   │   ├── identity/ user/ parcel/ dispatch/ merchant/ notification/ config/ reporting/
-│   │   │   ├── package-info.java    module scope and boundaries
-│   │   │   ├── controller/          REST endpoints
-│   │   │   ├── service/             business logic (the module's public entry point)
-│   │   │   ├── repository/          Spring Data JPA (private to the module)
-│   │   │   ├── model/               JPA entities, enums
-│   │   │   ├── dto/request/  dto/response/
-│   │   │   ├── mapper/              entity <-> DTO mapping
-│   │   │   ├── exception/           module-specific exceptions
-│   │   │   └── event/               RabbitMQ publishers/listeners (parcel, dispatch, merchant, notification)
-│   │   └── SwiftDropApplication.java
-│   ├── src/main/resources/
-│   │   ├── application*.yml
-│   │   └── db/migration/        Flyway migrations
-│   ├── src/test/java/...        unit, @WebMvcTest and Testcontainers (*IT) tests
-│   └── Dockerfile
-├── frontend/                    React SPA
-│   ├── src/{api,components,layouts,pages,routes,hooks,context,types,utils}
-│   │   └── pages/{auth,customer,merchant,courier,dispatcher,admin,public}
-│   ├── nginx.conf
-│   └── Dockerfile
-├── docker/                      extra Docker configs (reserved)
-├── docs/                        CONTRIBUTING, API conventions, module ownership
-├── .github/                     CI workflow, PR template
-├── docker-compose.yml           full stack
-├── docker-compose.dev.yml       hot-reload override
-└── .env.example
+│   │   ├── common/                  Shared: security (JWT), error handling, messaging, logging, CORS
+│   │   └── <module>/                identity, user, parcel, dispatch, merchant, notification, config, reporting
+│   │       ├── controller/          REST endpoints
+│   │       ├── service/             Business logic, the module's public entry point
+│   │       ├── repository/          Data access (private to the module)
+│   │       ├── model/               JPA entities and enums
+│   │       ├── dto/                 Request and response records
+│   │       ├── mapper/              Entity ↔ DTO mapping
+│   │       ├── exception/           Module-specific exceptions
+│   │       └── event/               Message publishers and listeners
+│   └── src/main/resources/
+│       ├── application*.yml         Configuration profiles
+│       └── db/migration/            Flyway migrations
+├── frontend/                        React single-page application
+│   └── src/
+│       ├── api/                     Axios client and API calls
+│       ├── components/  layouts/    Shared UI and page shells
+│       ├── pages/                   auth, customer, merchant, courier, dispatcher, admin, public
+│       ├── routes/                  Routing and role-based guards
+│       └── context/  hooks/  types/  utils/
+├── docs/                            Contributing guide and API conventions
+├── docker/                          Additional Docker configuration
+├── .github/                         CI workflow and PR template
+├── docker-compose.yml               Full stack
+├── docker-compose.dev.yml           Hot-reload override
+└── .env.example                     Environment template
 ```
 
-## Database migrations
+## API at a glance
 
-Flyway owns the schema (`spring.jpa.hibernate.ddl-auto=validate`). `V1__init.sql` creates only the baseline
-(`users`, `roles`, `user_roles`).
+- Base path: **`/api/v1`**. Interactive documentation at `/swagger-ui.html` (dev profile).
+- Authentication: `Authorization: Bearer <JWT>`. Roles: `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER_ADMIN`.
+- Public endpoints: `/api/v1/auth/**`, `/api/v1/public/tracking/**`, `/api/v1/health`.
+- Errors share one format:
 
-**Each member adds their own tables in separate versioned migrations, prefixed with their member number**,
-so parallel work never clashes:
-
+```json
+{
+  "timestamp": "2026-01-01T10:00:00Z",
+  "status": 400,
+  "error": "Bad Request",
+  "code": "VALIDATION_FAILED",
+  "message": "Request validation failed",
+  "path": "/api/v1/parcels",
+  "fieldErrors": [{ "field": "weightKg", "message": "must be greater than 0" }]
+}
 ```
-V1__init.sql                 baseline (shared)
-V3_001__create_parcels.sql   Member 3
-V3_002__add_parcel_indexes.sql
-V5_001__create_merchant_api_keys.sql  Member 5
-```
 
-Never edit a merged migration. Full rules are in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#5-database-migrations-flyway).
+Full conventions: [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md).
 
-## Module ownership
+## Contributing
 
-The scope has **not been divided yet**. When it is, fill in this table and
-[docs/MODULE_OWNERSHIP.md](docs/MODULE_OWNERSHIP.md).
+1. Branch from `main`: `feature/<short-name>`, `fix/<short-name>` or `chore/<short-name>`.
+2. Write [Conventional Commits](https://www.conventionalcommits.org/), e.g. `feat(parcel): add fee estimate endpoint`.
+3. Add database changes as a **new** Flyway migration; never edit a merged one.
+4. Open a pull request using the template; CI must pass and at least one review is required.
 
-| Member | Module / area | Branch prefix | Migration prefix |
-|--------|---------------|---------------|------------------|
-| 1  | TBD | `feature/m1-*`  | `V1_xxx__` |
-| 2  | TBD | `feature/m2-*`  | `V2_xxx__` |
-| 3  | TBD | `feature/m3-*`  | `V3_xxx__` |
-| 4  | TBD | `feature/m4-*`  | `V4_xxx__` |
-| 5  | TBD | `feature/m5-*`  | `V5_xxx__` |
-| 6  | TBD | `feature/m6-*`  | `V6_xxx__` |
-| 7  | TBD | `feature/m7-*`  | `V7_xxx__` |
-| 8  | TBD | `feature/m8-*`  | `V8_xxx__` |
-| 9  | TBD | `feature/m9-*`  | `V9_xxx__` |
-| 10 | TBD | `feature/m10-*` | `V10_xxx__` |
+Read the full guide in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before your first pull request.
 
-Modules to assign: identity, user, parcel, dispatch, merchant, notification, config, reporting,
-plus frontend shell and DevOps/QA.
+## Acknowledgements
 
-## Branching and pull requests
-
-- `main` is protected: work on `feature/m<N>-<short-name>` branches, open a PR, get **1 approval**
-  (**2** for shared code such as `common/`, events, security, compose, CI), and keep CI green.
-- Commit messages follow Conventional Commits: `feat(parcel): add fee estimate endpoint`.
-- Squash and merge, then delete the branch.
-
-Details: [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) · API rules: [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md)
+Developed by **Group 32 · Code_Crafters** for *IN3101 Enterprise Application Development*,
+University of Moratuwa.
 
 ## License
 
-[MIT](LICENSE)
+Released under the [MIT License](LICENSE).
