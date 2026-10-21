@@ -1,0 +1,21 @@
+# Test profile. Datasource and RabbitMQ connections come from Testcontainers
+# (@ServiceConnection), so only non-secret test values are set here.
+spring:
+  datasource:
+    username: test
+    password: test
+  rabbitmq:
+    username: guest
+    password: guest
+
+swiftdrop:
+  jwt:
+    # Test-only value, never used outside automated tests.
+    secret: test-only-secret-key-that-is-at-least-32-bytes-long
+    expiry: 600
+  cors:
+    allowed-origins: http://localhost:5173
+
+logging:
+  level:
+    com.swiftdrop: DEBUG
