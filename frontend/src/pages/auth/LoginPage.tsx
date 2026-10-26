@@ -1,4 +1,4 @@
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router';
 import { useAuth } from '../../hooks/useAuth';
 import { PATHS, ROLE_HOME } from '../../routes/paths';
 import { ROLES, type Role } from '../../types/auth';

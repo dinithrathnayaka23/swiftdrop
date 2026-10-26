@@ -1,14 +1,13 @@
 import { render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router';
 import { AuthProvider } from '../context/AuthContext';
 import type { Role } from '../types/auth';
 import { saveSession } from '../utils/sessionStorage';
 import ProtectedRoute from './ProtectedRoute';
-import { ROUTER_FUTURE_FLAGS } from './routerConfig';
 
 function renderAt(path: string) {
   render(
-    <MemoryRouter initialEntries={[path]} future={ROUTER_FUTURE_FLAGS}>
+    <MemoryRouter initialEntries={[path]}>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<p>login page</p>} />

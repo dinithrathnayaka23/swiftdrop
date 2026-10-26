@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { useApiHealth } from '../../hooks/useApiHealth';
 import { PATHS } from '../../routes/paths';
 

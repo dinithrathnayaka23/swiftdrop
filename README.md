@@ -5,12 +5,12 @@
 **Parcel delivery and courier management, from booking to doorstep.**
 
 [![CI](https://github.com/dinithrathnayaka23/swiftdrop/actions/workflows/ci.yml/badge.svg)](https://github.com/dinithrathnayaka23/swiftdrop/actions/workflows/ci.yml)
-![Java](https://img.shields.io/badge/Java-21-007396?logo=openjdk&logoColor=white)
-![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5-6DB33F?logo=springboot&logoColor=white)
-![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
-![RabbitMQ](https://img.shields.io/badge/RabbitMQ-3-FF6600?logo=rabbitmq&logoColor=white)
+![Java](https://img.shields.io/badge/Java-25-007396?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-4.1-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![TypeScript](https://img.shields.io/badge/TypeScript-6-3178C6?logo=typescript&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-18-4169E1?logo=postgresql&logoColor=white)
+![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4-FF6600?logo=rabbitmq&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
@@ -91,10 +91,10 @@ flowchart LR
 
 | Area | Technologies |
 |------|--------------|
-| **Backend** | Java 21, Spring Boot 3.5 (Web, Validation, Data JPA, Security, OAuth2 Client, AMQP, WebSocket, Mail, Actuator), springdoc-openapi, Lombok |
-| **Frontend** | React 18, TypeScript, Vite 6, Tailwind CSS 3, React Router 6, Axios |
-| **Data & messaging** | PostgreSQL 16, Flyway, RabbitMQ 3 |
-| **Testing** | JUnit 5, Spring Boot Test, Spring Security Test, Testcontainers, JaCoCo, Vitest, React Testing Library |
+| **Backend** | Java 25, Spring Boot 4.1 (Web MVC, Validation, Data JPA, Security, OAuth2 Client, AMQP, WebSocket, Mail, Actuator), springdoc-openapi, Lombok |
+| **Frontend** | React 19, TypeScript 6, Vite 8, Tailwind CSS 4, React Router 8, Axios |
+| **Data & messaging** | PostgreSQL 18, Flyway, RabbitMQ 4 |
+| **Testing** | JUnit 6, Spring Boot Test, Spring Security Test, Testcontainers, JaCoCo, Vitest, React Testing Library |
 | **Tooling** | Maven Wrapper, ESLint, Prettier, Docker Compose, GitHub Actions |
 
 ## Getting started
@@ -104,8 +104,8 @@ flowchart LR
 | Tool | Version | Required for |
 |------|---------|--------------|
 | [Docker Desktop](https://www.docker.com/products/docker-desktop/) | Compose v2+ | Running the stack and integration tests |
-| [JDK](https://adoptium.net/) | 21 | Backend development |
-| [Node.js](https://nodejs.org/) | 22 LTS (20.19+) | Frontend development |
+| [JDK](https://adoptium.net/) | 25 (LTS) | Backend development |
+| [Node.js](https://nodejs.org/) | 24 LTS (22.22+) | Frontend development |
 
 Maven is optional: the repository ships with the Maven Wrapper (`./mvnw`).
 PostgreSQL and RabbitMQ run in Docker; nothing else needs to be installed.

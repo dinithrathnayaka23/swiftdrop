@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router';
 import PagePlaceholder from '../../components/PagePlaceholder';
 import { PATHS } from '../../routes/paths';
 

@@ -1,4 +1,4 @@
-import { NavLink } from 'react-router-dom';
+import { NavLink } from 'react-router';
 import { NAV_ITEMS } from '../routes/paths';
 import type { Role } from '../types/auth';
 

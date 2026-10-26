@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.swiftdrop.common.messaging.RabbitConfig;
 import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
@@ -11,18 +15,16 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.containers.RabbitMQContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.rabbitmq.RabbitMQContainer;
 
 /**
  * Boots the full application against real PostgreSQL and RabbitMQ containers
@@ -35,11 +37,16 @@ class InfrastructureIT {
 
     @Container
     @ServiceConnection
-    static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:16-alpine");
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
 
     @Container
     @ServiceConnection
-    static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:3-management-alpine");
+    static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:4.4-management-alpine");
+
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    @Value("${local.server.port}")
+    private int port;
 
     @Autowired
     private Flyway flyway;
@@ -52,9 +59,6 @@ class InfrastructureIT {
 
     @Autowired
     private RabbitTemplate rabbitTemplate;
-
-    @Autowired
-    private TestRestTemplate restTemplate;
 
     @Test
     void flywayAppliedBaselineMigration() {
@@ -80,12 +84,17 @@ class InfrastructureIT {
     }
 
     @Test
-    void healthEndpointsReportUp() {
-        var ping = restTemplate.getForEntity("/api/v1/health", String.class);
-        assertThat(ping.getStatusCode()).isEqualTo(HttpStatus.OK);
+    void healthEndpointsReportUp() throws Exception {
+        HttpResponse<String> ping = get("/api/v1/health");
+        assertThat(ping.statusCode()).isEqualTo(200);
 
-        var actuator = restTemplate.exchange("/actuator/health", HttpMethod.GET, null, String.class);
-        assertThat(actuator.getStatusCode()).isEqualTo(HttpStatus.OK);
-        assertThat(actuator.getBody()).contains("\"UP\"");
+        HttpResponse<String> actuator = get("/actuator/health");
+        assertThat(actuator.statusCode()).isEqualTo(200);
+        assertThat(actuator.body()).contains("\"UP\"");
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }
