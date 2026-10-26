@@ -1,4 +1,4 @@
-import { Link, Outlet } from 'react-router-dom';
+import { Link, Outlet } from 'react-router';
 import Logo from '../components/Logo';
 import { useAuth } from '../hooks/useAuth';
 import { PATHS, ROLE_HOME } from '../routes/paths';
