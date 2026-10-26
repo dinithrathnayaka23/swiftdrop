@@ -1,6 +1,5 @@
 package com.swiftdrop.common.security;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.swiftdrop.common.exception.ErrorCode;
 import com.swiftdrop.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
@@ -15,15 +14,16 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.stereotype.Component;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Writes 401/403 responses from the security filter chain in the standard {@link ErrorResponse} format. */
 @Component
 public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDeniedHandler {
 
-    private final ObjectMapper objectMapper;
+    private final JsonMapper jsonMapper;
 
-    public SecurityErrorHandler(ObjectMapper objectMapper) {
-        this.objectMapper = objectMapper;
+    public SecurityErrorHandler(JsonMapper jsonMapper) {
+        this.jsonMapper = jsonMapper;
     }
 
     @Override
@@ -44,6 +44,6 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
                 message, request.getRequestURI(), List.of());
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
-        objectMapper.writeValue(response.getOutputStream(), body);
+        jsonMapper.writeValue(response.getOutputStream(), body);
     }
 }
