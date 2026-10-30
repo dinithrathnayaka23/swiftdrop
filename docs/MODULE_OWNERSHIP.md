@@ -35,5 +35,5 @@ Your **member number** (1-10) is used for:
 | Contract                                   | Who must agree                         |
 |--------------------------------------------|----------------------------------------|
 | `ParcelStatusChangedEvent` (RabbitMQ)      | Members 3, 6, 9 (as noted in the code; confirm once roles are assigned) |
-| `V1__init.sql` (users, roles)              | identity + user owners                 |
+| `V1__init.sql` (baseline schema from the ER diagram) | everyone; changes go in new migrations |
 | `ErrorResponse` / `ErrorCode`              | everyone (announce changes)            |
