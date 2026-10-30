@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import PagePlaceholder from '../../components/PagePlaceholder';
 import { PATHS } from '../../routes/paths';
 

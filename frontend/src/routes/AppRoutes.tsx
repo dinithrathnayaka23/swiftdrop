@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom';
+import { Route, Routes } from 'react-router';
 import AppLayout from '../layouts/AppLayout';
 import PublicLayout from '../layouts/PublicLayout';
 import AdminReportsPage from '../pages/admin/AdminReportsPage';

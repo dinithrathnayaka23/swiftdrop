@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build stage ----
-FROM maven:3.9-eclipse-temurin-21 AS build
+FROM maven:3.10-eclipse-temurin-25 AS build
 WORKDIR /workspace
 
 # Resolve dependencies first so they are cached between builds.
@@ -13,7 +13,7 @@ RUN --mount=type=cache,target=/root/.m2 mvn -B -ntp package -DskipTests \
     && cp target/swiftdrop-backend-*.jar app.jar
 
 # ---- Runtime stage ----
-FROM eclipse-temurin:21-jre-alpine
+FROM eclipse-temurin:25-jre-alpine
 WORKDIR /app
 
 RUN addgroup -S swiftdrop && adduser -S swiftdrop -G swiftdrop

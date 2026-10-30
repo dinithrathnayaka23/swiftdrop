@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link } from 'react-router';
 import { PATHS } from '../../routes/paths';
 
 export default function UnauthorizedPage() {
