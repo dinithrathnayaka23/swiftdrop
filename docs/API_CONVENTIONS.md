@@ -56,16 +56,11 @@ All errors use the standard body produced by `GlobalExceptionHandler`:
 
 ## Database naming
 
-The schema follows the team's ER diagram; see [DATA_MODEL.md](DATA_MODEL.md).
-
 - Tables: **plural snake_case** (`parcels`, `pricing_rules`); columns: snake_case (`created_at`).
-- Primary key `<entity>_id UUID DEFAULT gen_random_uuid()` (`user_id`, `parcel_id`); foreign keys use the
-  referenced key's name, optionally with a role prefix (`customer_user_id`, `assigned_by_user_id`).
-- Timestamps: `TIMESTAMPTZ` (`created_at`, plus `updated_at` on tables whose rows change).
-- Status/type columns are `VARCHAR` with a `CHECK` constraint listing the allowed values, mapped to a Java enum.
-- Money: `NUMERIC(10,2)` plus a `CHAR(3)` currency column (default `LKR`).
-- Constraint names: index `ix_<table>_<cols>`, unique `ux_<table>_<cols>`, foreign key `fk_<table>_<ref>`,
-  check `ck_<table>_<rule>`.
+- Primary key `id UUID DEFAULT gen_random_uuid()`; foreign keys `<entity>_id`.
+- Timestamps: `TIMESTAMPTZ`, with `created_at` / `updated_at` on every table.
+- Index names `ix_<table>_<cols>`, unique `ux_<table>_<cols>`, foreign keys `fk_<table>_<ref>`.
+- Prefix tables with the module name when it would otherwise be ambiguous (`dispatch_assignments`).
 
 ## Messaging
 

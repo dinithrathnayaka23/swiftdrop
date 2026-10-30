@@ -9,7 +9,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
@@ -64,19 +63,8 @@ class InfrastructureIT {
     @Test
     void flywayAppliedBaselineMigration() {
         assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
-
-        List<String> tables = jdbcTemplate.queryForList(
-                "SELECT table_name FROM information_schema.tables "
-                        + "WHERE table_schema = 'public' AND table_name <> 'flyway_schema_history'",
-                String.class);
-        assertThat(tables).containsExactlyInAnyOrder(
-                "users", "couriers", "addresses", "parcel_statuses", "parcels", "parcel_status_history",
-                "delivery_assignments", "delivery_receipts", "notifications", "merchants",
-                "merchant_api_credentials", "merchant_webhooks", "webhook_deliveries", "pricing_rules",
-                "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas");
-
-        Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);
-        assertThat(statuses).isEqualTo(9);
+        Integer roles = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM roles", Integer.class);
+        assertThat(roles).isEqualTo(4);
     }
 
     @Test
