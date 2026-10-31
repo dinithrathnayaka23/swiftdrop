@@ -23,8 +23,10 @@ public class CorsConfig {
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-API-Key"));
         config.setExposedHeaders(List.of("Location"));
-        // JWTs travel in the Authorization header, not cookies.
-        config.setAllowCredentials(false);
+        // Access tokens travel in the Authorization header; the session cookie (httpOnly, SameSite=Strict)
+        // is only sent to /api/v1/auth. Credentials must be allowed for that cookie when the frontend
+        // is served from another origin (allowed origins are an explicit list, never "*").
+        config.setAllowCredentials(true);
         config.setMaxAge(3600L);
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

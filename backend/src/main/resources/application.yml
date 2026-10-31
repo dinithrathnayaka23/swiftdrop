@@ -36,30 +36,41 @@ spring:
           initial-interval: 1s
           multiplier: 2
 
+  # Outgoing email. Gmail: MAIL_HOST=smtp.gmail.com, MAIL_PORT=587, MAIL_SMTP_AUTH=true, MAIL_STARTTLS=true,
+  # MAIL_USERNAME=<gmail address>, MAIL_PASSWORD=<16-character Google app password>. Local testing: Mailpit.
   mail:
     host: ${MAIL_HOST:localhost}
     port: ${MAIL_PORT:1025}
     username: ${MAIL_USERNAME:}
     password: ${MAIL_PASSWORD:}
+    default-encoding: UTF-8
     properties:
       mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
       mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      # Refuse to send over an unencrypted connection when STARTTLS is on.
+      mail.smtp.starttls.required: ${MAIL_STARTTLS:false}
+      # Never let a slow or unreachable mail server hang a request thread (milliseconds).
+      mail.smtp.connectiontimeout: 10000
+      mail.smtp.timeout: 10000
+      mail.smtp.writetimeout: 10000
 
-  security:
-    oauth2:
-      client:
-        registration:
-          google:
-            # Placeholders keep the app bootable until real credentials are provided.
-            client-id: ${GOOGLE_CLIENT_ID:not-configured}
-            client-secret: ${GOOGLE_CLIENT_SECRET:not-configured}
-            scope: openid,profile,email
+  data:
+    redis:
+      # Sign-in sessions, rate-limit counters and cooldowns (expire automatically).
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2s
+      connect-timeout: 2s
 
   mvc:
     log-request-details: false    # request bodies/headers may contain personal data
 
 server:
   port: ${SERVER_PORT:8080}
+  # Behind nginx: take the client IP from X-Forwarded-For (trusted only from private networks),
+  # so rate limits apply per visitor, not to the proxy.
+  forward-headers-strategy: native
   error:
     include-stacktrace: never
     include-message: never
@@ -89,14 +100,63 @@ springdoc:
 swiftdrop:
   jwt:
     secret: ${JWT_SECRET}
-    expiry: ${JWT_EXPIRY:3600}    # seconds
+    # Access tokens are short-lived; the browser renews them silently with the session cookie.
+    expiry: ${JWT_EXPIRY:900}     # seconds (15 minutes)
     issuer: swiftdrop
   cors:
     allowed-origins: ${FRONTEND_URL:http://localhost:5173}
   security:
     public-api-docs: false
   mail:
+    # With Gmail this must be your Gmail address (or a verified alias), otherwise Gmail rewrites it.
     from: ${MAIL_FROM:no-reply@swiftdrop.local}
+    from-name: ${MAIL_FROM_NAME:SwiftDrop}
+  frontend:
+    # Public URL of the web app, used for links in emails (e.g. password reset).
+    base-url: ${FRONTEND_BASE_URL:http://localhost:3000}
+  password-reset:
+    expiry: ${PASSWORD_RESET_EXPIRY:1800}   # seconds
+    # Minimum time between two reset emails to the same address (stops inbox flooding).
+    resend-cooldown: ${PASSWORD_RESET_RESEND_COOLDOWN:60}   # seconds
+  email-verification:
+    expiry: ${EMAIL_VERIFICATION_EXPIRY:86400}   # seconds (24 hours)
+    # Minimum time between two confirmation emails to the same address.
+    resend-cooldown: 60   # seconds
+  auth:
+    refresh-token:
+      # "Remember me" ticked: stay signed in this long, renewed every time the app is used.
+      remember-me-expiry: ${REFRESH_TOKEN_EXPIRY_REMEMBER_ME:2592000}   # 30 days
+      # Not ticked: the browser forgets the session on close; this is the upper limit.
+      session-expiry: ${REFRESH_TOKEN_EXPIRY_SESSION:86400}             # 1 day
+      # After a refresh, the old token keeps working this long, so two tabs refreshing at the
+      # same moment don't sign each other out.
+      rotation-grace: 30s
+      # The refresh token lives only in this httpOnly cookie: page scripts can never read it.
+      cookie-name: swiftdrop_session
+      # Browsers accept Secure cookies on http://localhost; set false only for other plain-http hosts.
+      cookie-secure: ${AUTH_COOKIE_SECURE:true}
+    google:
+      # OAuth 2.0 Client ID (type "Web application") from Google Cloud Console. Empty = Google
+      # sign-in turned off. No client secret is needed: the backend only verifies Google ID tokens.
+      client-id: ${GOOGLE_CLIENT_ID:}
+      jwk-set-uri: https://www.googleapis.com/oauth2/v3/certs
+  # Limits per client IP (and per account for failed sign-ins). Over the limit: 429 + Retry-After.
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    login:            { requests: 20, window: 1m }    # POST /auth/login, /auth/google
+    registration:     { requests: 10, window: 1h }    # POST /auth/register/**
+    password-reset:   { requests: 10, window: 15m }   # POST /auth/password-reset/**
+    email-verification: { requests: 10, window: 15m } # POST /auth/verify-email/**
+    session:          { requests: 120, window: 1m }   # POST /auth/refresh, /auth/logout
+    failed-logins-per-account-and-ip: { requests: 5, window: 15m }
+    failed-logins-per-account:        { requests: 20, window: 1h }
+  bootstrap:
+    # The one DISPATCHER_ADMIN account. Required; synced to these values on every startup
+    # (AdminAccountInitializer). Never commit a real password.
+    admin:
+      email: ${ADMIN_EMAIL:}
+      password: ${ADMIN_PASSWORD:}
+      full-name: ${ADMIN_FULL_NAME:SwiftDrop Admin}
 
 logging:
   level:
