@@ -26,9 +26,8 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
  *   <li>Fine-grained rules belong on controllers/services via {@code @PreAuthorize}.</li>
  * </ul>
  *
- * <p>Google OAuth: the {@code google} client registration is configured in application.yml.
- * Wiring {@code oauth2Login()} into this chain (and issuing our own JWT afterwards) is
- * left to the identity module owner.
+ * <p>Google sign-in needs nothing here: the identity module verifies the Google ID token at
+ * {@code POST /api/v1/auth/google} and issues our own JWT, so the API stays stateless.
  */
 @Configuration
 @EnableWebSecurity

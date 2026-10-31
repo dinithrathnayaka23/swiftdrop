@@ -6,12 +6,17 @@ import java.time.Instant;
 import java.util.List;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.Nullable;
+import org.springframework.dao.DataAccessResourceFailureException;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.dao.TransientDataAccessException;
+import org.springframework.data.redis.RedisSystemException;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
+import org.springframework.transaction.CannotCreateTransactionException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -30,7 +35,24 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
     @ExceptionHandler(ApiException.class)
     public ResponseEntity<ErrorResponse> handleApiException(ApiException ex, HttpServletRequest request) {
-        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(), List.of());
+        return build(ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(), ex.getFieldErrors());
+    }
+
+    @ExceptionHandler(RateLimitExceededException.class)
+    public ResponseEntity<ErrorResponse> handleRateLimit(RateLimitExceededException ex, HttpServletRequest request) {
+        return ResponseEntity.status(ex.getStatus())
+                .header(HttpHeaders.RETRY_AFTER, String.valueOf(ex.getRetryAfterSeconds()))
+                .body(body(ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(), List.of()));
+    }
+
+    /** Database or Redis unreachable (or timing out): a temporary problem, not a bug. */
+    @ExceptionHandler({DataAccessResourceFailureException.class, TransientDataAccessException.class,
+            CannotCreateTransactionException.class, RedisSystemException.class})
+    public ResponseEntity<ErrorResponse> handleUnavailable(Exception ex, HttpServletRequest request) {
+        log.error("Dependency unavailable on {}: {}", request.getRequestURI(), ex.getClass().getSimpleName());
+        return build(HttpStatus.SERVICE_UNAVAILABLE, ErrorCode.SERVICE_UNAVAILABLE,
+                "The service is temporarily unavailable. Please try again in a moment.", request.getRequestURI(),
+                List.of());
     }
 
     @ExceptionHandler(ConstraintViolationException.class)
@@ -75,6 +97,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ResponseEntity.status(status).headers(headers)
                 .body(body(status, ErrorCode.VALIDATION_FAILED, "Request validation failed", path(request),
                         fieldErrors));
+    }
+
+    /** Malformed JSON or a wrong value type; the parser's message isn't shown (it echoes input). */
+    @Override
+    protected ResponseEntity<Object> handleHttpMessageNotReadable(HttpMessageNotReadableException ex,
+                                                                  HttpHeaders headers, HttpStatusCode status,
+                                                                  WebRequest request) {
+        return ResponseEntity.status(status).headers(headers)
+                .body(body(status, ErrorCode.BAD_REQUEST, "The request body is missing or is not valid JSON",
+                        path(request), List.of()));
     }
 
     @Override

@@ -11,9 +11,9 @@ COPY . .
 
 # Vite inlines VITE_* variables at build time.
 ARG VITE_API_BASE_URL=/api/v1
-ARG VITE_ENABLE_DEV_LOGIN=false
+ARG VITE_USE_MOCK_API=false
 ENV VITE_API_BASE_URL=$VITE_API_BASE_URL \
-    VITE_ENABLE_DEV_LOGIN=$VITE_ENABLE_DEV_LOGIN
+    VITE_USE_MOCK_API=$VITE_USE_MOCK_API
 RUN npm run build
 
 # ---- Runtime stage ----
