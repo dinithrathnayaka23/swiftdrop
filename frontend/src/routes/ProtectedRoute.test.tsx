@@ -11,9 +11,17 @@ function renderAt(path: string) {
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<p>login page</p>} />
+          <Route path="/admin/login" element={<p>admin login page</p>} />
           <Route path="/unauthorized" element={<p>unauthorized page</p>} />
           <Route element={<ProtectedRoute allowedRoles={['COURIER']} />}>
             <Route path="/courier" element={<p>courier home</p>} />
+          </Route>
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={['DISPATCHER_ADMIN']} loginPath="/admin/login" />
+            }
+          >
+            <Route path="/admin" element={<p>admin home</p>} />
           </Route>
         </Routes>
       </AuthProvider>
@@ -22,13 +30,18 @@ function renderAt(path: string) {
 }
 
 function signInAs(role: Role) {
-  saveSession({ token: 'test-token', user: { id: '1', displayName: 'Test', role } });
+  saveSession({ token: 'test-token', user: { id: '1', displayName: 'Test', role } }, true);
 }
 
 describe('ProtectedRoute', () => {
   it('redirects anonymous users to login', () => {
     renderAt('/courier');
     expect(screen.getByText('login page')).toBeInTheDocument();
+  });
+
+  it("sends anonymous users to the area's own sign-in page when one is given", () => {
+    renderAt('/admin');
+    expect(screen.getByText('admin login page')).toBeInTheDocument();
   });
 
   it('renders the page for an allowed role', () => {
