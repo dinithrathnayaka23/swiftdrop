@@ -8,7 +8,7 @@ in the `model` package of the module that owns it.
 
 | Module | Table | Entity | Notes |
 |--------|-------|--------|-------|
-| `user` | `users` | `User` | One `role` per user (`Role` enum), `account_status` (`AccountStatus`). `password_hash` is null for Google-only accounts; `google_subject` is null for password-only accounts. |
+| `user` | `users` | `User` | One `role` per user (`Role` enum), `account_status` (`AccountStatus`). `password_hash` is null for Google-only accounts; `google_subject` is null for password-only accounts. `email_verified_at` (added in V2, not in the original ER diagram) records when the user proved they own the email; sign-in requires it. The partial unique index `ux_users_single_admin` (V3) allows only one `DISPATCHER_ADMIN`. |
 | `config` | `delivery_zones` | `DeliveryZone` | |
 | | `zone_coverage_areas` | `ZoneCoverageArea` | District/city/postal code covered by a zone. |
 | | `pricing_rules` | `PricingRule` | Base fee, weight and oversize pricing for a validity period. |

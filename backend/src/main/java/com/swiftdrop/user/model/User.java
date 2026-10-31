@@ -47,6 +47,10 @@ public class User {
     @Column(name = "google_subject", length = 255)
     private String googleSubject;
 
+    /** When the user proved they own {@link #email}; {@code null} until then. */
+    @Column(name = "email_verified_at")
+    private Instant emailVerifiedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "role", nullable = false, length = 20)
     private Role role;
