@@ -1,12 +1,10 @@
 package com.swiftdrop;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.swiftdrop.common.messaging.RabbitConfig;
 import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Instant;
 import java.util.List;
@@ -16,38 +14,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.test.context.ActiveProfiles;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.postgresql.PostgreSQLContainer;
-import org.testcontainers.rabbitmq.RabbitMQContainer;
 
-/**
- * Boots the full application against real PostgreSQL and RabbitMQ containers
- * (requires Docker) and proves the database, migrations and broker work.
- */
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
-@ActiveProfiles("test")
-@Testcontainers
-class InfrastructureIT {
-
-    @Container
-    @ServiceConnection
-    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
-
-    @Container
-    @ServiceConnection
-    static RabbitMQContainer rabbit = new RabbitMQContainer("rabbitmq:4.4-management-alpine");
-
-    private final HttpClient http = HttpClient.newHttpClient();
-
-    @Value("${local.server.port}")
-    private int port;
+/** Proves the database, migrations, broker and health endpoints work against real containers. */
+class InfrastructureIT extends IntegrationTestBase {
 
     @Autowired
     private Flyway flyway;
@@ -62,8 +34,23 @@ class InfrastructureIT {
     private RabbitTemplate rabbitTemplate;
 
     @Test
-    void flywayAppliedBaselineMigration() {
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("1");
+    void databaseAllowsOnlyOneAdmin() {
+        // The admin from application-test.yml already exists (created on startup).
+        assertThat(jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM users WHERE role = 'DISPATCHER_ADMIN'", Integer.class)).isEqualTo(1);
+
+        assertThatThrownBy(() -> jdbcTemplate.update(
+                "INSERT INTO users (full_name, email, password_hash, role, account_status) VALUES "
+                        + "('Second Admin', 'second-admin@test.swiftdrop.local', 'x', 'DISPATCHER_ADMIN', 'ACTIVE')"))
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("ux_users_single_admin");
+    }
+
+    @Test
+    void flywayAppliedAllMigrations() {
+        // V1 baseline (ER diagram) + V2 users.email_verified_at + V3 single admin; nothing pending.
+        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        assertThat(flyway.info().pending()).isEmpty();
 
         List<String> tables = jdbcTemplate.queryForList(
                 "SELECT table_name FROM information_schema.tables "
@@ -103,10 +90,5 @@ class InfrastructureIT {
         HttpResponse<String> actuator = get("/actuator/health");
         assertThat(actuator.statusCode()).isEqualTo(200);
         assertThat(actuator.body()).contains("\"UP\"");
-    }
-
-    private HttpResponse<String> get(String path) throws Exception {
-        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build();
-        return http.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

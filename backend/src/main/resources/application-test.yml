@@ -15,6 +15,24 @@ swiftdrop:
     expiry: 600
   cors:
     allowed-origins: http://localhost:5173
+  frontend:
+    base-url: http://localhost:5173
+  auth:
+    refresh-token:
+      rotation-grace: 2s   # short, so a test can wait it out
+  # Every IT shares one client IP (127.0.0.1): generous per-IP limits so tests don't trip them.
+  # RateLimitIT checks the limits with its own low values.
+  rate-limit:
+    login: { requests: 1000, window: 1m }
+    registration: { requests: 1000, window: 1m }
+    password-reset: { requests: 1000, window: 1m }
+    email-verification: { requests: 1000, window: 1m }
+    session: { requests: 1000, window: 1m }
+  bootstrap:
+    admin:
+      # Test-only account, never used outside automated tests.
+      email: admin@test.swiftdrop.local
+      password: test-admin-password-1
 
 logging:
   level:

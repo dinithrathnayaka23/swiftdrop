@@ -1,8 +1,11 @@
+import { LogOut } from 'lucide-react';
 import { useState } from 'react';
-import { Outlet, useLocation } from 'react-router';
-import Logo from '../components/Logo';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router';
+import Logo from '../components/brand/Logo';
 import SideNav from '../components/SideNav';
+import Button from '../components/ui/Button';
 import { useAuth } from '../hooks/useAuth';
+import { PATHS, ROLE_SIGN_IN } from '../routes/paths';
 import { formatRole } from '../utils/format';
 
 /**
@@ -11,6 +14,7 @@ import { formatRole } from '../utils/format';
  */
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const [lastPath, setLastPath] = useState(location.pathname);
@@ -30,8 +34,10 @@ export default function AppLayout() {
         }`}
         aria-label="Main navigation"
       >
-        <div className="flex h-14 items-center border-b border-slate-200 px-4">
-          <Logo />
+        <div className="flex h-16 items-center border-b border-slate-200 px-4">
+          <Link to={PATHS.home} aria-label="SwiftDrop home">
+            <Logo />
+          </Link>
         </div>
         {user && <SideNav role={user.role} />}
       </aside>
@@ -47,7 +53,7 @@ export default function AppLayout() {
 
       {/* Main column */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b border-slate-200 bg-white px-4">
+        <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4">
           <button
             type="button"
             className="rounded p-2 text-slate-600 hover:bg-slate-100 md:hidden"
@@ -70,13 +76,18 @@ export default function AppLayout() {
                 {user.displayName} · {formatRole(user.role)}
               </span>
             )}
-            <button
-              type="button"
-              onClick={logout}
-              className="rounded border border-slate-300 px-3 py-1.5 text-slate-700 hover:bg-slate-100"
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void logout();
+                // Admins go back to the admin sign-in page; customers and merchants to the site.
+                navigate(user?.role === 'DISPATCHER_ADMIN' ? ROLE_SIGN_IN[user.role] : PATHS.home);
+              }}
             >
+              <LogOut className="size-4" aria-hidden="true" />
               Sign out
-            </button>
+            </Button>
           </div>
         </header>
         <main className="flex-1 p-4 md:p-8">

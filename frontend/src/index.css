@@ -1,16 +1,158 @@
 @import 'tailwindcss';
 
-/* Neutral placeholder theme. Replace the brand palette once the UI design is finalized. */
+/* SwiftDrop theme: green brand palette from the approved UI design. */
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-500: #3b82f6;
-  --color-brand-600: #2563eb;
-  --color-brand-700: #1d4ed8;
+  --font-sans:
+    'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+    sans-serif;
+
+  --color-brand-50: #effaf3;
+  --color-brand-100: #d7f2e0;
+  --color-brand-200: #b1e4c4;
+  --color-brand-300: #7fcf9f;
+  --color-brand-400: #4cb478;
+  --color-brand-500: #26985a;
+  --color-brand-600: #188048;
+  --color-brand-700: #13673b;
+  --color-brand-800: #125231;
+  --color-brand-900: #0f432a;
 }
 
 @layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
+  }
+}
+
+/* ---- Landing page motion (kept subtle; all of it is switched off for reduced motion) ---- */
+@theme {
+  --animate-fade-up: fade-up 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-fade-in: fade-in 0.9s ease-out both;
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(18px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+      transform: scale(0.97);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+}
+
+@layer components {
+  /* Scroll reveal: <Reveal> sets data-visible once the element enters the viewport. */
+  .reveal {
+    opacity: 0;
+    transform: translateY(24px);
+    transition:
+      opacity 0.7s cubic-bezier(0.22, 1, 0.36, 1),
+      transform 0.7s cubic-bezier(0.22, 1, 0.36, 1);
+    transition-delay: var(--reveal-delay, 0ms);
+  }
+  .reveal[data-visible='true'] {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Hero illustration: the van "drives" (road moves, van bobs, speed lines flicker). */
+  .hero-road {
+    animation: hero-road 0.9s linear infinite;
+  }
+  .hero-van {
+    animation: hero-bob 1.6s ease-in-out infinite;
+  }
+  .hero-speed path {
+    animation: hero-speed 1.4s ease-in-out infinite;
+  }
+  .hero-speed path:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+  .hero-speed path:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+  .hero-route {
+    animation: hero-route 2.4s linear infinite;
+  }
+  .hero-pin {
+    animation: hero-pin 2.4s ease-in-out infinite;
+    transform-box: fill-box;
+    transform-origin: bottom;
+  }
+}
+
+@keyframes hero-road {
+  to {
+    stroke-dashoffset: 48;
+  }
+}
+@keyframes hero-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-3px);
+  }
+}
+@keyframes hero-speed {
+  0%,
+  100% {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  50% {
+    opacity: 0.35;
+    transform: translateX(-10px);
+  }
+}
+@keyframes hero-route {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@keyframes hero-pin {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .hero-road,
+  .hero-van,
+  .hero-speed path,
+  .hero-route,
+  .hero-pin,
+  .animate-fade-up,
+  .animate-fade-in {
+    animation: none;
   }
 }
