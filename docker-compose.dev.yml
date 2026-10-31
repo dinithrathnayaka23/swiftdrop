@@ -6,7 +6,7 @@
 #             docker compose -f docker-compose.yml -f docker-compose.dev.yml restart backend)
 #
 # Prefer running backend/frontend directly on your machine? You don't need this file:
-#   docker compose up -d postgres rabbitmq
+#   docker compose up -d postgres rabbitmq redis
 
 services:
   backend:
@@ -28,7 +28,7 @@ services:
     command: ["sh", "-c", "npm ci --no-audit --no-fund && npm run dev -- --host 0.0.0.0"]
     environment:
       VITE_PROXY_TARGET: http://backend:8080
-      VITE_ENABLE_DEV_LOGIN: "true"
+      VITE_USE_MOCK_API: "true"
       CHOKIDAR_USEPOLLING: "true"   # file watching through Docker Desktop bind mounts on Windows/macOS
     ports: !override
       - "5173:5173"

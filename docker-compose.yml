@@ -3,9 +3,11 @@
 #   Backend API   http://localhost:8080/api/v1/health
 #   RabbitMQ UI   http://localhost:15672
 #   PostgreSQL    localhost:5432
+#   Redis         localhost:6379   (sign-in sessions, rate limits; password = REDIS_PASSWORD)
+#   Mailpit UI    http://localhost:8025   (every email the app sends lands here, nothing is delivered)
 #
 # Only infrastructure (run backend/frontend on your machine):
-#   docker compose up -d postgres rabbitmq
+#   docker compose up -d postgres rabbitmq redis mailpit
 
 name: swiftdrop
 
@@ -45,6 +47,32 @@ services:
       retries: 10
       start_period: 20s
 
+  # Sign-in sessions, rate-limit counters and cooldowns (all expire automatically).
+  redis:
+    image: redis:8.6-alpine
+    restart: unless-stopped
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?set REDIS_PASSWORD in .env}
+    # appendonly: sessions survive a Redis restart, so nobody is signed out by maintenance.
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" --no-auth-warning ping | grep -q PONG"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Local SMTP catcher for development: captures password reset / approval emails.
+  mailpit:
+    image: axllent/mailpit:v1.32
+    restart: unless-stopped
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # web UI
+
   backend:
     build:
       context: ./backend
@@ -59,15 +87,31 @@ services:
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (min 32 chars)}
-      JWT_EXPIRY: ${JWT_EXPIRY:-3600}
-      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-not-configured}
-      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-not-configured}
-      MAIL_HOST: ${MAIL_HOST:-localhost}
+      JWT_EXPIRY: ${JWT_EXPIRY:-900}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-true}
+      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      PASSWORD_RESET_EXPIRY: ${PASSWORD_RESET_EXPIRY:-1800}
+      REFRESH_TOKEN_EXPIRY_REMEMBER_ME: ${REFRESH_TOKEN_EXPIRY_REMEMBER_ME:-2592000}
+      REFRESH_TOKEN_EXPIRY_SESSION: ${REFRESH_TOKEN_EXPIRY_SESSION:-86400}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_FULL_NAME: ${ADMIN_FULL_NAME:-SwiftDrop Admin}
+      # SMTP from .env (Gmail); falls back to the local Mailpit catcher when MAIL_HOST is not set.
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
       MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
       MAIL_USERNAME: ${MAIL_USERNAME:-}
       MAIL_PASSWORD: ${MAIL_PASSWORD:-}
       MAIL_FROM: ${MAIL_FROM:-no-reply@swiftdrop.local}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-SwiftDrop}
+      PASSWORD_RESET_RESEND_COOLDOWN: ${PASSWORD_RESET_RESEND_COOLDOWN:-60}
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:3000}
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     depends_on:
@@ -75,6 +119,10 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness > /dev/null || exit 1"]
       interval: 10s
@@ -87,7 +135,7 @@ services:
       context: ./frontend
       args:
         VITE_API_BASE_URL: /api/v1
-        VITE_ENABLE_DEV_LOGIN: ${VITE_ENABLE_DEV_LOGIN:-false}
+        VITE_USE_MOCK_API: ${VITE_USE_MOCK_API:-false}
     restart: unless-stopped
     ports:
       - "${FRONTEND_PORT:-3000}:80"
@@ -98,3 +146,4 @@ services:
 volumes:
   postgres_data:
   rabbitmq_data:
+  redis_data:
