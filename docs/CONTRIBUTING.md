@@ -54,6 +54,8 @@ Small, focused commits are easier to review.
 - Use constructor injection (`@RequiredArgsConstructor`), not field `@Autowired`.
 - Throw the exceptions in `common.exception`; never return stack traces or internal messages.
 - Write tests for services (unit) and controllers (`@WebMvcTest`). Integration tests end in `*IT.java`.
+- Empty packages hold a `.gitkeep` only so Git keeps the folder. When you add the first real file to a
+  folder (main or test), delete its `.gitkeep` in the same PR. Leave `.gitkeep` in folders that are still empty.
 
 ### Frontend
 - Pages go in `src/pages/<role>/`, reusable UI in `src/components/`, API calls in `src/api/<module>.ts` using `apiClient`.
