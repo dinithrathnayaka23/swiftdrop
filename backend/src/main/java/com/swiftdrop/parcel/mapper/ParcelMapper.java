@@ -2,9 +2,12 @@ package com.swiftdrop.parcel.mapper;
 
 import com.swiftdrop.parcel.dto.AddressDetails;
 import com.swiftdrop.parcel.dto.ParcelDetails;
+import com.swiftdrop.parcel.dto.StatusHistoryEntry;
 import com.swiftdrop.parcel.model.Address;
 import com.swiftdrop.parcel.model.Parcel;
+import com.swiftdrop.parcel.model.ParcelStatus;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
+import com.swiftdrop.parcel.model.ParcelStatusHistory;
 
 public final class ParcelMapper {
 
@@ -20,6 +23,15 @@ public final class ParcelMapper {
                 ParcelStatusCode.valueOf(parcel.getCurrentStatus().getStatusCode()),
                 parcel.getPricingRuleId(), parcel.getQuotedFee(), parcel.getFeeCurrency(),
                 parcel.getCreatedAt(), parcel.getUpdatedAt());
+    }
+
+    public static StatusHistoryEntry toEntry(ParcelStatusHistory history) {
+        ParcelStatus previous = history.getPreviousStatus();
+        return new StatusHistoryEntry(history.getId(), history.getParcel().getId(),
+                previous == null ? null : ParcelStatusCode.valueOf(previous.getStatusCode()),
+                ParcelStatusCode.valueOf(history.getStatus().getStatusCode()), history.getChangedByUserId(),
+                history.getNote(), history.getFailureReason(), history.getRecipientName(),
+                history.getProofFileUrl(), history.getChangedAt());
     }
 
     public static AddressDetails toDetails(Address address) {

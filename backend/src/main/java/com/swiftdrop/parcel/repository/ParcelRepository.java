@@ -1,6 +1,7 @@
 package com.swiftdrop.parcel.repository;
 
 import com.swiftdrop.parcel.model.Parcel;
+import jakarta.persistence.LockModeType;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -9,6 +10,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -20,6 +22,11 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
 
     @EntityGraph(attributePaths = {"pickupAddress", "dropoffAddress", "currentStatus"})
     List<Parcel> findWithDetailsByIdIn(Collection<UUID> ids);
+
+    /** Locks the parcel row until the transaction ends, so two status changes cannot overlap. */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select p from Parcel p join fetch p.currentStatus where p.id = :id")
+    Optional<Parcel> findByIdForUpdate(@Param("id") UUID id);
 
     @EntityGraph(attributePaths = {"pickupAddress", "dropoffAddress", "currentStatus"})
     Optional<Parcel> findByTrackingNumber(String trackingNumber);

@@ -1,5 +1,7 @@
 package com.swiftdrop.parcel.service;
 
+import static com.swiftdrop.parcel.service.Texts.trimToNull;
+
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.parcel.dto.NewAddress;
@@ -224,13 +226,5 @@ public class ParcelService {
             return Pageable.unpaged(DEFAULT_SORT);
         }
         return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), DEFAULT_SORT);
-    }
-
-    private static String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
     }
 }

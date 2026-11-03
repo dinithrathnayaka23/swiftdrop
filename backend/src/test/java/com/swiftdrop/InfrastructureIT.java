@@ -78,8 +78,9 @@ class InfrastructureIT extends IntegrationTestBase {
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.WEBHOOK_QUEUE)).isNotNull();
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.DEAD_LETTER_QUEUE)).isNotNull();
 
-        var event = new ParcelStatusChangedEvent(UUID.randomUUID(), "SD-TEST-0001", "CREATED", "ASSIGNED",
-                Instant.now(), UUID.randomUUID());
+        var event = new ParcelStatusChangedEvent(UUID.randomUUID(), ParcelStatusChangedEvent.EVENT_TYPE,
+                ParcelStatusChangedEvent.SCHEMA_VERSION, UUID.randomUUID(), "SD-TEST-0001", null, "CREATED",
+                "PICKED_UP", 2, UUID.randomUUID(), UUID.randomUUID(), Instant.now());
         rabbitTemplate.convertAndSend(RabbitConfig.PARCEL_EVENTS_EXCHANGE, RabbitConfig.PARCEL_STATUS_CHANGED_KEY,
                 event);
 
