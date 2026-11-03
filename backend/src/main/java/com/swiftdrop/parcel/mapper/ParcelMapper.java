@@ -15,7 +15,7 @@ public final class ParcelMapper {
         return new ParcelDetails(parcel.getId(), parcel.getTrackingNumber(), parcel.getCustomerUserId(),
                 parcel.getMerchantId(), parcel.getExternalOrderReference(),
                 toDetails(parcel.getPickupAddress()), toDetails(parcel.getDropoffAddress()),
-                parcel.getWeightKg(), parcel.getLengthCm(), parcel.getWidthCm(), parcel.getHeightCm(),
+                parcel.getParcelType(), parcel.getWeightKg(), parcel.getLengthCm(), parcel.getWidthCm(), parcel.getHeightCm(),
                 parcel.getContentDescription(), parcel.getDeliveryInstructions(),
                 ParcelStatusCode.valueOf(parcel.getCurrentStatus().getStatusCode()),
                 parcel.getPricingRuleId(), parcel.getQuotedFee(), parcel.getFeeCurrency(),

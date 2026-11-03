@@ -1,5 +1,6 @@
 package com.swiftdrop.parcel.dto;
 
+import com.swiftdrop.parcel.model.ParcelType;
 import java.math.BigDecimal;
 import java.util.Objects;
 import java.util.UUID;
@@ -22,6 +23,7 @@ public record NewParcel(
         String externalOrderReference,
         NewAddress pickupAddress,
         NewAddress dropoffAddress,
+        ParcelType parcelType,
         BigDecimal weightKg,
         BigDecimal lengthCm,
         BigDecimal widthCm,
@@ -41,6 +43,7 @@ public record NewParcel(
         }
         Objects.requireNonNull(pickupAddress, "pickupAddress");
         Objects.requireNonNull(dropoffAddress, "dropoffAddress");
+        Objects.requireNonNull(parcelType, "parcelType");
         Objects.requireNonNull(weightKg, "weightKg");
         Objects.requireNonNull(quotedFee, "quotedFee");
         if (weightKg.signum() <= 0) {

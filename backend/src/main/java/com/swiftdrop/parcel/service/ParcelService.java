@@ -15,7 +15,13 @@ import com.swiftdrop.parcel.repository.AddressRepository;
 import com.swiftdrop.parcel.repository.ParcelRepository;
 import com.swiftdrop.parcel.repository.ParcelStatusHistoryRepository;
 import com.swiftdrop.parcel.repository.ParcelStatusRepository;
+import com.swiftdrop.parcel.repository.StatusCount;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -77,6 +83,7 @@ public class ParcelService {
         parcel.setExternalOrderReference(externalOrderReference);
         parcel.setPickupAddress(addressRepository.save(toAddress(newParcel.pickupAddress())));
         parcel.setDropoffAddress(addressRepository.save(toAddress(newParcel.dropoffAddress())));
+        parcel.setParcelType(newParcel.parcelType());
         parcel.setWeightKg(newParcel.weightKg());
         parcel.setLengthCm(newParcel.lengthCm());
         parcel.setWidthCm(newParcel.widthCm());
@@ -107,10 +114,35 @@ public class ParcelService {
                 .orElseThrow(() -> new NotFoundException("Parcel not found"));
     }
 
+    /**
+     * The parcels with these ids, in no particular order, in one query (for example the parcels of
+     * a courier's assignments). Unknown ids are skipped.
+     */
+    @Transactional(readOnly = true)
+    public List<ParcelDetails> findAllByIds(Collection<UUID> parcelIds) {
+        if (parcelIds.isEmpty()) {
+            return List.of();
+        }
+        return parcelRepository.findWithDetailsByIdIn(parcelIds).stream()
+                .map(ParcelMapper::toDetails)
+                .toList();
+    }
+
     /** Case and surrounding spaces in {@code trackingNumber} are ignored. */
     @Transactional(readOnly = true)
     public Optional<ParcelDetails> findByTrackingNumber(String trackingNumber) {
         return parcelRepository.findByTrackingNumber(normalizeTrackingNumber(trackingNumber))
+                .map(ParcelMapper::toDetails);
+    }
+
+    /** A merchant's order by the merchant's own order reference (surrounding spaces are ignored). */
+    @Transactional(readOnly = true)
+    public Optional<ParcelDetails> findByMerchantOrderReference(UUID merchantId, String externalOrderReference) {
+        String reference = trimToNull(externalOrderReference);
+        if (reference == null) {
+            return Optional.empty();
+        }
+        return parcelRepository.findByMerchantIdAndExternalOrderReference(merchantId, reference)
                 .map(ParcelMapper::toDetails);
     }
 
@@ -126,6 +158,39 @@ public class ParcelService {
     public Page<ParcelDetails> listByMerchant(UUID merchantId, Pageable pageable) {
         return parcelRepository.findByMerchantId(merchantId, withDefaultSort(pageable))
                 .map(ParcelMapper::toDetails);
+    }
+
+    /**
+     * All parcels that currently have this status, newest first unless {@code pageable} has a sort.
+     * For example CREATED parcels waiting for a courier, or FAILED ones to follow up.
+     */
+    @Transactional(readOnly = true)
+    public Page<ParcelDetails> listByStatus(ParcelStatusCode status, Pageable pageable) {
+        return parcelRepository.findByCurrentStatusStatusCode(status.name(), withDefaultSort(pageable))
+                .map(ParcelMapper::toDetails);
+    }
+
+    /** Number of parcels per status, for every status (0 when there are none), in lifecycle order. */
+    @Transactional(readOnly = true)
+    public Map<ParcelStatusCode, Long> countByStatus() {
+        return toStatusMap(parcelRepository.countByStatus());
+    }
+
+    /** Like {@link #countByStatus()}, for one merchant's orders only. */
+    @Transactional(readOnly = true)
+    public Map<ParcelStatusCode, Long> countByStatusForMerchant(UUID merchantId) {
+        return toStatusMap(parcelRepository.countByStatusForMerchant(merchantId));
+    }
+
+    private static Map<ParcelStatusCode, Long> toStatusMap(List<StatusCount> counts) {
+        Map<ParcelStatusCode, Long> byStatus = new EnumMap<>(ParcelStatusCode.class);
+        for (ParcelStatusCode status : ParcelStatusCode.values()) {
+            byStatus.put(status, 0L);
+        }
+        for (StatusCount count : counts) {
+            byStatus.put(ParcelStatusCode.valueOf(count.statusCode()), count.count());
+        }
+        return Collections.unmodifiableMap(byStatus);
     }
 
     private String newTrackingNumber() {

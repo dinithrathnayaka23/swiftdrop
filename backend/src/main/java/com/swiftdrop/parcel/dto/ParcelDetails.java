@@ -1,6 +1,7 @@
 package com.swiftdrop.parcel.dto;
 
 import com.swiftdrop.parcel.model.ParcelStatusCode;
+import com.swiftdrop.parcel.model.ParcelType;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
@@ -23,6 +24,7 @@ public record ParcelDetails(
         String externalOrderReference,
         AddressDetails pickupAddress,
         AddressDetails dropoffAddress,
+        ParcelType parcelType,
         BigDecimal weightKg,
         BigDecimal lengthCm,
         BigDecimal widthCm,
