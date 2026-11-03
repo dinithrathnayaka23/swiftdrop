@@ -18,6 +18,8 @@ import org.testcontainers.containers.GenericContainer;
 /** RateLimiter and SessionStore against a real Redis (no Spring context). Requires Docker. */
 class RedisStoresIT {
 
+    // Stopped in stopRedis(); the IDE cannot follow the fluent withExposedPorts() call.
+    @SuppressWarnings("resource")
     private static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8.6-alpine").withExposedPorts(6379);
     private static LettuceConnectionFactory connectionFactory;
     private static StringRedisTemplate redis;

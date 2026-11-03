@@ -32,6 +32,9 @@ public abstract class IntegrationTestBase {
     @ServiceConnection
     static final RabbitMQContainer RABBIT = new RabbitMQContainer("rabbitmq:4.4-management-alpine");
 
+    // Shared for the whole run and removed by Testcontainers (Ryuk) at JVM exit, like the
+    // containers above; the IDE cannot follow the fluent withExposedPorts() call.
+    @SuppressWarnings("resource")
     @ServiceConnection(name = "redis")
     static final GenericContainer<?> REDIS = new GenericContainer<>("redis:8.6-alpine").withExposedPorts(6379);
 

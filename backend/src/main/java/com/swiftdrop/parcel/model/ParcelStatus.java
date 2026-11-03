@@ -9,8 +9,9 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 /**
- * Reference data for the parcel lifecycle (BOOKED, ASSIGNED, ..., DELIVERED). Seeded by
- * {@code V1__init.sql}. Table {@code parcel_statuses}.
+ * Reference data for the parcel lifecycle (CREATED, PICKED_UP, ..., DELIVERED, FAILED). Seeded by
+ * {@code V1__init.sql} and replaced by {@code V4_001}; the codes match {@link ParcelStatusCode}.
+ * Table {@code parcel_statuses}.
  */
 @Entity
 @Table(name = "parcel_statuses")
