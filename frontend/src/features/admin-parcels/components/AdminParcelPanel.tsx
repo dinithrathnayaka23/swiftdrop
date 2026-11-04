@@ -26,7 +26,7 @@ import Button from '../../../components/ui/Button';
 import CopyButton from '../../shared-parcels/components/CopyButton';
 import StatusHistoryList from '../../shared-parcels/components/StatusHistoryList';
 import StatusPill from '../../shared-parcels/components/StatusPill';
-import { adminStatusVisual } from '../../shared-parcels/components/statusVisuals';
+import { adminStatusVisual, isUnassigned } from '../../shared-parcels/components/statusVisuals';
 
 type Tab = 'details' | 'history' | 'items' | 'notes';
 const TABS: { id: Tab; label: string }[] = [
@@ -147,7 +147,7 @@ function DetailsTab({ parcel }: { parcel: AdminParcelDetail }) {
 function PanelBody({ parcel, onClose }: { parcel: AdminParcelDetail; onClose: () => void }) {
   const [tab, setTab] = useState<Tab>('details');
   const navigate = useNavigate();
-  const canAssign = parcel.status === 'CREATED' && parcel.dispatchState === 'UNASSIGNED';
+  const canAssign = isUnassigned(parcel.status, parcel.dispatchState);
 
   return (
     <div className="flex h-full flex-col">

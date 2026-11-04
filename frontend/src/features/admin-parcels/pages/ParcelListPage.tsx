@@ -8,7 +8,7 @@ import AdminParcelPanel from '../components/AdminParcelPanel';
 import Pagination from '../../shared-parcels/components/Pagination';
 import RowMenu from '../../shared-parcels/components/RowMenu';
 import StatusPill from '../../shared-parcels/components/StatusPill';
-import { adminStatusVisual } from '../../shared-parcels/components/statusVisuals';
+import { adminStatusVisual, isUnassigned } from '../../shared-parcels/components/statusVisuals';
 import Button from '../../../components/ui/Button';
 import { inputClasses } from '../../../components/ui/fieldStyles';
 import { PATHS } from '../../../routes/paths';
@@ -165,7 +165,12 @@ export default function ParcelListPage() {
   }
 
   return (
-    <div className="mx-auto grid max-w-[1600px] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div
+      className={cn(
+        'mx-auto grid max-w-[1600px] gap-6',
+        panelId && 'xl:grid-cols-[minmax(0,1fr)_380px]',
+      )}
+    >
       <div className="min-w-0 space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -176,7 +181,7 @@ export default function ParcelListPage() {
           </div>
           <div className="flex gap-3">
             <Button
-              className="bg-brand-800 hover:bg-brand-900"
+              className="bg-brand-800 hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-100"
               disabled
               title="Adding parcels from the admin portal is not available yet"
             >
@@ -198,7 +203,7 @@ export default function ParcelListPage() {
           <div
             role="tablist"
             aria-label="Parcel groups"
-            className="flex flex-wrap gap-x-1 border-b border-slate-200 px-3"
+            className="flex [scrollbar-width:none] overflow-x-auto border-b border-slate-200 px-2 [&::-webkit-scrollbar]:hidden"
           >
             {TABS.map((item) => (
               <button
@@ -208,7 +213,7 @@ export default function ParcelListPage() {
                 aria-selected={tab === item.id}
                 onClick={() => changeFilter(() => setTab(item.id))}
                 className={cn(
-                  'flex shrink-0 items-center gap-2 border-b-2 px-3 py-4 text-sm font-medium',
+                  'flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-4 text-sm font-medium whitespace-nowrap',
                   tab === item.id
                     ? 'border-brand-700 text-brand-700'
                     : 'border-transparent text-slate-600 hover:text-slate-900',
@@ -353,10 +358,16 @@ export default function ParcelListPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row) => {
-                      const unassigned =
-                        row.status === 'CREATED' && row.dispatchState === 'UNASSIGNED';
+                      const unassigned = isUnassigned(row.status, row.dispatchState);
                       return (
-                        <tr key={row.id} className={cn(panelId === row.id && 'bg-brand-50/40')}>
+                        <tr
+                          key={row.id}
+                          onClick={() => open(row)}
+                          className={cn(
+                            'cursor-pointer hover:bg-slate-50',
+                            panelId === row.id && 'bg-brand-50/40 hover:bg-brand-50/60',
+                          )}
+                        >
                           <td className="px-4 py-3 font-semibold text-slate-900">
                             #{row.trackingNumber}
                           </td>
@@ -376,20 +387,25 @@ export default function ParcelListPage() {
                               : formatDate(row.createdAt)}
                           </td>
                           <td className="px-3 py-3">
-                            <Button
-                              size="sm"
-                              variant={unassigned ? 'primary' : 'outline'}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                open(row);
+                              }}
                               className={cn(
-                                'min-w-16',
-                                unassigned && 'bg-brand-800 hover:bg-brand-900',
+                                'inline-flex h-8 min-w-16 items-center justify-center rounded-md px-4 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
+                                unassigned
+                                  ? 'bg-brand-800 text-white shadow-sm hover:bg-brand-900'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
                               )}
-                              onClick={() => open(row)}
                             >
                               {unassigned ? 'Assign' : 'View'}
                               <span className="sr-only"> {row.trackingNumber}</span>
-                            </Button>
+                            </button>
                           </td>
-                          <td className="px-3 py-3">
+                          {/* The menu has its own actions; a click in it must not also open the row. */}
+                          <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
                             <RowMenu
                               vertical
                               label={`More actions for ${row.trackingNumber}`}
