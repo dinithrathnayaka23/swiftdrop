@@ -6,6 +6,8 @@ import static com.swiftdrop.parcel.repository.ParcelSpecifications.createdBetwee
 import static com.swiftdrop.parcel.repository.ParcelSpecifications.customerSearch;
 import static com.swiftdrop.parcel.repository.ParcelSpecifications.deliveredTo;
 import static com.swiftdrop.parcel.repository.ParcelSpecifications.hasStatus;
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.idIn;
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.idNotIn;
 import static com.swiftdrop.parcel.repository.ParcelSpecifications.none;
 import static com.swiftdrop.parcel.repository.ParcelSpecifications.ownedByCustomer;
 
@@ -33,9 +35,11 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -48,8 +52,9 @@ import org.springframework.util.StringUtils;
  * Reads for the customer and admin parcel screens (dashboard, My Deliveries, Delivery Details,
  * admin Parcels). Used only by this module's controllers; other modules use {@link ParcelService}.
  *
- * <p>Until the dispatch module can say which CREATED parcels have a courier, every CREATED parcel
- * counts as UNASSIGNED and the ASSIGNED tab is empty.
+ * <p>Which CREATED parcels have a courier comes from the dispatch module through
+ * {@link DispatchStateLookup}. Without that bean every CREATED parcel counts as UNASSIGNED and the
+ * ASSIGNED tab is empty.
  */
 @Service
 @RequiredArgsConstructor
@@ -67,6 +72,7 @@ public class ParcelViewService {
     private final ParcelStatusHistoryRepository statusHistoryRepository;
     private final ParcelService parcelService;
     private final MerchantService merchantService;
+    private final ObjectProvider<DispatchStateLookup> dispatchStateLookup;
 
     // ---- Customer ----------------------------------------------------------------------------
 
@@ -112,10 +118,14 @@ public class ParcelViewService {
     @Transactional(readOnly = true)
     public Map<AdminParcelTab, Long> adminCounts() {
         Map<ParcelStatusCode, Long> byStatus = parcelService.countByStatus();
+        Set<UUID> assigned = assignedParcelIds();
+        long created = byStatus.get(ParcelStatusCode.CREATED);
+        long createdAndAssigned = assigned == null || assigned.isEmpty() ? 0
+                : parcelRepository.count(hasStatus(List.of(ParcelStatusCode.CREATED.name())).and(idIn(assigned)));
         Map<AdminParcelTab, Long> counts = new EnumMap<>(AdminParcelTab.class);
         counts.put(AdminParcelTab.ALL, byStatus.values().stream().mapToLong(Long::longValue).sum());
-        counts.put(AdminParcelTab.UNASSIGNED, byStatus.get(ParcelStatusCode.CREATED));
-        counts.put(AdminParcelTab.ASSIGNED, 0L);
+        counts.put(AdminParcelTab.UNASSIGNED, created - createdAndAssigned);
+        counts.put(AdminParcelTab.ASSIGNED, createdAndAssigned);
         counts.put(AdminParcelTab.IN_TRANSIT, byStatus.get(ParcelStatusCode.PICKED_UP)
                 + byStatus.get(ParcelStatusCode.IN_TRANSIT) + byStatus.get(ParcelStatusCode.OUT_FOR_DELIVERY));
         counts.put(AdminParcelTab.DELIVERED, byStatus.get(ParcelStatusCode.DELIVERED));
@@ -127,8 +137,9 @@ public class ParcelViewService {
     @Transactional(readOnly = true)
     public Page<AdminParcelRowResponse> listForAdmin(AdminParcelFilter filter, int page, int size) {
         Map<UUID, String> merchantNames = merchantNames();
+        Set<UUID> assigned = assignedParcelIds();
         Specification<Parcel> spec = any()
-                .and(inTab(filter.tab() == null ? AdminParcelTab.ALL : filter.tab()))
+                .and(inTab(filter.tab() == null ? AdminParcelTab.ALL : filter.tab(), assigned))
                 .and(createdBetween(startOf(filter.createdFrom()), endOf(filter.createdTo())));
         if (StringUtils.hasText(filter.search())) {
             String term = filter.search().trim().toLowerCase(Locale.ROOT);
@@ -145,7 +156,8 @@ public class ParcelViewService {
             spec = spec.and(deliveredTo(filter.area()));
         }
         return parcelRepository.findAll(spec, PageRequest.of(page, size, NEWEST_FIRST))
-                .map(parcel -> ParcelViewMapper.toAdminRow(parcel, merchantNames.get(parcel.getMerchantId())));
+                .map(parcel -> ParcelViewMapper.toAdminRow(parcel, merchantNames.get(parcel.getMerchantId()),
+                        dispatchState(parcel, assigned)));
     }
 
     /** @throws NotFoundException if there is no parcel with this id */
@@ -154,15 +166,31 @@ public class ParcelViewService {
         Parcel parcel = parcelRepository.findWithDetailsById(parcelId)
                 .orElseThrow(() -> new NotFoundException("Parcel not found"));
         String merchantName = parcel.getMerchantId() == null ? null : merchantNames().get(parcel.getMerchantId());
-        return ParcelViewMapper.toAdminDetail(parcel, merchantName,
+        return ParcelViewMapper.toAdminDetail(parcel, merchantName, dispatchState(parcel, assignedParcelIds()),
                 statusHistoryRepository.findByParcelIdOrderByChangedAtAsc(parcelId));
     }
 
-    private static Specification<Parcel> inTab(AdminParcelTab tab) {
+    /** Parcels with an open courier assignment, or {@code null} while the dispatch module can't tell. */
+    private Set<UUID> assignedParcelIds() {
+        DispatchStateLookup lookup = dispatchStateLookup.getIfAvailable();
+        return lookup == null ? null : lookup.parcelsWithOpenAssignment();
+    }
+
+    /** UNASSIGNED / ASSIGNED for a CREATED parcel when known; {@code null} otherwise. */
+    private static String dispatchState(Parcel parcel, Set<UUID> assigned) {
+        if (assigned == null || !ParcelStatusCode.CREATED.name().equals(parcel.getCurrentStatus().getStatusCode())) {
+            return null;
+        }
+        return assigned.contains(parcel.getId()) ? AdminParcelTab.ASSIGNED.name() : AdminParcelTab.UNASSIGNED.name();
+    }
+
+    /** @param assigned parcels with a courier, or {@code null} when unknown (all CREATED are unassigned) */
+    private static Specification<Parcel> inTab(AdminParcelTab tab, Set<UUID> assigned) {
+        Specification<Parcel> created = hasStatus(List.of(ParcelStatusCode.CREATED.name()));
         return switch (tab) {
             case ALL -> any();
-            case UNASSIGNED -> hasStatus(List.of(ParcelStatusCode.CREATED.name()));
-            case ASSIGNED -> none();
+            case UNASSIGNED -> assigned == null ? created : created.and(idNotIn(assigned));
+            case ASSIGNED -> assigned == null ? none() : created.and(idIn(assigned));
             case IN_TRANSIT -> hasStatus(ON_THE_WAY);
             case DELIVERED -> hasStatus(List.of(ParcelStatusCode.DELIVERED.name()));
             case FAILED -> hasStatus(List.of(ParcelStatusCode.FAILED.name()));
