@@ -4,7 +4,7 @@
  * @type {import('jest').Config}
  */
 export default {
-  testEnvironment: 'jsdom',
+  testEnvironment: '<rootDir>/jest.environment.js',
   roots: ['<rootDir>/src'],
   setupFiles: ['<rootDir>/jest.polyfills.js'],
   setupFilesAfterEnv: ['<rootDir>/src/test/setup.ts'],
@@ -31,7 +31,7 @@ export default {
     '^axios$': '<rootDir>/node_modules/axios/dist/browser/axios.cjs',
     '\\.css$': '<rootDir>/src/test/styleStub.ts',
     // React Router's framework-mode route loader uses Vite's import.meta.hot, which can't be
-    // compiled for Jest. This app uses plain <Routes>, so the loader is never called.
+    // compiled for Jest. This app doesn't use framework mode, so the loader is never called.
     '^\\./routeModules\\.js$': '<rootDir>/src/test/reactRouterRouteModulesStub.ts',
   },
   clearMocks: true,
