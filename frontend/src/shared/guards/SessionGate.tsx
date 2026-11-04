@@ -1,8 +1,8 @@
 import { WifiOff } from 'lucide-react';
-import LoadingState from '../components/feedback/LoadingState';
-import StateView from '../components/feedback/StateView';
-import Button from '../components/ui/Button';
-import { useAuth } from '../hooks/useAuth';
+import LoadingState from '../../components/feedback/LoadingState';
+import StateView from '../../components/feedback/StateView';
+import Button from '../../components/ui/Button';
+import { useAuth } from '../../hooks/useAuth';
 
 /**
  * Shown by the route guards while the session isn't known yet: "restoring" after a reload, or

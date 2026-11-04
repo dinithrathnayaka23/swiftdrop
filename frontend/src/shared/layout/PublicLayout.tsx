@@ -1,12 +1,14 @@
+import { Suspense } from 'react';
 import { LayoutDashboard, Menu, X } from 'lucide-react';
 import { useState } from 'react';
 import { Link, NavLink, Outlet, useLocation } from 'react-router';
-import Logo from '../components/brand/Logo';
-import SiteFooter from '../components/layout/SiteFooter';
-import ButtonLink from '../components/ui/ButtonLink';
-import { useAuth } from '../hooks/useAuth';
-import { PATHS, ROLE_HOME } from '../routes/paths';
-import { cn } from '../utils/cn';
+import Logo from '../../components/brand/Logo';
+import SiteFooter from '../../components/layout/SiteFooter';
+import ButtonLink from '../../components/ui/ButtonLink';
+import { useAuth } from '../../hooks/useAuth';
+import { PATHS, ROLE_HOME } from '../../routes/paths';
+import { cn } from '../../utils/cn';
+import LoadingState from '../../components/feedback/LoadingState';
 
 const NAV_LINKS = [
   { label: 'Track Parcel', to: PATHS.track },
@@ -109,7 +111,9 @@ export default function PublicLayout() {
       </header>
 
       <main className="flex-1">
-        <Outlet />
+        <Suspense fallback={<LoadingState />}>
+          <Outlet />
+        </Suspense>
       </main>
 
       <SiteFooter />

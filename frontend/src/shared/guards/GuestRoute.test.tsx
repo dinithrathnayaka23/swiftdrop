@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { AuthProvider } from '../context/AuthContext';
-import { saveSession } from '../utils/sessionStorage';
+import { AuthProvider } from '../../context/AuthContext';
+import { saveSession } from '../../utils/sessionStorage';
 import GuestRoute from './GuestRoute';
 
 function renderLogin() {

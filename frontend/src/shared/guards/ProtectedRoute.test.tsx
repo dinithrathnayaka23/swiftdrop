@@ -1,8 +1,8 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { AuthProvider } from '../context/AuthContext';
-import type { Role } from '../types/auth';
-import { saveSession } from '../utils/sessionStorage';
+import { AuthProvider } from '../../context/AuthContext';
+import type { Role } from '../../types/auth';
+import { saveSession } from '../../utils/sessionStorage';
 import ProtectedRoute from './ProtectedRoute';
 
 function renderAt(path: string) {

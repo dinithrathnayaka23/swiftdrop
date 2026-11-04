@@ -1,7 +1,7 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
-import { useAuth } from '../hooks/useAuth';
-import type { Role } from '../types/auth';
-import { PATHS } from './paths';
+import { useAuth } from '../../hooks/useAuth';
+import type { Role } from '../../types/auth';
+import { PATHS } from '../../routes/paths';
 import SessionGate from './SessionGate';
 
 interface ProtectedRouteProps {

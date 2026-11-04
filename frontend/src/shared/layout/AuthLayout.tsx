@@ -1,6 +1,8 @@
+import { Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router';
-import AuthShowcase, { type ShowcaseContent } from '../components/auth/AuthShowcase';
-import { PATHS } from '../routes/paths';
+import AuthShowcase, { type ShowcaseContent } from '../../components/auth/AuthShowcase';
+import { PATHS } from '../../routes/paths';
+import LoadingState from '../../components/feedback/LoadingState';
 
 const CUSTOMER_FEATURES = [
   'Live tracking from pickup to doorstep',
@@ -99,7 +101,9 @@ export default function AuthLayout() {
           className="pointer-events-none absolute -top-24 -right-24 size-72 rounded-full bg-brand-100/50 blur-3xl lg:hidden"
         />
         <div className="relative mx-auto w-full max-w-md">
-          <Outlet />
+          <Suspense fallback={<LoadingState />}>
+            <Outlet />
+          </Suspense>
         </div>
       </main>
     </div>

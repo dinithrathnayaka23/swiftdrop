@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router';
-import { useAuth } from '../hooks/useAuth';
-import { ROLE_HOME } from './paths';
+import { useAuth } from '../../hooks/useAuth';
+import { ROLE_HOME } from '../../routes/paths';
 import SessionGate from './SessionGate';
 
 /** Sign-in/sign-up pages: signed-in users are sent to their dashboard instead. */
