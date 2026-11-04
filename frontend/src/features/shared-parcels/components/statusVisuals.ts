@@ -40,12 +40,25 @@ const DISPATCH_VISUALS: Record<DispatchState, Visual> = {
   ASSIGNED: { label: 'Assigned', icon: UserCheck, tone: 'info' },
 };
 
+/**
+ * A CREATED parcel without a courier. Until dispatch reports assignments (dispatchState null),
+ * every CREATED parcel counts as unassigned, as in the backend's tab counts.
+ */
+export function isUnassigned(
+  status: ParcelStatusCode,
+  dispatchState?: DispatchState | null,
+): boolean {
+  return status === 'CREATED' && dispatchState !== 'ASSIGNED';
+}
+
 /** Admin view: a CREATED parcel shows whether dispatch has assigned it; later statuses show as usual. */
 export function adminStatusVisual(
   status: ParcelStatusCode,
   dispatchState?: DispatchState | null,
 ): Visual {
-  if (status === 'CREATED' && dispatchState) return DISPATCH_VISUALS[dispatchState];
+  if (status === 'CREATED') {
+    return DISPATCH_VISUALS[isUnassigned(status, dispatchState) ? 'UNASSIGNED' : 'ASSIGNED'];
+  }
   return statusVisual(status);
 }
 

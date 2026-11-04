@@ -1,4 +1,4 @@
-import { CalendarDays, CircleX, Download, Filter, PackageOpen, Plus, Search } from 'lucide-react';
+import { CalendarDays, CircleX, Download, PackageOpen, Plus, Search } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { generatePath, useNavigate } from 'react-router';
 import { parcelsApi } from '../../../api/parcels';
@@ -8,7 +8,7 @@ import AdminParcelPanel from '../components/AdminParcelPanel';
 import Pagination from '../../shared-parcels/components/Pagination';
 import RowMenu from '../../shared-parcels/components/RowMenu';
 import StatusPill from '../../shared-parcels/components/StatusPill';
-import { adminStatusVisual } from '../../shared-parcels/components/statusVisuals';
+import { adminStatusVisual, isUnassigned } from '../../shared-parcels/components/statusVisuals';
 import Button from '../../../components/ui/Button';
 import { inputClasses } from '../../../components/ui/fieldStyles';
 import { PATHS } from '../../../routes/paths';
@@ -115,7 +115,6 @@ export default function ParcelListPage() {
   const [area, setArea] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('ALL');
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [panelClosed, setPanelClosed] = useState(false);
   const navigate = useNavigate();
@@ -163,22 +162,15 @@ export default function ParcelListPage() {
   function changeFilter(apply: () => void) {
     apply();
     setPage(0);
-    setSelected(new Set());
   }
-
-  function toggleRow(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
 
   return (
-    <div className="mx-auto grid max-w-[1600px] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+    <div
+      className={cn(
+        'mx-auto grid max-w-[1600px] gap-6',
+        panelId && 'xl:grid-cols-[minmax(0,1fr)_380px]',
+      )}
+    >
       <div className="min-w-0 space-y-5">
         <header className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -189,7 +181,7 @@ export default function ParcelListPage() {
           </div>
           <div className="flex gap-3">
             <Button
-              className="bg-brand-800 hover:bg-brand-900"
+              className="bg-brand-800 hover:bg-brand-900 disabled:cursor-not-allowed disabled:opacity-100"
               disabled
               title="Adding parcels from the admin portal is not available yet"
             >
@@ -211,7 +203,7 @@ export default function ParcelListPage() {
           <div
             role="tablist"
             aria-label="Parcel groups"
-            className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3"
+            className="flex [scrollbar-width:none] overflow-x-auto border-b border-slate-200 px-2 [&::-webkit-scrollbar]:hidden"
           >
             {TABS.map((item) => (
               <button
@@ -221,7 +213,7 @@ export default function ParcelListPage() {
                 aria-selected={tab === item.id}
                 onClick={() => changeFilter(() => setTab(item.id))}
                 className={cn(
-                  'flex shrink-0 items-center gap-2 border-b-2 px-3 py-4 text-sm font-medium',
+                  'flex shrink-0 items-center gap-1.5 border-b-2 px-2.5 py-4 text-sm font-medium whitespace-nowrap',
                   tab === item.id
                     ? 'border-brand-700 text-brand-700'
                     : 'border-transparent text-slate-600 hover:text-slate-900',
@@ -240,8 +232,8 @@ export default function ParcelListPage() {
             ))}
           </div>
 
-          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_150px_150px_150px_auto] xl:items-end">
-            <div className="relative md:col-span-2 xl:col-span-1">
+          <div className="grid gap-3 p-4 sm:grid-cols-3 sm:items-end">
+            <div className="relative sm:col-span-3">
               <Search
                 className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
                 aria-hidden="true"
@@ -307,15 +299,6 @@ export default function ParcelListPage() {
                 ))}
               </select>
             </div>
-            <Button
-              variant="outline"
-              className="h-10"
-              disabled
-              title="More filters are not available yet"
-            >
-              <Filter className="size-4" aria-hidden="true" />
-              More Filters
-            </Button>
           </div>
 
           {list.status === 'loading' && (
@@ -351,22 +334,9 @@ export default function ParcelListPage() {
           {list.status === 'success' && rows.length > 0 && (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-left text-sm">
+                <table className="w-full min-w-[880px] text-left text-sm">
                   <thead className="border-y border-slate-200 bg-slate-50 text-xs text-slate-600">
                     <tr>
-                      <th scope="col" className="w-12 px-4 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all parcels on this page"
-                          checked={allSelected}
-                          onChange={() =>
-                            setSelected(
-                              allSelected ? new Set() : new Set(rows.map((row) => row.id)),
-                            )
-                          }
-                          className="size-4 rounded border-slate-300 accent-brand-700"
-                        />
-                      </th>
                       {[
                         'Tracking No.',
                         'Merchant',
@@ -377,7 +347,7 @@ export default function ParcelListPage() {
                         'Created At',
                         'Action',
                       ].map((label) => (
-                        <th key={label} scope="col" className="px-3 py-3 font-medium">
+                        <th key={label} scope="col" className="px-3 py-3 font-medium first:pl-4">
                           {label}
                         </th>
                       ))}
@@ -388,20 +358,17 @@ export default function ParcelListPage() {
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {rows.map((row) => {
-                      const unassigned =
-                        row.status === 'CREATED' && row.dispatchState === 'UNASSIGNED';
+                      const unassigned = isUnassigned(row.status, row.dispatchState);
                       return (
-                        <tr key={row.id} className={cn(panelId === row.id && 'bg-brand-50/40')}>
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select parcel ${row.trackingNumber}`}
-                              checked={selected.has(row.id)}
-                              onChange={() => toggleRow(row.id)}
-                              className="size-4 rounded border-slate-300 accent-brand-700"
-                            />
-                          </td>
-                          <td className="px-3 py-3 font-semibold text-slate-900">
+                        <tr
+                          key={row.id}
+                          onClick={() => open(row)}
+                          className={cn(
+                            'cursor-pointer hover:bg-slate-50',
+                            panelId === row.id && 'bg-brand-50/40 hover:bg-brand-50/60',
+                          )}
+                        >
+                          <td className="px-4 py-3 font-semibold text-slate-900">
                             #{row.trackingNumber}
                           </td>
                           <td className="px-3 py-3 text-slate-700">{row.merchantName ?? '—'}</td>
@@ -420,20 +387,25 @@ export default function ParcelListPage() {
                               : formatDate(row.createdAt)}
                           </td>
                           <td className="px-3 py-3">
-                            <Button
-                              size="sm"
-                              variant={unassigned ? 'primary' : 'outline'}
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                open(row);
+                              }}
                               className={cn(
-                                'min-w-16',
-                                unassigned && 'bg-brand-800 hover:bg-brand-900',
+                                'inline-flex h-8 min-w-16 items-center justify-center rounded-md px-4 text-xs font-semibold transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600',
+                                unassigned
+                                  ? 'bg-brand-800 text-white shadow-sm hover:bg-brand-900'
+                                  : 'bg-slate-100 text-slate-700 hover:bg-slate-200',
                               )}
-                              onClick={() => open(row)}
                             >
                               {unassigned ? 'Assign' : 'View'}
                               <span className="sr-only"> {row.trackingNumber}</span>
-                            </Button>
+                            </button>
                           </td>
-                          <td className="px-3 py-3">
+                          {/* The menu has its own actions; a click in it must not also open the row. */}
+                          <td className="px-3 py-3" onClick={(event) => event.stopPropagation()}>
                             <RowMenu
                               vertical
                               label={`More actions for ${row.trackingNumber}`}
@@ -457,8 +429,7 @@ export default function ParcelListPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <p className="text-sm text-slate-500">
-                  {selected.size > 0 ? `${selected.size} selected · ` : ''}Showing{' '}
-                  {list.data.page.number * list.data.page.size + 1}–
+                  Showing {list.data.page.number * list.data.page.size + 1}–
                   {list.data.page.number * list.data.page.size + rows.length} of{' '}
                   {list.data.page.totalElements} parcels
                 </p>
@@ -475,7 +446,7 @@ export default function ParcelListPage() {
 
       {/* Details beside the list on xl screens (smaller screens use the detail page). */}
       {panelId && (
-        <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white shadow-xs xl:sticky xl:top-4 xl:block xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
+        <aside className="hidden self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs xl:sticky xl:top-20 xl:block xl:h-[calc(100vh-6rem)]">
           <AdminParcelPanel key={panelId} parcelId={panelId} onClose={close} />
         </aside>
       )}
