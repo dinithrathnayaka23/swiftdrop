@@ -178,6 +178,12 @@ public class ParcelService {
         return toStatusMap(parcelRepository.countByStatus());
     }
 
+    /** Like {@link #countByStatus()}, for one customer's bookings only. */
+    @Transactional(readOnly = true)
+    public Map<ParcelStatusCode, Long> countByStatusForCustomer(UUID customerUserId) {
+        return toStatusMap(parcelRepository.countByStatusForCustomer(customerUserId));
+    }
+
     /** Like {@link #countByStatus()}, for one merchant's orders only. */
     @Transactional(readOnly = true)
     public Map<ParcelStatusCode, Long> countByStatusForMerchant(UUID merchantId) {

@@ -8,14 +8,21 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Read methods load the addresses and status in the same query, as every caller maps them. */
-public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
+public interface ParcelRepository extends JpaRepository<Parcel, UUID>, JpaSpecificationExecutor<Parcel> {
+
+    /** Filtered lists (see {@link ParcelSpecifications}). */
+    @Override
+    @EntityGraph(attributePaths = {"pickupAddress", "dropoffAddress", "currentStatus"})
+    Page<Parcel> findAll(Specification<Parcel> specification, Pageable pageable);
 
     @EntityGraph(attributePaths = {"pickupAddress", "dropoffAddress", "currentStatus"})
     Optional<Parcel> findWithDetailsById(UUID id);
@@ -50,6 +57,10 @@ public interface ParcelRepository extends JpaRepository<Parcel, UUID> {
     @Query("select new com.swiftdrop.parcel.repository.StatusCount(p.currentStatus.statusCode, count(p)) "
             + "from Parcel p where p.merchantId = :merchantId group by p.currentStatus.statusCode")
     List<StatusCount> countByStatusForMerchant(@Param("merchantId") UUID merchantId);
+
+    @Query("select new com.swiftdrop.parcel.repository.StatusCount(p.currentStatus.statusCode, count(p)) "
+            + "from Parcel p where p.customerUserId = :customerUserId group by p.currentStatus.statusCode")
+    List<StatusCount> countByStatusForCustomer(@Param("customerUserId") UUID customerUserId);
 
     boolean existsByTrackingNumber(String trackingNumber);
 

@@ -68,13 +68,13 @@ function DetailsTab({ parcel }: { parcel: AdminParcelDetail }) {
       </span>,
     ],
     ['Merchant', parcel.merchantName ?? 'Customer booking'],
-    ['Service Type', parcel.serviceType],
+    ['Service Type', parcel.serviceType ?? '—'],
     ['Weight', `${parcel.weightKg} kg`],
     [
       'Items',
       `${parcel.itemCount} parcel${parcel.itemCount === 1 ? '' : 's'} • ${parcel.contentDescription ?? PARCEL_TYPE_LABELS[parcel.parcelType]}`,
     ],
-    ['Payment', parcel.paymentMethod],
+    ['Payment', parcel.paymentMethod ?? '—'],
   ];
 
   return (

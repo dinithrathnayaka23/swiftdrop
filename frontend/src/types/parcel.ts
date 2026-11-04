@@ -122,11 +122,13 @@ export interface AdminParcelNote {
 }
 
 export interface AdminParcelDetail extends AdminParcelRow {
-  serviceType: string;
+  /** {@code null} while there is a single service level. */
+  serviceType?: string | null;
   parcelType: ParcelType;
   contentDescription?: string | null;
   itemCount: number;
-  paymentMethod: string;
+  /** {@code null} until payments exist. */
+  paymentMethod?: string | null;
   recipientPhone: string;
   recipientEmail?: string | null;
   dropoffAddress: Address;
