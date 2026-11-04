@@ -1,10 +1,10 @@
 import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
-import { authApi } from '../../api/auth';
+import { authApi } from '../../../api/auth';
 import ForgotPasswordPage, { RESEND_COOLDOWN_SECONDS } from './ForgotPasswordPage';
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: {
     login: jest.fn(),
     refresh: jest.fn(),

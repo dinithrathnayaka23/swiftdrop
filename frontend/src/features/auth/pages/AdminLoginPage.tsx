@@ -1,7 +1,7 @@
 import { Link } from 'react-router';
-import AuthCard from '../../components/auth/AuthCard';
-import StaffSignInForm from '../../components/auth/StaffSignInForm';
-import { PATHS } from '../../routes/paths';
+import AuthCard from '../../../components/auth/AuthCard';
+import StaffSignInForm from '../../../components/auth/StaffSignInForm';
+import { PATHS } from '../../../routes/paths';
 
 /** Sign-in for the one SwiftDrop admin, whose credentials come from ADMIN_EMAIL / ADMIN_PASSWORD. */
 export default function AdminLoginPage() {

@@ -1,19 +1,19 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { authApi } from '../../api/auth';
-import { getErrorMessage } from '../../api/errors';
-import AuthCard from '../../components/auth/AuthCard';
-import Alert from '../../components/ui/Alert';
-import Button from '../../components/ui/Button';
-import PasswordField from '../../components/ui/PasswordField';
-import PhoneField from '../../components/ui/PhoneField';
-import TextAreaField from '../../components/ui/TextAreaField';
-import TextField from '../../components/ui/TextField';
-import { useForm } from '../../hooks/useForm';
-import { PATHS } from '../../routes/paths';
-import type { MerchantRegistrationResponse } from '../../types/auth';
-import { DEFAULT_COUNTRY_CODE, toE164 } from '../../utils/phone';
-import { normalizeRegistrationNo, validateMerchantSignupForm } from '../../utils/validation';
+import { authApi } from '../../../api/auth';
+import { getErrorMessage } from '../../../api/errors';
+import AuthCard from '../../../components/auth/AuthCard';
+import Alert from '../../../components/ui/Alert';
+import Button from '../../../components/ui/Button';
+import PasswordField from '../../../components/ui/PasswordField';
+import PhoneField from '../../../components/ui/PhoneField';
+import TextAreaField from '../../../components/ui/TextAreaField';
+import TextField from '../../../components/ui/TextField';
+import { useForm } from '../../../hooks/useForm';
+import { PATHS } from '../../../routes/paths';
+import type { MerchantRegistrationResponse } from '../../../types/auth';
+import { DEFAULT_COUNTRY_CODE, toE164 } from '../../../utils/phone';
+import { normalizeRegistrationNo, validateMerchantSignupForm } from '../../../utils/validation';
 
 /** Navigation state passed to the "Registration Submitted" page. */
 export type MerchantSubmittedState = Pick<

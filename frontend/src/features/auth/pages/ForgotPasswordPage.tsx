@@ -1,18 +1,18 @@
 import { MailCheck } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router';
-import { authApi } from '../../api/auth';
-import { getErrorMessage } from '../../api/errors';
-import AuthCard from '../../components/auth/AuthCard';
-import StateView from '../../components/feedback/StateView';
-import Alert from '../../components/ui/Alert';
-import Button from '../../components/ui/Button';
-import ButtonLink from '../../components/ui/ButtonLink';
-import TextField from '../../components/ui/TextField';
-import { useForm } from '../../hooks/useForm';
-import { PATHS } from '../../routes/paths';
-import { loadLoginPreferences } from '../../utils/loginPreferences';
-import { validateEmail } from '../../utils/validation';
+import { authApi } from '../../../api/auth';
+import { getErrorMessage } from '../../../api/errors';
+import AuthCard from '../../../components/auth/AuthCard';
+import StateView from '../../../components/feedback/StateView';
+import Alert from '../../../components/ui/Alert';
+import Button from '../../../components/ui/Button';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import TextField from '../../../components/ui/TextField';
+import { useForm } from '../../../hooks/useForm';
+import { PATHS } from '../../../routes/paths';
+import { loadLoginPreferences } from '../../../utils/loginPreferences';
+import { validateEmail } from '../../../utils/validation';
 
 /** Matches the backend's PASSWORD_RESET_RESEND_COOLDOWN (one email per address per minute). */
 export const RESEND_COOLDOWN_SECONDS = 60;

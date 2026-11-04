@@ -12,12 +12,12 @@ import {
 } from 'lucide-react';
 import { useEffect } from 'react';
 import { useLocation } from 'react-router';
-import HeroIllustration from '../../components/illustrations/HeroIllustration';
-import Reveal from '../../components/motion/Reveal';
-import TrackingSearchForm from '../../components/tracking/TrackingSearchForm';
-import ButtonLink from '../../components/ui/ButtonLink';
-import { buttonClasses } from '../../components/ui/buttonStyles';
-import { PATHS } from '../../routes/paths';
+import HeroIllustration from '../../../components/illustrations/HeroIllustration';
+import Reveal from '../../../components/motion/Reveal';
+import TrackingSearchForm from '../../../components/tracking/TrackingSearchForm';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import { buttonClasses } from '../../../components/ui/buttonStyles';
+import { PATHS } from '../../../routes/paths';
 
 const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   {

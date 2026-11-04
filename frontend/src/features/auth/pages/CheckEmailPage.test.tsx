@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError } from '../../api/errors';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError } from '../../../api/errors';
 import CheckEmailPage from './CheckEmailPage';
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: { resendVerification: jest.fn() },
 }));
 

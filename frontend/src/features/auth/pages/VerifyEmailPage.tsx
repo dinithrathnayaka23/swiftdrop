@@ -1,13 +1,13 @@
 import { CircleCheck, Hourglass, Link2Off } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { useSearchParams } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError, getErrorMessage } from '../../api/errors';
-import LoadingState from '../../components/feedback/LoadingState';
-import StateView from '../../components/feedback/StateView';
-import ButtonLink from '../../components/ui/ButtonLink';
-import { PATHS } from '../../routes/paths';
-import type { EmailVerifiedResponse } from '../../types/auth';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError, getErrorMessage } from '../../../api/errors';
+import LoadingState from '../../../components/feedback/LoadingState';
+import StateView from '../../../components/feedback/StateView';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import { PATHS } from '../../../routes/paths';
+import type { EmailVerifiedResponse } from '../../../types/auth';
 
 type Result =
   | { state: 'verified'; awaitingApproval: boolean }

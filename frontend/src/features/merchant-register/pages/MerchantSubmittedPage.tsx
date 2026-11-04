@@ -1,8 +1,8 @@
 import { Hourglass } from 'lucide-react';
 import { useLocation } from 'react-router';
-import ButtonLink from '../../components/ui/ButtonLink';
-import { PATHS } from '../../routes/paths';
-import { formatDateTime } from '../../utils/date';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import { PATHS } from '../../../routes/paths';
+import { formatDateTime } from '../../../utils/date';
 import type { MerchantSubmittedState } from './MerchantSignupPage';
 
 export default function MerchantSubmittedPage() {

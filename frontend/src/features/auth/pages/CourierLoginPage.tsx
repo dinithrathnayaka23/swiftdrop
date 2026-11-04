@@ -1,8 +1,8 @@
 import { ArrowLeft, Bike } from 'lucide-react';
 import { Link } from 'react-router';
-import StaffSignInForm from '../../components/auth/StaffSignInForm';
-import Logo from '../../components/brand/Logo';
-import { PATHS } from '../../routes/paths';
+import StaffSignInForm from '../../../components/auth/StaffSignInForm';
+import Logo from '../../../components/brand/Logo';
+import { PATHS } from '../../../routes/paths';
 
 /**
  * Courier app sign-in. Built for phones first: one column, full-height, large touch targets.

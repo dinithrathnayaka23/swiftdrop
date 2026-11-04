@@ -1,11 +1,11 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError } from '../../api/errors';
-import { AuthProvider } from '../../context/AuthContext';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError } from '../../../api/errors';
+import { AuthProvider } from '../../../context/AuthContext';
 import CustomerSignupPage from './CustomerSignupPage';
-import { getToken } from '../../utils/sessionStorage';
+import { getToken } from '../../../utils/sessionStorage';
 import { useLocation } from 'react-router';
 
 function CheckEmailProbe() {
@@ -13,7 +13,7 @@ function CheckEmailProbe() {
   return <p>check email: {(state as { email: string }).email}</p>;
 }
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: {
     login: jest.fn(),
     googleConfig: jest.fn(async () => ({ enabled: false, clientId: null })),

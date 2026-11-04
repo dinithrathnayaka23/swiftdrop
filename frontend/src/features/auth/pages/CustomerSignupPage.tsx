@@ -1,21 +1,21 @@
 import { Store } from 'lucide-react';
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router';
-import { authApi } from '../../api/auth';
-import { getErrorMessage } from '../../api/errors';
-import AuthCard from '../../components/auth/AuthCard';
-import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
-import Alert from '../../components/ui/Alert';
-import Button from '../../components/ui/Button';
-import PasswordField from '../../components/ui/PasswordField';
-import PhoneField from '../../components/ui/PhoneField';
-import TextField from '../../components/ui/TextField';
+import { authApi } from '../../../api/auth';
+import { getErrorMessage } from '../../../api/errors';
+import AuthCard from '../../../components/auth/AuthCard';
+import GoogleSignInButton from '../../../components/auth/GoogleSignInButton';
+import Alert from '../../../components/ui/Alert';
+import Button from '../../../components/ui/Button';
+import PasswordField from '../../../components/ui/PasswordField';
+import PhoneField from '../../../components/ui/PhoneField';
+import TextField from '../../../components/ui/TextField';
 import type { CheckEmailState } from './CheckEmailPage';
-import { useForm } from '../../hooks/useForm';
-import { useGoogleSignIn } from '../../hooks/useGoogleSignIn';
-import { PATHS } from '../../routes/paths';
-import { DEFAULT_COUNTRY_CODE, toE164 } from '../../utils/phone';
-import { validateCustomerSignupForm } from '../../utils/validation';
+import { useForm } from '../../../hooks/useForm';
+import { useGoogleSignIn } from '../../../hooks/useGoogleSignIn';
+import { PATHS } from '../../../routes/paths';
+import { DEFAULT_COUNTRY_CODE, toE164 } from '../../../utils/phone';
+import { validateCustomerSignupForm } from '../../../utils/validation';
 
 /** Self-registration for customers. Couriers and dispatchers are created by an admin. */
 export default function CustomerSignupPage() {

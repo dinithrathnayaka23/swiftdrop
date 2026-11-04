@@ -1,9 +1,9 @@
 import { MailCheck } from 'lucide-react';
 import { useLocation } from 'react-router';
-import ResendVerificationButton from '../../components/auth/ResendVerificationButton';
-import StateView from '../../components/feedback/StateView';
-import ButtonLink from '../../components/ui/ButtonLink';
-import { PATHS } from '../../routes/paths';
+import ResendVerificationButton from '../../../components/auth/ResendVerificationButton';
+import StateView from '../../../components/feedback/StateView';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import { PATHS } from '../../../routes/paths';
 
 export interface CheckEmailState {
   email: string;

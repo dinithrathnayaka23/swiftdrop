@@ -1,13 +1,13 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError } from '../../api/errors';
-import { AuthProvider } from '../../context/AuthContext';
-import { clearSession } from '../../utils/sessionStorage';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError } from '../../../api/errors';
+import { AuthProvider } from '../../../context/AuthContext';
+import { clearSession } from '../../../utils/sessionStorage';
 import CourierLoginPage from './CourierLoginPage';
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: { login: jest.fn(), logout: jest.fn() },
 }));
 

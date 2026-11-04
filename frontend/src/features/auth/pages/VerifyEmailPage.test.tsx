@@ -1,10 +1,10 @@
 import { render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError } from '../../api/errors';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError } from '../../../api/errors';
 import VerifyEmailPage from './VerifyEmailPage';
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: { confirmEmailVerification: jest.fn() },
 }));
 

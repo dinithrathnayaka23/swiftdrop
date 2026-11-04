@@ -1,22 +1,22 @@
 import { useCallback, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError, getErrorMessage } from '../../api/errors';
-import AuthCard from '../../components/auth/AuthCard';
-import GoogleSignInButton from '../../components/auth/GoogleSignInButton';
-import ResendVerificationButton from '../../components/auth/ResendVerificationButton';
-import SignInPageLinks from '../../components/auth/SignInPageLinks';
-import Alert from '../../components/ui/Alert';
-import Button from '../../components/ui/Button';
-import Checkbox from '../../components/ui/Checkbox';
-import PasswordField from '../../components/ui/PasswordField';
-import TextField from '../../components/ui/TextField';
-import { useAuth } from '../../hooks/useAuth';
-import { useForm } from '../../hooks/useForm';
-import { useGoogleSignIn } from '../../hooks/useGoogleSignIn';
-import { PATHS, ROLE_HOME } from '../../routes/paths';
-import { loadLoginPreferences, updateLoginPreferences } from '../../utils/loginPreferences';
-import { validateLoginForm } from '../../utils/validation';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError, getErrorMessage } from '../../../api/errors';
+import AuthCard from '../../../components/auth/AuthCard';
+import GoogleSignInButton from '../../../components/auth/GoogleSignInButton';
+import ResendVerificationButton from '../../../components/auth/ResendVerificationButton';
+import SignInPageLinks from '../../../components/auth/SignInPageLinks';
+import Alert from '../../../components/ui/Alert';
+import Button from '../../../components/ui/Button';
+import Checkbox from '../../../components/ui/Checkbox';
+import PasswordField from '../../../components/ui/PasswordField';
+import TextField from '../../../components/ui/TextField';
+import { useAuth } from '../../../hooks/useAuth';
+import { useForm } from '../../../hooks/useForm';
+import { useGoogleSignIn } from '../../../hooks/useGoogleSignIn';
+import { PATHS, ROLE_HOME } from '../../../routes/paths';
+import { loadLoginPreferences, updateLoginPreferences } from '../../../utils/loginPreferences';
+import { validateLoginForm } from '../../../utils/validation';
 
 /** One sign-in page for every role; users land on their role's home afterwards. */
 export default function LoginPage() {

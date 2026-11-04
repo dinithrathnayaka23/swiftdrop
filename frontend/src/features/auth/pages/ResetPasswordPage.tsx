@@ -1,17 +1,17 @@
 import { CircleCheck, Link2Off } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { authApi } from '../../api/auth';
-import { ApiRequestError, getErrorMessage } from '../../api/errors';
-import AuthCard from '../../components/auth/AuthCard';
-import StateView from '../../components/feedback/StateView';
-import Alert from '../../components/ui/Alert';
-import Button from '../../components/ui/Button';
-import ButtonLink from '../../components/ui/ButtonLink';
-import PasswordField from '../../components/ui/PasswordField';
-import { useForm } from '../../hooks/useForm';
-import { PATHS } from '../../routes/paths';
-import { validateNewPassword, validatePasswordConfirmation } from '../../utils/validation';
+import { authApi } from '../../../api/auth';
+import { ApiRequestError, getErrorMessage } from '../../../api/errors';
+import AuthCard from '../../../components/auth/AuthCard';
+import StateView from '../../../components/feedback/StateView';
+import Alert from '../../../components/ui/Alert';
+import Button from '../../../components/ui/Button';
+import ButtonLink from '../../../components/ui/ButtonLink';
+import PasswordField from '../../../components/ui/PasswordField';
+import { useForm } from '../../../hooks/useForm';
+import { PATHS } from '../../../routes/paths';
+import { validateNewPassword, validatePasswordConfirmation } from '../../../utils/validation';
 
 function ResultCard({ children }: { children: ReactNode }) {
   return <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">{children}</div>;

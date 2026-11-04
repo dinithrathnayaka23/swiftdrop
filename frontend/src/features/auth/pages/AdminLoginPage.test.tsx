@@ -1,12 +1,12 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router';
-import { authApi } from '../../api/auth';
-import { AuthProvider } from '../../context/AuthContext';
-import { clearSession } from '../../utils/sessionStorage';
+import { authApi } from '../../../api/auth';
+import { AuthProvider } from '../../../context/AuthContext';
+import { clearSession } from '../../../utils/sessionStorage';
 import AdminLoginPage from './AdminLoginPage';
 
-jest.mock('../../api/auth', () => ({
+jest.mock('../../../api/auth', () => ({
   authApi: { login: jest.fn(), logout: jest.fn() },
 }));
 
@@ -31,7 +31,7 @@ describe('AdminLoginPage', () => {
         <AuthProvider>
           <Routes>
             <Route path="/admin/login" element={<AdminLoginPage />} />
-            <Route path="/dispatcher/assignments" element={<p>assignments</p>} />
+            <Route path="/admin" element={<p>operations overview</p>} />
           </Routes>
         </AuthProvider>
       </MemoryRouter>,
@@ -45,7 +45,7 @@ describe('AdminLoginPage', () => {
     await userEvent.click(screen.getByLabelText('Remember me'));
     await userEvent.click(screen.getByRole('button', { name: 'Sign In' }));
 
-    expect(await screen.findByText('assignments')).toBeInTheDocument();
+    expect(await screen.findByText('operations overview')).toBeInTheDocument();
     expect(login).toHaveBeenCalledWith(
       expect.objectContaining({ portal: 'ADMIN', rememberMe: true }),
     );
