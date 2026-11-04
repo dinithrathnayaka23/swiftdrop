@@ -16,6 +16,8 @@ import com.swiftdrop.identity.security.LoginAttemptGuard;
 import com.swiftdrop.merchant.dto.NewMerchant;
 import com.swiftdrop.merchant.dto.response.MerchantResponse;
 import com.swiftdrop.merchant.service.MerchantService;
+import com.swiftdrop.settings.exception.MaintenanceModeException;
+import com.swiftdrop.settings.service.SystemSettingsService;
 import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.dto.UserAccount;
 import com.swiftdrop.user.model.AccountStatus;
@@ -47,12 +49,14 @@ public class AuthService {
     private final SessionService sessionService;
     private final LoginAttemptGuard loginAttempts;
     private final EmailVerificationService emailVerification;
+    private final SystemSettingsService settings;
     /** Compared against when the email is unknown, so both cases take the same time. */
     private final String dummyPasswordHash;
 
     public AuthService(UserService userService, MerchantService merchantService, PasswordEncoder passwordEncoder,
                        GoogleIdTokenVerifier googleVerifier, SessionService sessionService,
-                       LoginAttemptGuard loginAttempts, EmailVerificationService emailVerification) {
+                       LoginAttemptGuard loginAttempts, EmailVerificationService emailVerification,
+                       SystemSettingsService settings) {
         this.userService = userService;
         this.merchantService = merchantService;
         this.passwordEncoder = passwordEncoder;
@@ -60,17 +64,21 @@ public class AuthService {
         this.sessionService = sessionService;
         this.loginAttempts = loginAttempts;
         this.emailVerification = emailVerification;
+        this.settings = settings;
         this.dummyPasswordHash = passwordEncoder.encode("swiftdrop-timing-equaliser");
     }
 
     /**
      * Password sign-in. After too many wrong passwords for an account the sign-in is paused (429)
-     * before the password is even checked.
+     * before the password is even checked. During maintenance only the admin portal accepts sign-ins.
      *
      * @param clientIp the caller's IP, for the per-account-and-IP failure limit
      */
     @Transactional(readOnly = true)
     public IssuedSession login(LoginRequest request, String clientIp) {
+        if (request.portalOrDefault() != LoginPortal.ADMIN && settings.maintenanceMode()) {
+            throw new MaintenanceModeException();
+        }
         loginAttempts.checkAllowed(request.email(), clientIp);
 
         Optional<UserAccount> account = userService.findAccountByEmail(request.email());

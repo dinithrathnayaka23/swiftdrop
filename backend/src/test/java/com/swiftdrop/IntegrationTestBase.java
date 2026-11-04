@@ -82,6 +82,14 @@ public abstract class IntegrationTestBase {
         return post(path, jsonBody, null);
     }
 
+    protected HttpResponse<String> put(String path, String jsonBody, String bearerToken) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path))
+                .header("Content-Type", "application/json")
+                .PUT(HttpRequest.BodyPublishers.ofString(jsonBody));
+        if (bearerToken != null) request.header("Authorization", "Bearer " + bearerToken);
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
     /** POST with the session cookie, as the browser sends it to /api/v1/auth/refresh and /logout. */
     protected HttpResponse<String> postWithSession(String path, String sessionCookieValue) throws Exception {
         HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).POST(HttpRequest.BodyPublishers.noBody());

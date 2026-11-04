@@ -33,6 +33,8 @@ import com.swiftdrop.merchant.dto.NewMerchant;
 import com.swiftdrop.merchant.dto.response.MerchantResponse;
 import com.swiftdrop.merchant.model.MerchantApprovalStatus;
 import com.swiftdrop.merchant.service.MerchantService;
+import com.swiftdrop.settings.exception.MaintenanceModeException;
+import com.swiftdrop.settings.service.SystemSettingsService;
 import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.dto.UserAccount;
 import com.swiftdrop.user.model.AccountStatus;
@@ -66,6 +68,7 @@ class AuthServiceTest {
     @Mock private SessionService sessionService;
     @Mock private LoginAttemptGuard loginAttempts;
     @Mock private EmailVerificationService emailVerification;
+    @Mock private SystemSettingsService settings;
 
     private AuthService authService;
 
@@ -73,7 +76,7 @@ class AuthServiceTest {
     void setUp() {
         when(passwordEncoder.encode("swiftdrop-timing-equaliser")).thenReturn(DUMMY_HASH);
         authService = new AuthService(userService, merchantService, passwordEncoder, googleVerifier, sessionService,
-                loginAttempts, emailVerification);
+                loginAttempts, emailVerification, settings);
     }
 
     private static UserAccount account(String passwordHash, String googleSubject, Role role, AccountStatus status) {
@@ -258,6 +261,33 @@ class AuthServiceTest {
                     new LoginRequest("nimal@example.com", "wrong", false, LoginPortal.ADMIN), IP))
                     .isInstanceOf(UnauthorizedException.class)
                     .hasMessage("Invalid email or password");
+        }
+
+        @Test
+        void duringMaintenanceOnlyTheAdminPortalAcceptsSignIns() {
+            when(settings.maintenanceMode()).thenReturn(true);
+
+            assertThatThrownBy(() -> authService.login(new LoginRequest("nimal@example.com", "parcel2026", false), IP))
+                    .isInstanceOf(MaintenanceModeException.class);
+            assertThatThrownBy(() -> authService.login(
+                    new LoginRequest("rider@swiftdrop.lk", "parcel2026", false, LoginPortal.COURIER), IP))
+                    .isInstanceOf(MaintenanceModeException.class);
+            // Refused before anything else: no password check, no failed-attempt count.
+            verify(passwordEncoder, never()).matches(anyString(), anyString());
+            verify(loginAttempts, never()).checkAllowed(anyString(), anyString());
+        }
+
+        @Test
+        void theAdminCanStillSignInDuringMaintenance() {
+            UserAccount admin = account("$2a$hash", null, Role.DISPATCHER_ADMIN, AccountStatus.ACTIVE);
+            when(userService.findAccountByEmail("admin@swiftdrop.lk")).thenReturn(Optional.of(admin));
+            when(passwordEncoder.matches(anyString(), anyString())).thenReturn(true);
+            stubSessions();
+
+            authService.login(new LoginRequest("admin@swiftdrop.lk", "parcel2026", false, LoginPortal.ADMIN), IP);
+
+            verify(sessionService).issue(admin, false);
+            verify(settings, never()).maintenanceMode(); // the admin portal doesn't even ask
         }
 
         @Test
