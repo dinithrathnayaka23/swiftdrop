@@ -35,6 +35,9 @@ export default {
     '^\\./routeModules\\.js$': '<rootDir>/src/test/reactRouterRouteModulesStub.ts',
   },
   clearMocks: true,
+  // Form tests type whole fields key by key; with many test files in parallel on a busy machine
+  // they can pass Jest's 5 s default without anything being wrong.
+  testTimeout: 15000,
   collectCoverageFrom: ['src/**/*.{ts,tsx}', '!src/test/**', '!src/main.tsx', '!src/**/*.d.ts'],
   coverageReporters: ['text', 'html', 'lcov'],
 };

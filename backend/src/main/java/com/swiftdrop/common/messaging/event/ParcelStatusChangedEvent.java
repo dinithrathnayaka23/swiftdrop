@@ -5,21 +5,38 @@ import java.util.UUID;
 
 /**
  * Published to {@code swiftdrop.parcel.events} with routing key {@code parcel.status.changed}
- * whenever a parcel changes status.
+ * after a parcel status change is committed (report section 4.1). Published by the parcel module;
+ * consumed by live tracking, merchant webhooks and notifications.
  *
- * <p><b>PLACEHOLDER - TO BE FINALIZED BY MEMBERS 3, 6, 9.</b> Field names and types
- * (in particular whether statuses become a shared enum) are not agreed yet. Changing
- * this record changes the message contract between publisher and consumers, so
- * agree changes in a PR reviewed by all three.
+ * <p>Delivery is at least once, so consumers skip events whose {@code eventId} they have already
+ * handled. {@code statusVersion} grows by one with every change of the same parcel, so a consumer
+ * can ignore an older event that arrives after a newer one. Changing this record changes the
+ * message contract: raise {@link #SCHEMA_VERSION} and agree the change with the consumers.
  *
- * <p>Do not add personal data (names, phone numbers, addresses) to events; consumers
- * should look those up by ID.
+ * <p>No personal data (names, phone numbers, addresses, proof) is included; consumers look up what
+ * they need by ID.
+ *
+ * @param eventType       always {@link #EVENT_TYPE}
+ * @param merchantId      the owning merchant, or {@code null} for a customer booking
+ * @param previousStatus  parcel status code before the change
+ * @param newStatus       parcel status code after the change
+ * @param statusHistoryId the {@code parcel_status_history} row of this change
+ * @param changedByUserId who made the change, or {@code null} for a system change
  */
 public record ParcelStatusChangedEvent(
+        UUID eventId,
+        String eventType,
+        int schemaVersion,
         UUID parcelId,
         String trackingNumber,
-        String oldStatus,
+        UUID merchantId,
+        String previousStatus,
         String newStatus,
-        Instant timestamp,
-        UUID actorId) {
+        long statusVersion,
+        UUID statusHistoryId,
+        UUID changedByUserId,
+        Instant occurredAt) {
+
+    public static final String EVENT_TYPE = "PARCEL_STATUS_CHANGED";
+    public static final int SCHEMA_VERSION = 1;
 }

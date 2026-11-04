@@ -48,8 +48,13 @@ class InfrastructureIT extends IntegrationTestBase {
 
     @Test
     void flywayAppliedAllMigrations() {
-        // V1 baseline (ER diagram) + V2 users.email_verified_at + V3 single admin; nothing pending.
-        assertThat(flyway.info().current().getVersion().getVersion()).isEqualTo("3");
+        // V1 baseline (ER diagram) + V2 users.email_verified_at + V3 single admin, plus the members'
+        // own migrations (V<member>_<seq>); all applied, nothing failed or pending. No exact latest
+        // version, so a new migration from any member doesn't break this test.
+        assertThat(flyway.info().applied()).extracting(migration -> migration.getVersion().getVersion())
+                .contains("1", "2", "3");
+        assertThat(flyway.info().applied())
+                .allMatch(migration -> migration.getState().isApplied() && !migration.getState().isFailed());
         assertThat(flyway.info().pending()).isEmpty();
 
         List<String> tables = jdbcTemplate.queryForList(
@@ -62,8 +67,9 @@ class InfrastructureIT extends IntegrationTestBase {
                 "merchant_api_credentials", "merchant_webhooks", "webhook_deliveries", "pricing_rules",
                 "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas");
 
+        // The six report statuses (V4_001); ParcelServiceIT checks the codes and their order.
         Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);
-        assertThat(statuses).isEqualTo(9);
+        assertThat(statuses).isEqualTo(6);
     }
 
     @Test
@@ -72,8 +78,9 @@ class InfrastructureIT extends IntegrationTestBase {
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.WEBHOOK_QUEUE)).isNotNull();
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.DEAD_LETTER_QUEUE)).isNotNull();
 
-        var event = new ParcelStatusChangedEvent(UUID.randomUUID(), "SD-TEST-0001", "CREATED", "ASSIGNED",
-                Instant.now(), UUID.randomUUID());
+        var event = new ParcelStatusChangedEvent(UUID.randomUUID(), ParcelStatusChangedEvent.EVENT_TYPE,
+                ParcelStatusChangedEvent.SCHEMA_VERSION, UUID.randomUUID(), "SD-TEST-0001", null, "CREATED",
+                "PICKED_UP", 2, UUID.randomUUID(), UUID.randomUUID(), Instant.now());
         rabbitTemplate.convertAndSend(RabbitConfig.PARCEL_EVENTS_EXCHANGE, RabbitConfig.PARCEL_STATUS_CHANGED_KEY,
                 event);
 
