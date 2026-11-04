@@ -26,6 +26,7 @@ apiClient.interceptors.request.use((config) => {
 
 let unauthorizedHandler: (() => void) | null = null;
 let sessionUpdatedHandler: ((session: AuthSession) => void) | null = null;
+let maintenanceHandler: (() => void) | null = null;
 
 /** Registered by AuthContext: called when the session can't be renewed (sign the user out). */
 export function setUnauthorizedHandler(handler: (() => void) | null): void {
@@ -35,6 +36,11 @@ export function setUnauthorizedHandler(handler: (() => void) | null): void {
 /** Registered by AuthContext: called after the access token was renewed in the background. */
 export function setSessionUpdatedHandler(handler: ((session: AuthSession) => void) | null): void {
   sessionUpdatedHandler = handler;
+}
+
+/** Registered by SettingsProvider: called when the API says maintenance mode is on. */
+export function setMaintenanceHandler(handler: (() => void) | null): void {
+  maintenanceHandler = handler;
 }
 
 /**
@@ -80,6 +86,13 @@ apiClient.interceptors.response.use(
     // password on the login form) is handled by the page itself.
     const sentToken = Boolean(request?.headers?.Authorization);
     const isAuthEndpoint = request?.url?.startsWith('/auth/') ?? false;
+
+    // Maintenance switched on while the app was open: show the maintenance page.
+    const body = error.response?.data as { code?: string } | undefined;
+    if (error.response?.status === 503 && body?.code === 'MAINTENANCE_MODE') {
+      maintenanceHandler?.();
+      return Promise.reject(error);
+    }
 
     if (error.response?.status === 401 && sentToken && !isAuthEndpoint && request) {
       if (!request._retried) {

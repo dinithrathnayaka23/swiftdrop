@@ -4,7 +4,7 @@ import { buildTimeline } from './parcelStatus';
 function result(overrides: Partial<TrackingResult>): TrackingResult {
   return {
     trackingNumber: 'SD1',
-    currentStatus: 'BOOKED',
+    currentStatus: 'CREATED',
     lastUpdatedAt: '2026-01-02T10:00:00Z',
     bookedAt: '2026-01-01T10:00:00Z',
     fromCity: 'Colombo',
@@ -43,7 +43,7 @@ describe('buildTimeline', () => {
   });
 
   it('shows nothing reached before pickup', () => {
-    const steps = buildTimeline(result({ currentStatus: 'BOOKED' }));
+    const steps = buildTimeline(result({ currentStatus: 'CREATED' }));
     expect(steps.every((s) => s.state === 'upcoming')).toBe(true);
   });
 });

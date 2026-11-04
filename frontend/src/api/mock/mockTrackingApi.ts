@@ -22,8 +22,7 @@ function sampleParcels(): Record<string, TrackingResult> {
       toCity: 'Kandy',
       weightKg: 2.5,
       history: [
-        { statusCode: 'BOOKED', changedAt: hoursAgo(54) },
-        { statusCode: 'ASSIGNED', changedAt: hoursAgo(52) },
+        { statusCode: 'CREATED', changedAt: hoursAgo(54) },
         { statusCode: 'PICKED_UP', changedAt: hoursAgo(50) },
         { statusCode: 'IN_TRANSIT', changedAt: hoursAgo(3) },
       ],
@@ -37,8 +36,7 @@ function sampleParcels(): Record<string, TrackingResult> {
       toCity: 'Galle',
       weightKg: 1.2,
       history: [
-        { statusCode: 'BOOKED', changedAt: hoursAgo(80) },
-        { statusCode: 'ASSIGNED', changedAt: hoursAgo(78) },
+        { statusCode: 'CREATED', changedAt: hoursAgo(80) },
         { statusCode: 'PICKED_UP', changedAt: hoursAgo(76) },
         { statusCode: 'IN_TRANSIT', changedAt: hoursAgo(54) },
         { statusCode: 'OUT_FOR_DELIVERY', changedAt: hoursAgo(9) },

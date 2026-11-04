@@ -299,6 +299,10 @@ Email and password sign-in with stateless JWTs (Google sign-in is planned).
 | `GET /api/v1/users/me` | Any signed-in user | Own profile |
 | `GET /api/v1/admin/merchants?status=PENDING` | `DISPATCHER_ADMIN` | Merchants awaiting review |
 | `POST /api/v1/admin/merchants/{id}/approve` · `/reject` | `DISPATCHER_ADMIN` | Approve (activates the merchant's sign-in) or reject with a reason |
+| `GET` · `PUT /api/v1/admin/settings` | `DISPATCHER_ADMIN` | System settings; saving needs the `version` it was loaded with (409 if someone saved in between) |
+| `GET /api/v1/public/settings` | Public | Contact details, date/time formats, parcel limits and whether maintenance mode is on |
+
+**Maintenance mode** (System Settings): while it's on, every API call from anyone but the admin gets `503 MAINTENANCE_MODE`, only the admin portal accepts sign-ins, and the web app shows a maintenance page. The admin keeps full access to switch it off.
 
 Sessions: sign-in returns a 1-hour **access token** and a **refresh token**. The web app renews the access
 token in the background, so users stay signed in while the refresh token is valid: **30 days with

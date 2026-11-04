@@ -22,6 +22,7 @@
         <springdoc.version>3.2.0</springdoc.version>
         <jjwt.version>0.13.0</jjwt.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <openpdf.version>3.0.5</openpdf.version>
     </properties>
 
     <dependencies>
@@ -42,6 +43,13 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- Delivery receipt PDFs (parcel module) -->
+        <dependency>
+            <groupId>com.github.librepdf</groupId>
+            <artifactId>openpdf</artifactId>
+            <version>${openpdf.version}</version>
         </dependency>
 
         <!-- Persistence -->

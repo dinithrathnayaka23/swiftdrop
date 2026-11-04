@@ -1,37 +1,41 @@
-import { ArrowRight, ArrowUp, Mail, MapPin, PackageSearch } from 'lucide-react';
+import { ArrowRight, ArrowUp, Mail, MapPin, PackageSearch, Phone } from 'lucide-react';
 import { Link } from 'react-router';
 import { PATHS } from '../../routes/paths';
 import Logo from '../brand/Logo';
 import { buttonClasses } from '../ui/buttonStyles';
-import { SUPPORT_EMAIL } from '../../shared/support';
+import { useSettings } from '../../hooks/useSettings';
 
-const LINK_GROUPS: { title: string; links: { label: string; to: string }[] }[] = [
-  {
-    title: 'Services',
-    links: [
-      { label: 'Track a Parcel', to: PATHS.track },
-      { label: 'Send a Parcel', to: PATHS.signup },
-      { label: 'For Businesses', to: PATHS.merchantSignup },
-      { label: 'Why SwiftDrop', to: '/#services' },
-    ],
-  },
-  {
-    title: 'Account',
-    links: [
-      { label: 'Sign In', to: PATHS.login },
-      { label: 'Create Account', to: PATHS.signup },
-      { label: 'Register a Business', to: PATHS.merchantSignup },
-      { label: 'Forgot Password', to: PATHS.forgotPassword },
-    ],
-  },
-  {
-    title: 'Support',
-    links: [
-      { label: 'Help Centre', to: '/#help' },
-      { label: 'Contact Support', to: `mailto:${SUPPORT_EMAIL}` },
-    ],
-  },
-];
+function linkGroups(
+  contactEmail: string,
+): { title: string; links: { label: string; to: string }[] }[] {
+  return [
+    {
+      title: 'Services',
+      links: [
+        { label: 'Track a Parcel', to: PATHS.track },
+        { label: 'Send a Parcel', to: PATHS.signup },
+        { label: 'For Businesses', to: PATHS.merchantSignup },
+        { label: 'Why SwiftDrop', to: '/#services' },
+      ],
+    },
+    {
+      title: 'Account',
+      links: [
+        { label: 'Sign In', to: PATHS.login },
+        { label: 'Create Account', to: PATHS.signup },
+        { label: 'Register a Business', to: PATHS.merchantSignup },
+        { label: 'Forgot Password', to: PATHS.forgotPassword },
+      ],
+    },
+    {
+      title: 'Support',
+      links: [
+        { label: 'Help Centre', to: '/#help' },
+        { label: 'Contact Support', to: `mailto:${contactEmail}` },
+      ],
+    },
+  ];
+}
 
 function FooterLink({ label, to }: { label: string; to: string }) {
   const className =
@@ -49,6 +53,7 @@ function FooterLink({ label, to }: { label: string; to: string }) {
 
 /** Site-wide footer for public pages: call to action, link columns, contact and copyright. */
 export default function SiteFooter() {
+  const { contactEmail, contactPhone, companyAddress } = useSettings().settings;
   return (
     <footer className="relative mt-16 bg-brand-900 text-white">
       {/* Call to action card, overlapping the top edge of the footer */}
@@ -110,25 +115,38 @@ export default function SiteFooter() {
           <ul className="mt-6 space-y-3 text-sm text-brand-100/90">
             <li>
               <a
-                href={`mailto:${SUPPORT_EMAIL}`}
+                href={`mailto:${contactEmail}`}
                 className="inline-flex items-center gap-2.5 transition-colors hover:text-white"
               >
                 <span className="flex size-8 items-center justify-center rounded-lg bg-white/10">
                   <Mail className="size-4" aria-hidden="true" />
                 </span>
-                {SUPPORT_EMAIL}
+                {contactEmail}
               </a>
             </li>
+            {contactPhone && (
+              <li>
+                <a
+                  href={`tel:${contactPhone}`}
+                  className="inline-flex items-center gap-2.5 transition-colors hover:text-white"
+                >
+                  <span className="flex size-8 items-center justify-center rounded-lg bg-white/10">
+                    <Phone className="size-4" aria-hidden="true" />
+                  </span>
+                  {contactPhone}
+                </a>
+              </li>
+            )}
             <li className="inline-flex items-center gap-2.5">
-              <span className="flex size-8 items-center justify-center rounded-lg bg-white/10">
+              <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-white/10">
                 <MapPin className="size-4" aria-hidden="true" />
               </span>
-              Delivering across Sri Lanka
+              {companyAddress ?? 'Delivering across Sri Lanka'}
             </li>
           </ul>
         </div>
 
-        {LINK_GROUPS.map((group) => (
+        {linkGroups(contactEmail).map((group) => (
           <nav key={group.title} aria-label={group.title}>
             <h3 className="text-sm font-semibold tracking-wide text-white uppercase">
               {group.title}
