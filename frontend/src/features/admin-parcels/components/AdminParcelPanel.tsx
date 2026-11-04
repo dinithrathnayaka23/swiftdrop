@@ -202,7 +202,7 @@ function PanelBody({ parcel, onClose }: { parcel: AdminParcelDetail; onClose: ()
         role="tabpanel"
         id={`parcel-tabpanel-${tab}`}
         aria-labelledby={`parcel-tab-${tab}`}
-        className="flex-1 overflow-y-auto p-4"
+        className="min-h-0 flex-1 overflow-y-auto p-4"
       >
         {tab === 'details' && <DetailsTab parcel={parcel} />}
         {tab === 'history' && <StatusHistoryList history={parcel.history} />}

@@ -1,4 +1,4 @@
-import { CalendarDays, CircleX, Download, Filter, PackageOpen, Plus, Search } from 'lucide-react';
+import { CalendarDays, CircleX, Download, PackageOpen, Plus, Search } from 'lucide-react';
 import { useEffect, useState, type ReactNode } from 'react';
 import { generatePath, useNavigate } from 'react-router';
 import { parcelsApi } from '../../../api/parcels';
@@ -115,7 +115,6 @@ export default function ParcelListPage() {
   const [area, setArea] = useState('');
   const [dateRange, setDateRange] = useState<DateRange>('ALL');
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<Set<string>>(new Set());
   const [openId, setOpenId] = useState<string | null>(null);
   const [panelClosed, setPanelClosed] = useState(false);
   const navigate = useNavigate();
@@ -163,19 +162,7 @@ export default function ParcelListPage() {
   function changeFilter(apply: () => void) {
     apply();
     setPage(0);
-    setSelected(new Set());
   }
-
-  function toggleRow(id: string) {
-    setSelected((current) => {
-      const next = new Set(current);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  }
-
-  const allSelected = rows.length > 0 && rows.every((row) => selected.has(row.id));
 
   return (
     <div className="mx-auto grid max-w-[1600px] gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
@@ -211,7 +198,7 @@ export default function ParcelListPage() {
           <div
             role="tablist"
             aria-label="Parcel groups"
-            className="flex gap-1 overflow-x-auto border-b border-slate-200 px-3"
+            className="flex flex-wrap gap-x-1 border-b border-slate-200 px-3"
           >
             {TABS.map((item) => (
               <button
@@ -240,8 +227,8 @@ export default function ParcelListPage() {
             ))}
           </div>
 
-          <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1fr)_150px_150px_150px_auto] xl:items-end">
-            <div className="relative md:col-span-2 xl:col-span-1">
+          <div className="grid gap-3 p-4 sm:grid-cols-3 sm:items-end">
+            <div className="relative sm:col-span-3">
               <Search
                 className="pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2 text-slate-400"
                 aria-hidden="true"
@@ -307,15 +294,6 @@ export default function ParcelListPage() {
                 ))}
               </select>
             </div>
-            <Button
-              variant="outline"
-              className="h-10"
-              disabled
-              title="More filters are not available yet"
-            >
-              <Filter className="size-4" aria-hidden="true" />
-              More Filters
-            </Button>
           </div>
 
           {list.status === 'loading' && (
@@ -351,22 +329,9 @@ export default function ParcelListPage() {
           {list.status === 'success' && rows.length > 0 && (
             <>
               <div className="overflow-x-auto">
-                <table className="w-full min-w-[960px] text-left text-sm">
+                <table className="w-full min-w-[880px] text-left text-sm">
                   <thead className="border-y border-slate-200 bg-slate-50 text-xs text-slate-600">
                     <tr>
-                      <th scope="col" className="w-12 px-4 py-3">
-                        <input
-                          type="checkbox"
-                          aria-label="Select all parcels on this page"
-                          checked={allSelected}
-                          onChange={() =>
-                            setSelected(
-                              allSelected ? new Set() : new Set(rows.map((row) => row.id)),
-                            )
-                          }
-                          className="size-4 rounded border-slate-300 accent-brand-700"
-                        />
-                      </th>
                       {[
                         'Tracking No.',
                         'Merchant',
@@ -377,7 +342,7 @@ export default function ParcelListPage() {
                         'Created At',
                         'Action',
                       ].map((label) => (
-                        <th key={label} scope="col" className="px-3 py-3 font-medium">
+                        <th key={label} scope="col" className="px-3 py-3 font-medium first:pl-4">
                           {label}
                         </th>
                       ))}
@@ -392,16 +357,7 @@ export default function ParcelListPage() {
                         row.status === 'CREATED' && row.dispatchState === 'UNASSIGNED';
                       return (
                         <tr key={row.id} className={cn(panelId === row.id && 'bg-brand-50/40')}>
-                          <td className="px-4 py-3">
-                            <input
-                              type="checkbox"
-                              aria-label={`Select parcel ${row.trackingNumber}`}
-                              checked={selected.has(row.id)}
-                              onChange={() => toggleRow(row.id)}
-                              className="size-4 rounded border-slate-300 accent-brand-700"
-                            />
-                          </td>
-                          <td className="px-3 py-3 font-semibold text-slate-900">
+                          <td className="px-4 py-3 font-semibold text-slate-900">
                             #{row.trackingNumber}
                           </td>
                           <td className="px-3 py-3 text-slate-700">{row.merchantName ?? '—'}</td>
@@ -457,8 +413,7 @@ export default function ParcelListPage() {
               </div>
               <div className="flex flex-wrap items-center justify-between gap-3 p-4">
                 <p className="text-sm text-slate-500">
-                  {selected.size > 0 ? `${selected.size} selected · ` : ''}Showing{' '}
-                  {list.data.page.number * list.data.page.size + 1}–
+                  Showing {list.data.page.number * list.data.page.size + 1}–
                   {list.data.page.number * list.data.page.size + rows.length} of{' '}
                   {list.data.page.totalElements} parcels
                 </p>
@@ -475,7 +430,7 @@ export default function ParcelListPage() {
 
       {/* Details beside the list on xl screens (smaller screens use the detail page). */}
       {panelId && (
-        <aside className="hidden self-start rounded-2xl border border-slate-200 bg-white shadow-xs xl:sticky xl:top-4 xl:block xl:max-h-[calc(100vh-2rem)] xl:overflow-hidden">
+        <aside className="hidden self-start overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs xl:sticky xl:top-20 xl:block xl:h-[calc(100vh-6rem)]">
           <AdminParcelPanel key={panelId} parcelId={panelId} onClose={close} />
         </aside>
       )}
