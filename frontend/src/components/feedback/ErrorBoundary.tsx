@@ -5,6 +5,13 @@ import StateView from './StateView';
 
 interface ErrorBoundaryProps {
   children: ReactNode;
+  /**
+   * Whole app (default): a full-screen page that reloads. Inside a layout: only the page area is
+   * replaced, the menu stays usable, and "Try Again" re-renders the page.
+   */
+  variant?: 'app' | 'page';
+  /** When this changes (e.g. the URL), a crashed page is cleared so the new page can render. */
+  resetKey?: string;
 }
 
 interface ErrorBoundaryState {
@@ -26,8 +33,33 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
     console.error('Unexpected error while rendering', error, info.componentStack);
   }
 
+  componentDidUpdate(previous: ErrorBoundaryProps): void {
+    if (this.state.failed && previous.resetKey !== this.props.resetKey) {
+      this.setState({ failed: false });
+    }
+  }
+
   render() {
     if (!this.state.failed) return this.props.children;
+
+    if (this.props.variant === 'page') {
+      return (
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <StateView
+            icon={TriangleAlert}
+            tone="danger"
+            title="Something Went Wrong"
+            message="An unexpected error occurred. Please try again later."
+            actions={
+              <Button variant="outline" onClick={() => this.setState({ failed: false })}>
+                Try Again
+              </Button>
+            }
+          />
+        </div>
+      );
+    }
+
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
         <StateView

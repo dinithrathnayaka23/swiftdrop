@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { authApi } from '../api/auth';
 import { refreshSession } from '../api/client';
 import { useAuth } from '../hooks/useAuth';
-import ProtectedRoute from '../routes/ProtectedRoute';
+import ProtectedRoute from '../shared/guards/ProtectedRoute';
 import { getToken, saveSession, SESSION_HINT_KEY } from '../utils/sessionStorage';
 import { AuthProvider } from './AuthContext';
 

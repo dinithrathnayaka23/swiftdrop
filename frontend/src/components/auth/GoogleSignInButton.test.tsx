@@ -4,7 +4,7 @@ import { MemoryRouter, Route, Routes } from 'react-router';
 import { authApi } from '../../api/auth';
 import { ApiRequestError } from '../../api/errors';
 import { AuthProvider } from '../../context/AuthContext';
-import LoginPage from '../../pages/auth/LoginPage';
+import LoginPage from '../../features/auth/pages/LoginPage';
 import { loadSession } from '../../utils/sessionStorage';
 import type { GoogleIdentityApi } from '../../utils/googleIdentity';
 

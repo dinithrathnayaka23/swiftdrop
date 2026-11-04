@@ -23,6 +23,18 @@
     scroll-behavior: smooth;
   }
 
+  /*
+   * Desktop type scale. The UI designs are about 6% more compact than browser defaults on large
+   * screens, so text, spacing and components (all sized in rem) shrink together from 16px to 15px.
+   * A percentage keeps the visitor's own browser font-size setting working. Phones and tablets keep
+   * 16px: easier to read, and iOS zooms into form fields with smaller text.
+   */
+  @media (min-width: 64rem) {
+    html {
+      font-size: 93.75%;
+    }
+  }
+
   body {
     @apply bg-slate-50 text-slate-900 antialiased;
   }

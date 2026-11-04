@@ -3,8 +3,7 @@ import { Link } from 'react-router';
 import { PATHS } from '../../routes/paths';
 import Logo from '../brand/Logo';
 import { buttonClasses } from '../ui/buttonStyles';
-
-const SUPPORT_EMAIL = 'support@swiftdrop.lk';
+import { SUPPORT_EMAIL } from '../../shared/support';
 
 const LINK_GROUPS: { title: string; links: { label: string; to: string }[] }[] = [
   {
