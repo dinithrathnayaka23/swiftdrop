@@ -1,4 +1,4 @@
-package com.swiftdrop.config.model;
+package com.swiftdrop.pricing.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -34,13 +34,13 @@ public class ZonePricingAdjustment {
     @JoinColumn(name = "pricing_rule_id", nullable = false)
     private PricingRule pricingRule;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "pickup_zone_id", nullable = false)
-    private DeliveryZone pickupZone;
+    /** {@code delivery_zones.zone_id} of the pickup zone (zone module owns the zones). */
+    @Column(name = "pickup_zone_id", nullable = false)
+    private UUID pickupZoneId;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "delivery_zone_id", nullable = false)
-    private DeliveryZone deliveryZone;
+    /** {@code delivery_zones.zone_id} of the delivery zone. */
+    @Column(name = "delivery_zone_id", nullable = false)
+    private UUID deliveryZoneId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "adjustment_type", nullable = false, length = 20)

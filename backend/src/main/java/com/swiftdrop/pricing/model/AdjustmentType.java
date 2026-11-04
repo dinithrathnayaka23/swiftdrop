@@ -1,4 +1,4 @@
-package com.swiftdrop.config.model;
+package com.swiftdrop.pricing.model;
 
 /** Values of {@code zone_pricing_adjustments.adjustment_type}. */
 public enum AdjustmentType {
