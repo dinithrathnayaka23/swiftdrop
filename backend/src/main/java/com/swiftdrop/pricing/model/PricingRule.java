@@ -1,4 +1,4 @@
-package com.swiftdrop.config.model;
+package com.swiftdrop.pricing.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
