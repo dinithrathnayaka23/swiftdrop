@@ -81,7 +81,7 @@ export default function Sidebar({
     <div className="flex h-full flex-col bg-white">
       <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-5">
         <Link to={homePath} onClick={onNavigate} aria-label="SwiftDrop dashboard">
-          <Logo />
+          <Logo size="lg" />
         </Link>
       </div>
 
