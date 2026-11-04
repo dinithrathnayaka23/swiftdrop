@@ -1,8 +1,14 @@
-import { CircleCheck, CircleX, Clock, Lock, Package, TriangleAlert } from 'lucide-react';
+import { Clock, Lock, Signpost, TriangleAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
 import ConfirmDialog from '../../components/feedback/ConfirmDialog';
 import LoadingState from '../../components/feedback/LoadingState';
 import StateView from '../../components/feedback/StateView';
+import {
+  EmptyState,
+  ErrorState,
+  FailureState,
+  SuccessState,
+} from '../../components/feedback/States';
 import Button from '../../components/ui/Button';
 
 function Tile({ label, children }: { label: string; children: ReactNode }) {
@@ -14,7 +20,7 @@ function Tile({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-/** Dev-only gallery of the shared feedback states (/dev/ui). */
+/** Dev-only gallery of the shared feedback states (/dev/ui), matching the UI design's state row. */
 export default function UiStatesPage() {
   const [dialogOpen, setDialogOpen] = useState(false);
 
@@ -28,38 +34,27 @@ export default function UiStatesPage() {
           <LoadingState />
         </Tile>
         <Tile label="Empty">
-          <StateView
-            icon={Package}
+          <EmptyState
             title="No Parcels Found"
             message="You don't have any parcels yet."
-            actions={<Button variant="outline">Track a Parcel</Button>}
+            action={<Button variant="outline">Track a Parcel</Button>}
           />
         </Tile>
         <Tile label="Success">
-          <StateView
-            icon={CircleCheck}
-            tone="success"
-            title="Success!"
-            message="Your changes have been saved."
-            actions={<Button variant="outline">Done</Button>}
-          />
+          <SuccessState onAction={() => undefined} />
         </Tile>
         <Tile label="Failure">
-          <StateView
-            icon={CircleX}
-            tone="danger"
-            title="Action Failed"
-            message="We couldn't complete this action. Please try again."
-            actions={<Button variant="outline">Try Again</Button>}
-          />
+          <FailureState onAction={() => undefined} />
         </Tile>
         <Tile label="General error">
+          <ErrorState onAction={() => undefined} />
+        </Tile>
+        <Tile label="404 Not Found">
           <StateView
-            icon={TriangleAlert}
-            tone="danger"
-            title="Something Went Wrong"
-            message="An unexpected error occurred. Please try again later."
-            actions={<Button variant="outline">Try Again</Button>}
+            icon={Signpost}
+            title="Page Not Found"
+            message="The page you are looking for doesn't exist or has been moved."
+            actions={<Button variant="outline">Go to Home</Button>}
           />
         </Tile>
         <Tile label="403 Unauthorized">
