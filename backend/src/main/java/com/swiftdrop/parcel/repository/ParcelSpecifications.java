@@ -26,6 +26,14 @@ public final class ParcelSpecifications {
         return (root, query, cb) -> cb.disjunction();
     }
 
+    public static Specification<Parcel> idIn(Collection<UUID> ids) {
+        return ids.isEmpty() ? none() : (root, query, cb) -> root.get("id").in(ids);
+    }
+
+    public static Specification<Parcel> idNotIn(Collection<UUID> ids) {
+        return ids.isEmpty() ? any() : (root, query, cb) -> cb.not(root.get("id").in(ids));
+    }
+
     public static Specification<Parcel> ownedByCustomer(UUID customerUserId) {
         return (root, query, cb) -> cb.equal(root.get("customerUserId"), customerUserId);
     }

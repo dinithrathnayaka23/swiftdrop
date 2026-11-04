@@ -44,18 +44,18 @@ public final class ParcelViewMapper {
                 parcel.getFeeCurrency(), null, null, history.stream().map(ParcelViewMapper::toHistoryItem).toList());
     }
 
-    public static AdminParcelRowResponse toAdminRow(Parcel parcel, String merchantName) {
+    public static AdminParcelRowResponse toAdminRow(Parcel parcel, String merchantName, String dispatchState) {
         Address dropoff = parcel.getDropoffAddress();
         return new AdminParcelRowResponse(parcel.getId(), parcel.getTrackingNumber(), merchantName,
-                dropoff.getContactName(), dropoff.getCity(), parcel.getWeightKg(), status(parcel), null,
+                dropoff.getContactName(), dropoff.getCity(), parcel.getWeightKg(), status(parcel), dispatchState,
                 parcel.getCreatedAt());
     }
 
-    public static AdminParcelDetailResponse toAdminDetail(Parcel parcel, String merchantName,
+    public static AdminParcelDetailResponse toAdminDetail(Parcel parcel, String merchantName, String dispatchState,
                                                           List<ParcelStatusHistory> history) {
         Address dropoff = parcel.getDropoffAddress();
         return new AdminParcelDetailResponse(parcel.getId(), parcel.getTrackingNumber(), merchantName,
-                dropoff.getContactName(), dropoff.getCity(), parcel.getWeightKg(), status(parcel), null,
+                dropoff.getContactName(), dropoff.getCity(), parcel.getWeightKg(), status(parcel), dispatchState,
                 parcel.getCreatedAt(), null, parcel.getParcelType(), parcel.getContentDescription(), 1, null,
                 dropoff.getContactPhone(), null, toAddress(dropoff), parcel.getDeliveryInstructions(),
                 history.stream().map(ParcelViewMapper::toHistoryItem).toList(), List.of());
