@@ -49,6 +49,17 @@ Shared building blocks are in `src/components/`:
 
 To see them all, run the dev server and open `/dev/ui`.
 
+### System settings
+
+The admin's System Settings apply everywhere, so use them instead of hard-coding:
+
+- **Dates and times:** `useDateFormat()` (`src/hooks/useDateFormat`) gives `formatDateTime`,
+  `formatShortDateTime` and `formatDate` in the admin's time zone and formats.
+- **Everything else public:** `useSettings().settings` has the support email and phone, items per page,
+  default parcel type and the maximum parcel weight and size (for the booking form).
+- **Backend:** inject `SystemSettingsService` and call `current()` for any setting (for example the
+  default failed-delivery action, auto-assign, or the admin notification switches).
+
 ## Owners
 
 | Folder                     | Member | Screens                                                                                                         |

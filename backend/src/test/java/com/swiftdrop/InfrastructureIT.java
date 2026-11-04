@@ -52,7 +52,7 @@ class InfrastructureIT extends IntegrationTestBase {
         // own migrations (V<member>_<seq>); all applied, nothing failed or pending. No exact latest
         // version, so a new migration from any member doesn't break this test.
         assertThat(flyway.info().applied()).extracting(migration -> migration.getVersion().getVersion())
-                .contains("1", "2", "3");
+                .contains("1", "1.001", "2", "3");
         assertThat(flyway.info().applied())
                 .allMatch(migration -> migration.getState().isApplied() && !migration.getState().isFailed());
         assertThat(flyway.info().pending()).isEmpty();
@@ -65,7 +65,9 @@ class InfrastructureIT extends IntegrationTestBase {
                 "users", "couriers", "addresses", "parcel_statuses", "parcels", "parcel_status_history",
                 "delivery_assignments", "delivery_receipts", "notifications", "merchants",
                 "merchant_api_credentials", "merchant_webhooks", "webhook_deliveries", "pricing_rules",
-                "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas");
+                "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas",
+                // V1_001: Admin System Settings (one row).
+                "system_settings");
 
         // The six report statuses (V4_001); ParcelServiceIT checks the codes and their order.
         Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);

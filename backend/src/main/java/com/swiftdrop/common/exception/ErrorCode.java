@@ -24,6 +24,8 @@ public enum ErrorCode {
     GOOGLE_SIGN_IN_UNAVAILABLE,
     /** Rate limit hit; see the Retry-After header. */
     TOO_MANY_REQUESTS,
+    /** Maintenance mode is on: only the admin can use the system. */
+    MAINTENANCE_MODE,
     /** A dependency (database, Redis) is unreachable; retrying shortly usually works. */
     SERVICE_UNAVAILABLE,
     METHOD_NOT_ALLOWED,

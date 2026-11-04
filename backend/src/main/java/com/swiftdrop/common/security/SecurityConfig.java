@@ -37,6 +37,7 @@ public class SecurityConfig {
     private static final String[] PUBLIC_ROUTES = {
             ApiPaths.AUTH + "/**",
             ApiPaths.PUBLIC_TRACKING + "/**",
+            ApiPaths.PUBLIC_SETTINGS,
             ApiPaths.HEALTH,
             "/actuator/health",
             "/actuator/health/**",

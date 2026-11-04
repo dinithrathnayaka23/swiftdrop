@@ -1,6 +1,6 @@
 import { Check } from 'lucide-react';
 import { cn } from '../../utils/cn';
-import { formatShortDateTime } from '../../utils/date';
+import { useDateFormat } from '../../hooks/useDateFormat';
 import type { StepState, TimelineStep } from '../../utils/parcelStatus';
 
 function StepDot({ state }: { state: StepState }) {
@@ -34,6 +34,7 @@ const STATE_TEXT: Record<StepState, string> = {
 
 /** Picked Up → In Transit → Out for Delivery → Delivered. Horizontal on sm+, vertical on phones. */
 export default function TrackingTimeline({ steps }: { steps: TimelineStep[] }) {
+  const { formatShortDateTime } = useDateFormat();
   return (
     <>
       {/* phones: vertical */}

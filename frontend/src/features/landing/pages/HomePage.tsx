@@ -17,6 +17,7 @@ import Reveal from '../../../components/motion/Reveal';
 import TrackingSearchForm from '../../../components/tracking/TrackingSearchForm';
 import ButtonLink from '../../../components/ui/ButtonLink';
 import { buttonClasses } from '../../../components/ui/buttonStyles';
+import { useSettings } from '../../../hooks/useSettings';
 import { PATHS } from '../../../routes/paths';
 
 const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
@@ -42,10 +43,9 @@ const FEATURES: { icon: LucideIcon; title: string; text: string }[] = [
   },
 ];
 
-const SUPPORT_EMAIL = 'support@swiftdrop.lk';
-
 export default function HomePage() {
   const { hash } = useLocation();
+  const { contactEmail } = useSettings().settings;
 
   // Header links like "/#services" jump to the matching section.
   useEffect(() => {
@@ -156,7 +156,7 @@ export default function HomePage() {
                 We&apos;re here to assist you with tracking, deliveries or general enquiries.
               </p>
             </div>
-            <a href={`mailto:${SUPPORT_EMAIL}`} className={buttonClasses({ variant: 'outline' })}>
+            <a href={`mailto:${contactEmail}`} className={buttonClasses({ variant: 'outline' })}>
               Contact Support
               <ChevronRight className="size-4" aria-hidden="true" />
             </a>

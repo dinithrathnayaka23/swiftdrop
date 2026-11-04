@@ -2,7 +2,7 @@ import { CircleCheck, CircleX, Clock, Truck, type LucideIcon } from 'lucide-reac
 import type { ReactNode } from 'react';
 import type { ParcelStatusCode, TrackingResult } from '../../types/tracking';
 import { cn } from '../../utils/cn';
-import { formatDateTime } from '../../utils/date';
+import { useDateFormat } from '../../hooks/useDateFormat';
 import { buildTimeline, STATUS_META } from '../../utils/parcelStatus';
 import ParcelStatusBadge from './ParcelStatusBadge';
 import TrackingTimeline from './TrackingTimeline';
@@ -26,6 +26,7 @@ function InfoPanel({ title, children }: { title: string; children: ReactNode }) 
 }
 
 export default function TrackingResultCard({ result }: { result: TrackingResult }) {
+  const { formatDateTime } = useDateFormat();
   const meta = STATUS_META[result.currentStatus];
   const { icon: StatusIcon, className: iconClass } = STATUS_ICON[result.currentStatus];
 

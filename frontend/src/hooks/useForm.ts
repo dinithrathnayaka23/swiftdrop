@@ -40,13 +40,13 @@ export function useForm<T extends Values>(
     setTouched((current) => (current[name] ? current : { ...current, [name]: true }));
   }
 
-  /** Props for TextField / PasswordField / TextAreaField. */
+  /** Props for TextField / PasswordField / TextAreaField / SelectField. */
   function field(name: Field) {
     return {
       name,
       value: values[name],
       error: errors[name],
-      onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+      onChange: (e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
         setValue(name, e.target.value),
       onBlur: () => touch(name),
     };

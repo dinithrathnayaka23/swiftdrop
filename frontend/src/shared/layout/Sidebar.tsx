@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router';
 import Logo from '../../components/brand/Logo';
 import { cn } from '../../utils/cn';
-import { SUPPORT_EMAIL } from '../support';
+import { useSettings } from '../../hooks/useSettings';
 import type { NavItem, NavSection } from './navigation';
 
 interface SidebarProps {
@@ -77,6 +77,7 @@ export default function Sidebar({
   showHelp = false,
   onNavigate,
 }: SidebarProps) {
+  const { contactEmail } = useSettings().settings;
   return (
     <div className="flex h-full flex-col bg-white">
       <div className="flex h-16 shrink-0 items-center border-b border-slate-200 px-5">
@@ -120,7 +121,7 @@ export default function Sidebar({
             </div>
           </div>
           <a
-            href={`mailto:${SUPPORT_EMAIL}`}
+            href={`mailto:${contactEmail}`}
             className="mt-3 flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-50"
           >
             Contact Support
