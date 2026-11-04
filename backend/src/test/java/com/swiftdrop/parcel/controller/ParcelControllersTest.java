@@ -14,6 +14,7 @@ import com.swiftdrop.parcel.dto.request.AdminParcelTab;
 import com.swiftdrop.parcel.dto.request.CustomerParcelFilter;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.service.ParcelViewService;
+import com.swiftdrop.parcel.service.ReceiptService;
 import java.time.LocalDate;
 import java.util.Set;
 import java.util.UUID;
@@ -29,6 +30,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 class ParcelControllersTest {
 
     @Mock private ParcelViewService parcelViewService;
+    @Mock private ReceiptService receiptService;
 
     private final UUID customerId = UUID.randomUUID();
     private final AuthenticatedUser customer = new AuthenticatedUser(customerId.toString(), Set.of(Role.CUSTOMER));
@@ -43,7 +45,7 @@ class ParcelControllersTest {
 
     @Test
     void customerListUsesTheSignedInCustomerAndTheFilters() {
-        CustomerParcelController controller = new CustomerParcelController(parcelViewService);
+        CustomerParcelController controller = new CustomerParcelController(parcelViewService, receiptService);
         CustomerParcelFilter filter = new CustomerParcelFilter("kandy", ParcelStatusCode.DELIVERED,
                 LocalDate.of(2026, 1, 1), LocalDate.of(2026, 1, 31));
         when(parcelViewService.listForCustomer(customerId, filter, 2, 10)).thenReturn(Page.empty(PageRequest.of(2, 10)));
@@ -56,7 +58,7 @@ class ParcelControllersTest {
 
     @Test
     void customerDetailAndCountsUseTheSignedInCustomer() {
-        CustomerParcelController controller = new CustomerParcelController(parcelViewService);
+        CustomerParcelController controller = new CustomerParcelController(parcelViewService, receiptService);
 
         controller.get(customer, "SD7KQ2MX9TRB4H");
         controller.counts(customer);
@@ -77,7 +79,7 @@ class ParcelControllersTest {
 
     @Test
     void rejectsANegativePageAndAnOversizedPage() {
-        CustomerParcelController controller = new CustomerParcelController(parcelViewService);
+        CustomerParcelController controller = new CustomerParcelController(parcelViewService, receiptService);
 
         assertThatThrownBy(() -> controller.list(customer, null, null, null, null, -1, 10))
                 .isInstanceOf(BadRequestException.class);

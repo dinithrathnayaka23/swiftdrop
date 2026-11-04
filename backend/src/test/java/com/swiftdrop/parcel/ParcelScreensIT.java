@@ -198,6 +198,36 @@ class ParcelScreensIT extends IntegrationTestBase {
     }
 
     @Test
+    void customerDownloadsAReceiptPdfAndItsNumberIsRecordedOnce() throws Exception {
+        ParcelDetails mine = customerParcel(customerId, "Kandy");
+        String path = "/api/v1/customer/parcels/" + mine.id() + "/receipt";
+
+        HttpResponse<String> first = get(path, customerToken);
+        HttpResponse<String> second = get(path, customerToken);
+
+        assertThat(first.statusCode()).isEqualTo(200);
+        assertThat(first.headers().firstValue("Content-Type")).hasValue("application/pdf");
+        assertThat(first.headers().firstValue("Content-Disposition").orElseThrow())
+                .contains("attachment", "receipt-" + mine.trackingNumber() + ".pdf");
+        assertThat(first.body()).startsWith("%PDF-");
+        assertThat(second.statusCode()).isEqualTo(200);
+
+        List<String> numbers = jdbc.queryForList(
+                "SELECT receipt_number FROM delivery_receipts WHERE parcel_id = ?", String.class, mine.id());
+        assertThat(numbers).containsExactly("SDR-" + mine.trackingNumber().substring(2));
+    }
+
+    @Test
+    void customerCannotDownloadSomeoneElsesReceipt() throws Exception {
+        ParcelDetails theirs = customerParcel(newUser(Role.CUSTOMER), "Galle");
+
+        assertThat(get("/api/v1/customer/parcels/" + theirs.id() + "/receipt", customerToken).statusCode())
+                .isEqualTo(404);
+        assertThat(jdbc.queryForObject("SELECT count(*) FROM delivery_receipts WHERE parcel_id = ?", Long.class,
+                theirs.id())).isZero();
+    }
+
+    @Test
     void unknownAdminParcelIsNotFound() throws Exception {
         assertThat(get("/api/v1/admin/parcels/" + UUID.randomUUID(), adminToken).statusCode()).isEqualTo(404);
     }
