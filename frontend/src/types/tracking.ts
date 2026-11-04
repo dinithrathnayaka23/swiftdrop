@@ -1,14 +1,6 @@
-/** Rows of the parcel_statuses table. */
+/** Rows of the parcel_statuses table (backend ParcelStatusCode; report section 3.6). */
 export type ParcelStatusCode =
-  | 'BOOKED'
-  | 'ASSIGNED'
-  | 'PICKED_UP'
-  | 'IN_TRANSIT'
-  | 'OUT_FOR_DELIVERY'
-  | 'DELIVERED'
-  | 'FAILED_ATTEMPT'
-  | 'RETURNED'
-  | 'CANCELLED';
+  'CREATED' | 'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED';
 
 export interface TrackingEvent {
   statusCode: ParcelStatusCode;

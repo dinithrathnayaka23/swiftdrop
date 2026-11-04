@@ -1,12 +1,4 @@
-import {
-  CircleCheck,
-  CircleX,
-  Clock,
-  TriangleAlert,
-  Truck,
-  Undo2,
-  type LucideIcon,
-} from 'lucide-react';
+import { CircleCheck, CircleX, Clock, Truck, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ParcelStatusCode, TrackingResult } from '../../types/tracking';
 import { cn } from '../../utils/cn';
@@ -16,15 +8,12 @@ import ParcelStatusBadge from './ParcelStatusBadge';
 import TrackingTimeline from './TrackingTimeline';
 
 const STATUS_ICON: Record<ParcelStatusCode, { icon: LucideIcon; className: string }> = {
-  BOOKED: { icon: Clock, className: 'bg-slate-100 text-slate-500' },
-  ASSIGNED: { icon: Clock, className: 'bg-blue-50 text-blue-600' },
+  CREATED: { icon: Clock, className: 'bg-slate-100 text-slate-500' },
   PICKED_UP: { icon: Truck, className: 'bg-blue-50 text-blue-600' },
   IN_TRANSIT: { icon: Truck, className: 'bg-blue-50 text-blue-600' },
   OUT_FOR_DELIVERY: { icon: Truck, className: 'bg-amber-50 text-amber-600' },
   DELIVERED: { icon: CircleCheck, className: 'bg-brand-50 text-brand-600' },
-  FAILED_ATTEMPT: { icon: TriangleAlert, className: 'bg-red-50 text-red-600' },
-  RETURNED: { icon: Undo2, className: 'bg-slate-100 text-slate-600' },
-  CANCELLED: { icon: CircleX, className: 'bg-red-50 text-red-600' },
+  FAILED: { icon: CircleX, className: 'bg-red-50 text-red-600' },
 };
 
 function InfoPanel({ title, children }: { title: string; children: ReactNode }) {

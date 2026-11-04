@@ -30,7 +30,7 @@ describe('AppRoutes', () => {
     signInAs('CUSTOMER');
     renderAt('/customer');
 
-    expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: /Welcome back/ })).toBeInTheDocument();
     const menu = screen.getAllByRole('navigation', { name: 'Main navigation' })[0];
     for (const label of ['Book a Delivery', 'My Deliveries', 'Notifications', 'Profile']) {
       expect(within(menu).getByRole('link', { name: label })).toBeInTheDocument();
@@ -115,7 +115,7 @@ describe('AppRoutes', () => {
   it('opens the menu drawer on small screens and closes it with Escape', async () => {
     signInAs('CUSTOMER');
     renderAt('/customer');
-    await screen.findByRole('heading', { name: 'Dashboard' });
+    await screen.findByRole('heading', { name: /Welcome back/ });
 
     await userEvent.click(screen.getByRole('button', { name: 'Open menu' }));
     expect(screen.getByRole('dialog', { name: 'Menu' })).toBeInTheDocument();

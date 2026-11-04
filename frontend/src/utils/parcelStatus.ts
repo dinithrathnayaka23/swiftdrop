@@ -9,15 +9,10 @@ interface StatusMeta {
 }
 
 export const STATUS_META: Record<ParcelStatusCode, StatusMeta> = {
-  BOOKED: {
-    label: 'Booked',
-    description: 'Your delivery is booked and waiting for a courier.',
+  CREATED: {
+    label: 'Created',
+    description: 'Your delivery is booked and waiting for pickup.',
     tone: 'neutral',
-  },
-  ASSIGNED: {
-    label: 'Courier Assigned',
-    description: 'A courier has been assigned to collect your parcel.',
-    tone: 'info',
   },
   PICKED_UP: {
     label: 'Picked Up',
@@ -39,19 +34,9 @@ export const STATUS_META: Record<ParcelStatusCode, StatusMeta> = {
     description: 'Your parcel has been delivered successfully.',
     tone: 'success',
   },
-  FAILED_ATTEMPT: {
-    label: 'Delivery Attempt Failed',
-    description: 'We could not deliver your parcel. We will try again soon.',
-    tone: 'danger',
-  },
-  RETURNED: {
-    label: 'Returned to Sender',
-    description: 'Your parcel has been returned to the sender.',
-    tone: 'neutral',
-  },
-  CANCELLED: {
-    label: 'Cancelled',
-    description: 'This delivery has been cancelled.',
+  FAILED: {
+    label: 'Failed',
+    description: 'We could not deliver your parcel. The reason has been recorded.',
     tone: 'danger',
   },
 };
