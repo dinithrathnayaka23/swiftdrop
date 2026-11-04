@@ -3,6 +3,7 @@ package com.swiftdrop.parcel;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.swiftdrop.IntegrationTestBase;
+import com.swiftdrop.common.messaging.RabbitConfig;
 import com.swiftdrop.common.security.Role;
 import com.swiftdrop.common.security.jwt.JwtService;
 import com.swiftdrop.merchant.dto.NewMerchant;
@@ -24,8 +25,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
@@ -41,10 +44,21 @@ class ParcelScreensIT extends IntegrationTestBase {
     @Autowired private JwtService jwtService;
     @Autowired private JdbcTemplate jdbc;
     @Autowired private JsonMapper json;
+    @Autowired private AmqpAdmin amqpAdmin;
 
     private UUID customerId;
     private String customerToken;
     private String adminToken;
+
+    /**
+     * Status changes here publish events that nothing consumes yet. Empty the queues so they can't
+     * reach a later test that reads them (e.g. InfrastructureIT), whatever order the classes run in.
+     */
+    @AfterEach
+    void emptyQueues() {
+        amqpAdmin.purgeQueue(RabbitConfig.NOTIFICATION_QUEUE);
+        amqpAdmin.purgeQueue(RabbitConfig.WEBHOOK_QUEUE);
+    }
 
     @BeforeEach
     void signIn() {
