@@ -3,6 +3,7 @@ import { Route, Routes } from 'react-router';
 import LoadingState from '../components/feedback/LoadingState';
 import NotFoundPage from '../shared/errors/NotFoundPage';
 import GuestRoute from '../shared/guards/GuestRoute';
+import MaintenanceGate from '../shared/guards/MaintenanceGate';
 import ProtectedRoute from '../shared/guards/ProtectedRoute';
 import AuthLayout from '../shared/layout/AuthLayout';
 import CourierLayout from '../shared/layout/CourierLayout';
@@ -27,55 +28,57 @@ function render(routes: AppRoute[]) {
 export default function AppRoutes() {
   return (
     <Suspense fallback={<LoadingState className="flex min-h-screen items-center justify-center" />}>
-      <Routes>
-        {/* Public website with the site header and footer */}
-        <Route element={<PublicLayout />}>
-          {render(routesFor('public'))}
-          <Route path="*" element={<NotFoundPage />} />
-        </Route>
-
-        {/* Sign-in and registration (signed-in users are redirected to their dashboard) */}
-        <Route element={<AuthLayout />}>
-          <Route element={<GuestRoute />}>{render(routesFor('guest'))}</Route>
-          {render(routesFor('authPages'))}
-        </Route>
-        <Route element={<GuestRoute />}>{render(routesFor('guestFullPage'))}</Route>
-
-        {/* Signed-in areas, one per role */}
-        <Route element={<ProtectedRoute allowedRoles={['CUSTOMER']} />}>
-          <Route element={<DashboardLayout />}>
-            {render(routesFor('customer'))}
-            <Route path={`${PATHS.customerDashboard}/*`} element={<NotFoundPage />} />
+      <MaintenanceGate>
+        <Routes>
+          {/* Public website with the site header and footer */}
+          <Route element={<PublicLayout />}>
+            {render(routesFor('public'))}
+            <Route path="*" element={<NotFoundPage />} />
           </Route>
-        </Route>
 
-        <Route element={<ProtectedRoute allowedRoles={['MERCHANT']} />}>
-          <Route element={<DashboardLayout />}>
-            {render(routesFor('merchant'))}
-            <Route path={`${PATHS.merchantDashboard}/*`} element={<NotFoundPage />} />
+          {/* Sign-in and registration (signed-in users are redirected to their dashboard) */}
+          <Route element={<AuthLayout />}>
+            <Route element={<GuestRoute />}>{render(routesFor('guest'))}</Route>
+            {render(routesFor('authPages'))}
           </Route>
-        </Route>
+          <Route element={<GuestRoute />}>{render(routesFor('guestFullPage'))}</Route>
 
-        <Route
-          element={<ProtectedRoute allowedRoles={['COURIER']} loginPath={PATHS.courierLogin} />}
-        >
-          <Route element={<CourierLayout />}>
-            {render(routesFor('courier'))}
-            <Route path={`${PATHS.courierHome}/*`} element={<NotFoundPage />} />
+          {/* Signed-in areas, one per role */}
+          <Route element={<ProtectedRoute allowedRoles={['CUSTOMER']} />}>
+            <Route element={<DashboardLayout />}>
+              {render(routesFor('customer'))}
+              <Route path={`${PATHS.customerDashboard}/*`} element={<NotFoundPage />} />
+            </Route>
           </Route>
-        </Route>
 
-        <Route
-          element={
-            <ProtectedRoute allowedRoles={['DISPATCHER_ADMIN']} loginPath={PATHS.adminLogin} />
-          }
-        >
-          <Route element={<DashboardLayout />}>
-            {render(routesFor('admin'))}
-            <Route path={`${PATHS.adminOverview}/*`} element={<NotFoundPage />} />
+          <Route element={<ProtectedRoute allowedRoles={['MERCHANT']} />}>
+            <Route element={<DashboardLayout />}>
+              {render(routesFor('merchant'))}
+              <Route path={`${PATHS.merchantDashboard}/*`} element={<NotFoundPage />} />
+            </Route>
           </Route>
-        </Route>
-      </Routes>
+
+          <Route
+            element={<ProtectedRoute allowedRoles={['COURIER']} loginPath={PATHS.courierLogin} />}
+          >
+            <Route element={<CourierLayout />}>
+              {render(routesFor('courier'))}
+              <Route path={`${PATHS.courierHome}/*`} element={<NotFoundPage />} />
+            </Route>
+          </Route>
+
+          <Route
+            element={
+              <ProtectedRoute allowedRoles={['DISPATCHER_ADMIN']} loginPath={PATHS.adminLogin} />
+            }
+          >
+            <Route element={<DashboardLayout />}>
+              {render(routesFor('admin'))}
+              <Route path={`${PATHS.adminOverview}/*`} element={<NotFoundPage />} />
+            </Route>
+          </Route>
+        </Routes>
+      </MaintenanceGate>
     </Suspense>
   );
 }
