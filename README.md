@@ -250,9 +250,10 @@ swiftdrop/
 ├── frontend/                        React single-page application
 │   └── src/
 │       ├── api/                     Axios client and API calls
-│       ├── components/  layouts/    Shared UI and page shells
-│       ├── pages/                   auth, customer, merchant, courier, dispatcher, admin, public
-│       ├── routes/                  Routing and role-based guards
+│       ├── components/              Shared UI kit and state components
+│       ├── features/                One folder per feature: its routes.ts and pages (see features/README.md)
+│       ├── shared/                  Layouts, route guards and error pages
+│       ├── routes/                  Router, paths for every screen, feature registry
 │       └── context/  hooks/  types/  utils/
 ├── docs/                            Contributing guide and API conventions
 ├── docker/                          Additional Docker configuration
