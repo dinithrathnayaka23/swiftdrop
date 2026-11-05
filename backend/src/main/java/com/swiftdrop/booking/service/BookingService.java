@@ -1,0 +1,134 @@
+package com.swiftdrop.booking.service;
+
+import com.swiftdrop.booking.dto.request.BookingAddressRequest;
+import com.swiftdrop.booking.dto.request.BookingRequest;
+import com.swiftdrop.booking.dto.response.BookingConfirmationResponse;
+import com.swiftdrop.booking.dto.response.FeeEstimateResponse;
+import com.swiftdrop.common.exception.BadRequestException;
+import com.swiftdrop.parcel.dto.NewAddress;
+import com.swiftdrop.parcel.dto.NewParcel;
+import com.swiftdrop.parcel.dto.ParcelDetails;
+import com.swiftdrop.parcel.service.ParcelService;
+import com.swiftdrop.pricing.api.FeeApi;
+import com.swiftdrop.pricing.api.FeeEstimate;
+import com.swiftdrop.pricing.api.FeeLocation;
+import com.swiftdrop.pricing.api.FeeRequest;
+import com.swiftdrop.settings.dto.SystemSettingsView;
+import com.swiftdrop.settings.service.SystemSettingsService;
+import java.math.BigDecimal;
+import java.util.UUID;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.stereotype.Service;
+
+/** Customer delivery booking: fee estimate and booking confirmation. */
+@Slf4j
+@Service
+@RequiredArgsConstructor
+public class BookingService {
+
+    private final FeeApi feeApi;
+    private final ParcelService parcelService;
+    private final SystemSettingsService settings;
+
+    /** Shows the fee for a booking without saving anything. */
+    public FeeEstimateResponse estimate(BookingRequest request) {
+        checkLimits(request);
+        FeeEstimate estimate = feeApi.estimateFee(toFeeRequest(request));
+        return new FeeEstimateResponse(estimate.totalFee(), estimate.currency(), estimate.lines());
+    }
+
+    /** Saves the parcel for the customer. The fee is calculated here again, never taken from the browser. */
+    public BookingConfirmationResponse book(BookingRequest request, UUID customerUserId) {
+        checkLimits(request);
+        FeeEstimate estimate = feeApi.estimateFee(toFeeRequest(request));
+
+        NewParcel newParcel = new NewParcel(
+                customerUserId,
+                null,
+                null,
+                toAddress(request.pickup()),
+                toAddress(request.dropoff()),
+                request.parcelType(),
+                request.weightKg(),
+                request.lengthCm(),
+                request.widthCm(),
+                request.heightCm(),
+                blankToNull(request.contentDescription()),
+                blankToNull(request.deliveryInstructions()),
+                estimate.pricingRuleId(),
+                estimate.totalFee());
+
+        ParcelDetails parcel = parcelService.createParcel(newParcel);
+        log.info("Parcel {} booked by customer {}", parcel.id(), customerUserId);
+
+        return new BookingConfirmationResponse(
+                parcel.id(),
+                parcel.trackingNumber(),
+                parcel.currentStatus(),
+                parcel.quotedFee(),
+                parcel.feeCurrency(),
+                parcel.createdAt());
+    }
+
+    /** Refuses parcels heavier or bigger than the maximums in System Settings. */
+    private void checkLimits(BookingRequest request) {
+        SystemSettingsView limits = settings.current();
+        if (request.weightKg().compareTo(limits.maxParcelWeightKg()) > 0) {
+            throw new BadRequestException("The parcel is heavier than the maximum of "
+                    + limits.maxParcelWeightKg().stripTrailingZeros().toPlainString() + " kg");
+        }
+        BigDecimal maxSide = limits.maxParcelDimensionCm();
+        if (exceeds(request.lengthCm(), maxSide)
+                || exceeds(request.widthCm(), maxSide)
+                || exceeds(request.heightCm(), maxSide)) {
+            throw new BadRequestException("Each side of the parcel can be at most "
+                    + maxSide.stripTrailingZeros().toPlainString() + " cm");
+        }
+    }
+
+    private static boolean exceeds(BigDecimal side, BigDecimal max) {
+        return side != null && side.compareTo(max) > 0;
+    }
+
+    private static FeeRequest toFeeRequest(BookingRequest request) {
+        return new FeeRequest(
+                toFeeLocation(request.pickup()),
+                toFeeLocation(request.dropoff()),
+                request.weightKg(),
+                request.lengthCm(),
+                request.widthCm(),
+                request.heightCm());
+    }
+
+    private static FeeLocation toFeeLocation(BookingAddressRequest address) {
+        return new FeeLocation(
+                address.district().trim(), address.city().trim(), blankToNull(address.postalCode()));
+    }
+
+    private static NewAddress toAddress(BookingAddressRequest address) {
+        return new NewAddress(
+                address.contactName().trim(),
+                address.contactPhone().trim(),
+                address.addressLine1().trim(),
+                blankToNull(address.addressLine2()),
+                address.city().trim(),
+                address.district().trim(),
+                blankToNull(address.postalCode()),
+                null); // zone id is filled in when the zone module publishes its API
+    }
+
+    private static String blankToNull(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        return value.trim();
+    }
+}
+
+/*estimate checks the limits and returns the fee breakdown. 
+book does the same checks, recalculates the fee,
+ saves the parcel for the signed-in customer and
+  returns the tracking number. Text fields are 
+  trimmed, and empty optional fields become null. 
+  Logs contain ids only, never names, phones or addresses. */
