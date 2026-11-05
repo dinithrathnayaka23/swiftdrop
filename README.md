@@ -297,10 +297,16 @@ Email and password sign-in with stateless JWTs (Google sign-in is planned).
 | `POST /api/v1/auth/password-reset` | Public | Email a reset link (always 202, so emails can't be discovered) |
 | `POST /api/v1/auth/password-reset/confirm` | Public | Set a new password with the emailed token (single use, 30 min) |
 | `GET /api/v1/users/me` | Any signed-in user | Own profile |
+| `GET /api/v1/admin/users?search=&role=&status=&page=0&size=20` | `DISPATCHER_ADMIN` | Accounts, newest first, filtered by name/email/phone, role and status |
+| `GET /api/v1/admin/users/{id}` | `DISPATCHER_ADMIN` | One account |
+| `PATCH /api/v1/admin/users/{id}/role` | `DISPATCHER_ADMIN` | Change between `CUSTOMER` and `COURIER` (`{"role":"COURIER"}`); ends the user's sessions |
+| `PATCH /api/v1/admin/users/{id}/status` | `DISPATCHER_ADMIN` | Activate, suspend or deactivate (`{"status":"SUSPENDED"}`); suspending or deactivating ends the user's sessions |
 | `GET /api/v1/admin/merchants?status=PENDING` | `DISPATCHER_ADMIN` | Merchants awaiting review |
 | `POST /api/v1/admin/merchants/{id}/approve` · `/reject` | `DISPATCHER_ADMIN` | Approve (activates the merchant's sign-in) or reject with a reason |
 | `GET` · `PUT /api/v1/admin/settings` | `DISPATCHER_ADMIN` | System settings; saving needs the `version` it was loaded with (409 if someone saved in between) |
 | `GET /api/v1/public/settings` | Public | Contact details, date/time formats, parcel limits and whether maintenance mode is on |
+
+**User management rules:** there is one admin account (set in `.env`), so the admin role can't be given or taken away and the admin always stays active. Merchant accounts belong to a registered business: they come from merchant registration and approval, not a role change, and a pending or rejected merchant is handled through the merchant review. Other modules use the `UserApi` interface (`user/api`), not `UserService` or the repository, and can listen for `UserRoleChangedEvent` / `UserAccountStatusChangedEvent`.
 
 **Maintenance mode** (System Settings): while it's on, every API call from anyone but the admin gets `503 MAINTENANCE_MODE`, only the admin portal accepts sign-ins, and the web app shows a maintenance page. The admin keeps full access to switch it off.
 
