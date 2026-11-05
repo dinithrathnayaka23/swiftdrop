@@ -5,11 +5,12 @@ import com.swiftdrop.user.model.User;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 /** Private to the user module: other modules go through UserService. */
-public interface UserRepository extends JpaRepository<User, UUID> {
+public interface UserRepository extends JpaRepository<User, UUID>, JpaSpecificationExecutor<User> {
 
     // lower(...) matches the ux_users_email_lower index, so lookups are case-insensitive and indexed.
     @Query("select u from User u where lower(u.email) = lower(:email)")
