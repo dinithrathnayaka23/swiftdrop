@@ -1,7 +1,7 @@
 import { ArrowLeft, Check, SearchX, Share2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { MOCK_TRACKING_NUMBERS } from '../../../api/mock/mockTrackingApi';
+import { generatePath, Link, useParams } from 'react-router';
+import { MOCK_TRACKING_SAMPLES } from '../../../api/mock/mockTrackingApi';
 import LoadingState from '../../../components/feedback/LoadingState';
 import StateView from '../../../components/feedback/StateView';
 import TrackParcelIllustration from '../../../components/illustrations/TrackParcelIllustration';
@@ -36,13 +36,30 @@ function TrackingSearchView() {
           Enter your tracking number to get the latest delivery status.
         </p>
         <TrackingSearchForm className="mt-8 w-full" autoFocus />
-        {isMockApiEnabled() && (
-          <p className="mt-4 text-xs text-slate-500">
-            Demo: try {MOCK_TRACKING_NUMBERS.inTransit} or {MOCK_TRACKING_NUMBERS.delivered}
-          </p>
-        )}
+        {isMockApiEnabled() && <DemoHint />}
       </div>
     </div>
+  );
+}
+
+/** Sample tracking numbers of the mock API, one per result state. */
+function DemoHint() {
+  return (
+    <p className="mt-4 text-xs leading-6 text-slate-500">
+      Demo: try{' '}
+      {MOCK_TRACKING_SAMPLES.map(({ trackingNumber, label }, i) => (
+        <span key={trackingNumber}>
+          {i > 0 && ', '}
+          <Link
+            to={generatePath(PATHS.trackResult, { trackingNumber })}
+            className="rounded-sm font-medium text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600"
+          >
+            {trackingNumber}
+          </Link>{' '}
+          ({label})
+        </span>
+      ))}
+    </p>
   );
 }
 
