@@ -88,7 +88,7 @@ export default function AddressStep({ form, onContinue, onCancel }: AddressStepP
       />
 
       <div className="flex items-center justify-between gap-3">
-        <Button variant="secondary" onClick={onCancel}>
+        <Button type="button" variant="outline" onClick={onCancel}>
           Cancel
         </Button>
         <Button type="submit">
