@@ -140,8 +140,8 @@ Credentials for PostgreSQL, RabbitMQ and Redis are the ones in your `.env`.
 > **First sign-in:** SwiftDrop has a single admin whose credentials are `ADMIN_EMAIL` / `ADMIN_PASSWORD` in `.env`
 > (required; synced on every startup, so edit `.env` and restart to change them). Sign in at `/admin/login`. Couriers sign in at `/courier/login` (built for phones).
 > Customers and merchants register from the web app; merchants can sign in once an admin approves them.
-> Password reset and approval emails appear in Mailpit. Parcel tracking still uses sample data
-> (`SD123456789`, `SD987654321`) until the tracking API is built (`VITE_USE_MOCK_API`).
+> Password reset and approval emails appear in Mailpit. Parcel tracking reads real parcels; with the
+> backend on the `dev` profile, create and advance sample parcels as shown in [docs/tracking.md](docs/tracking.md).
 
 Stop everything with `docker compose down` (add `-v` to also delete the database and broker data).
 
@@ -197,7 +197,7 @@ Secrets are never committed: `.env` is git-ignored.
 | `GOOGLE_CLIENT_ID` | Sign in with Google (OAuth Client ID; empty hides the button) |
 | `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_FROM` | Outgoing email (Mailpit in Docker) |
 | `FRONTEND_URL` | Allowed CORS origin(s), comma-separated |
-| `VITE_USE_MOCK_API` | Sample parcel tracking data until the tracking API exists (sign-in always uses the backend) |
+| `VITE_USE_MOCK_API` | Sample data for the booking, pricing and parcel screens (sign-in and public tracking always use the backend) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME` | First admin account, created on startup if it doesn't exist |
 | `FRONTEND_BASE_URL`, `PASSWORD_RESET_EXPIRY` | Web app address used in email links; reset link lifetime (seconds) |
 | `REFRESH_TOKEN_EXPIRY_REMEMBER_ME`, `REFRESH_TOKEN_EXPIRY_SESSION` | Session length with / without "Remember me" (seconds; default 30 days / 1 day) |
