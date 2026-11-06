@@ -86,5 +86,3 @@ export default function ParcelStep({ form, limits, onBack, onContinue }: ParcelS
     </form>
   );
 }
-
-
