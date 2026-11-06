@@ -82,18 +82,13 @@ Invoke-RestMethod "http://localhost:8080/api/v1/public/tracking/$n"
 Tracking numbers are trimmed and upper-cased: the search boxes do it before navigating, and a typed
 URL such as `/track/sd123456789` redirects to `/track/SD123456789`.
 
-**Mock data.** In `npm run dev` the page uses `api/mock/mockTrackingApi.ts` unless
-`VITE_USE_MOCK_API=false`. The search page lists the samples: `SD246813579` booked,
-`SD123456789` in transit, `SD987654321` delivered, `SD135792468` failed. Any other number is not
-found.
+**No mock data.** The page always calls the backend; `VITE_USE_MOCK_API` doesn't apply to
+tracking (it only switches the booking, pricing and parcel screens). To try it:
 
-**Against the real backend:**
-
-1. Start the stack and the backend with the `dev` profile (for the demo helper above).
-2. Create `frontend/.env.local` (git-ignored by `*.local`) with `VITE_USE_MOCK_API=false`, then
-   restart `npm run dev`. The Vite proxy sends `/api` to `VITE_PROXY_TARGET`
-   (default `http://localhost:8080`).
-3. Sign in as the admin and create a sample parcel:
+1. Start the stack and the backend with the `dev` profile (for the demo helper above), then
+   `npm run dev`. The Vite proxy sends `/api` to `VITE_PROXY_TARGET` (default
+   `http://localhost:8080`).
+2. Sign in as the admin and create a sample parcel:
 
    ```powershell
    $login = Invoke-RestMethod -Method Post http://localhost:8080/api/v1/auth/login `
@@ -103,7 +98,7 @@ found.
    $n = (Invoke-RestMethod -Method Post http://localhost:8080/api/v1/admin/dev/tracking/sample-parcel -Headers $h).trackingNumber
    ```
 
-4. Open `http://localhost:5173/track/$n`, call `.../advance` (or `?to=FAILED`), and reload the page
+3. Open `http://localhost:5173/track/$n`, call `.../advance` (or `?to=FAILED`), and reload the page
    to see each state. More than `lookup-rate-limit` reloads in a minute shows the 429 state.
 
 ## Settings (`swiftdrop.tracking`, all optional)

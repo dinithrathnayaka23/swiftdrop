@@ -1,9 +1,7 @@
 import { isAxiosError } from 'axios';
 import type { TrackingApi, TrackingResult } from '../types/tracking';
-import { isMockApiEnabled } from '../utils/env';
 import { apiClient } from './client';
 import { ApiRequestError, toApiRequestError } from './errors';
-import { mockTrackingApi } from './mock/mockTrackingApi';
 
 /** Used when a 429 has no usable Retry-After header (the backend's window is one minute). */
 const DEFAULT_RETRY_AFTER_SECONDS = 60;
@@ -30,7 +28,12 @@ export function parseRetryAfter(value: unknown, now = Date.now()): number {
   return Math.max(1, Math.ceil((date - now) / 1000));
 }
 
-const httpTrackingApi: TrackingApi = {
+/**
+ * Public tracking, always from the backend (`GET /public/tracking/{trackingNumber}`). There is no
+ * mock: VITE_USE_MOCK_API doesn't apply here. Try real parcels with the dev demo helper (see
+ * docs/tracking.md).
+ */
+export const trackingApi: TrackingApi = {
   async getTracking(trackingNumber) {
     try {
       const { data } = await apiClient.get<TrackingResult>(
@@ -52,5 +55,3 @@ const httpTrackingApi: TrackingApi = {
     }
   },
 };
-
-export const trackingApi: TrackingApi = isMockApiEnabled() ? mockTrackingApi : httpTrackingApi;

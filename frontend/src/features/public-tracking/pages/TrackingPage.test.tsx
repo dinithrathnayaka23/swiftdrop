@@ -3,7 +3,6 @@ import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import { MemoryRouter, Route, Routes } from 'react-router';
 import { ApiRequestError } from '../../../api/errors';
-import { MOCK_TRACKING_SAMPLES } from '../../../api/mock/mockTrackingApi';
 import { trackingApi, TrackingRateLimitError } from '../../../api/tracking';
 import { SettingsContext } from '../../../context/settingsContextValue';
 import { PATHS } from '../../../routes/paths';
@@ -226,21 +225,13 @@ describe('TrackingPage rate limit (429)', () => {
 });
 
 describe('TrackingPage search and tracking numbers', () => {
-  it('lists every mock sample, linked to its result, while the mock API is on', () => {
+  it('shows the search form without sample tracking numbers', () => {
     renderAt('/track');
 
     expect(screen.getByRole('heading', { name: 'Track Your Parcel' })).toBeInTheDocument();
-    for (const { trackingNumber, label } of MOCK_TRACKING_SAMPLES) {
-      const link = screen.getByRole('link', { name: trackingNumber });
-      expect(link).toHaveAttribute('href', `/track/${trackingNumber}`);
-      expect(link.parentElement).toHaveTextContent(`(${label})`);
-    }
-    expect(MOCK_TRACKING_SAMPLES.map((s) => s.label)).toEqual([
-      'booked',
-      'in transit',
-      'delivered',
-      'failed',
-    ]);
+    expect(screen.getByLabelText('Tracking number')).toBeInTheDocument();
+    expect(screen.queryByText(/demo/i)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('link')).toEqual([]);
   });
 
   it('redirects a lower-case number with spaces in the URL to the clean number', async () => {

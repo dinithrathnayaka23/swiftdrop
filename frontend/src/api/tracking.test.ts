@@ -3,13 +3,8 @@ import { apiClient } from './client';
 import { ApiRequestError } from './errors';
 import { parseRetryAfter, trackingApi, TrackingRateLimitError } from './tracking';
 
+// Jest's env stand-in turns the mock APIs on (src/test/env.ts): tracking must still use the backend.
 jest.mock('./client', () => ({ apiClient: { get: jest.fn() } }));
-// Use the real HTTP client, not the mock tracking data.
-jest.mock('../utils/env', () => ({
-  API_BASE_URL: '/api/v1',
-  IS_DEV: false,
-  isMockApiEnabled: () => false,
-}));
 
 const get = jest.mocked(apiClient.get);
 
