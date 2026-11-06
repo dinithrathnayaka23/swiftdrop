@@ -1,6 +1,6 @@
 import { ArrowLeft, Check, SearchX, Share2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { generatePath, Link, useParams } from 'react-router';
+import { generatePath, Link, Navigate, useParams } from 'react-router';
 import { MOCK_TRACKING_SAMPLES } from '../../../api/mock/mockTrackingApi';
 import LoadingState from '../../../components/feedback/LoadingState';
 import StateView from '../../../components/feedback/StateView';
@@ -14,15 +14,30 @@ import { PATHS } from '../../../routes/paths';
 import { isMockApiEnabled } from '../../../utils/env';
 import RateLimitedView from '../components/RateLimitedView';
 
+/** The stored form of a tracking number, as the search boxes and the backend use it. */
+function normalizeTrackingNumber(value: string): string {
+  return value.trim().toUpperCase();
+}
+
 /** /track (search) and /track/:trackingNumber (result). Public, no sign-in needed. */
 export default function TrackingPage() {
   const { trackingNumber } = useParams();
-  return trackingNumber ? (
-    // key: reset state when a different number is tracked
-    <TrackingResultView key={trackingNumber} trackingNumber={trackingNumber} />
-  ) : (
-    <TrackingSearchView />
-  );
+  if (trackingNumber === undefined) return <TrackingSearchView />;
+
+  // A typed or shared URL like /track/sd123%20 goes to the clean /track/SD123 (or back to search).
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  if (normalized !== trackingNumber) {
+    return (
+      <Navigate
+        replace
+        to={
+          normalized ? generatePath(PATHS.trackResult, { trackingNumber: normalized }) : PATHS.track
+        }
+      />
+    );
+  }
+  // key: reset state when a different number is tracked
+  return <TrackingResultView key={normalized} trackingNumber={normalized} />;
 }
 
 function TrackingSearchView() {
