@@ -9,10 +9,10 @@ Live parcel status updates over server-sent events (report section 3.7), for any
 
 Streams:
 
-| Stream | Who | Notes |
-| ------ | --- | ----- |
-| `GET /api/v1/public/tracking/{trackingNumber}/stream` | anyone | One parcel |
-| `GET /api/v1/admin/live/stream` | DISPATCHER_ADMIN | Every parcel; sends the bearer token |
+| Stream                                                | Who              | Notes                                |
+| ----------------------------------------------------- | ---------------- | ------------------------------------ |
+| `GET /api/v1/public/tracking/{trackingNumber}/stream` | anyone           | One parcel                           |
+| `GET /api/v1/admin/live/stream`                       | DISPATCHER_ADMIN | Every parcel; sends the bearer token |
 
 Want live updates on your own screen (for example the signed-in Delivery Tracking page)? Use the
 hook; ask Member 5 if it needs something more.
