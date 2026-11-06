@@ -12,6 +12,7 @@ import ButtonLink from '../../../components/ui/ButtonLink';
 import { useParcelTracking } from '../../../hooks/useParcelTracking';
 import { PATHS } from '../../../routes/paths';
 import { isMockApiEnabled } from '../../../utils/env';
+import RateLimitedView from '../components/RateLimitedView';
 
 /** /track (search) and /track/:trackingNumber (result). Public, no sign-in needed. */
 export default function TrackingPage() {
@@ -144,6 +145,15 @@ function TrackingResultView({ trackingNumber }: { trackingNumber: string }) {
                 </>
               }
               actions={<ButtonLink to={PATHS.track}>Try Again</ButtonLink>}
+            />
+          </div>
+        )}
+
+        {tracking.status === 'rate-limited' && (
+          <div className="rounded-2xl border border-slate-200 bg-white">
+            <RateLimitedView
+              retryAfterSeconds={tracking.retryAfterSeconds}
+              onRetry={tracking.retry}
             />
           </div>
         )}
