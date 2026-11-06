@@ -61,6 +61,51 @@ Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/
 Invoke-RestMethod "http://localhost:8080/api/v1/public/tracking/$n"
 ```
 
+## Tracking screen (frontend)
+
+`/track` (search) and `/track/:trackingNumber` (result), no sign-in. Page:
+`features/public-tracking/pages/TrackingPage.tsx`; result card and timeline in
+`components/tracking/`; data from `hooks/useParcelTracking` → `api/tracking.ts`.
+
+| State | When | Shows |
+| ----- | ---- | ----- |
+| Loading | Request in flight | "Finding your parcel..." |
+| Booked | `CREATED` | "Awaiting Pickup", a "Waiting for pickup" notice, no timeline progress |
+| In progress | `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY` | Reached steps ticked, the latest one current |
+| Delivered | `DELIVERED` | Every step ticked |
+| Failed | `FAILED` | Timeline stops at the step where it failed (red cross); "Delivery Unsuccessful" in general terms (the API sends no reason) and the support email/phone from System Settings |
+| Not found | 404 | "Parcel Not Found" with the number searched for, and Try Again |
+| Too many searches | 429 | "Please try again in N seconds" from `Retry-After`; the Try Again button counts down and is disabled until then |
+| Maintenance | 503 `MAINTENANCE_MODE` | The app's maintenance page (the API client switches the app into maintenance mode; `MaintenanceGate`) |
+| Error | Anything else (server down, offline) | "Something Went Wrong" with Try Again |
+
+Tracking numbers are trimmed and upper-cased: the search boxes do it before navigating, and a typed
+URL such as `/track/sd123456789` redirects to `/track/SD123456789`.
+
+**Mock data.** In `npm run dev` the page uses `api/mock/mockTrackingApi.ts` unless
+`VITE_USE_MOCK_API=false`. The search page lists the samples: `SD246813579` booked,
+`SD123456789` in transit, `SD987654321` delivered, `SD135792468` failed. Any other number is not
+found.
+
+**Against the real backend:**
+
+1. Start the stack and the backend with the `dev` profile (for the demo helper above).
+2. Create `frontend/.env.local` (git-ignored by `*.local`) with `VITE_USE_MOCK_API=false`, then
+   restart `npm run dev`. The Vite proxy sends `/api` to `VITE_PROXY_TARGET`
+   (default `http://localhost:8080`).
+3. Sign in as the admin and create a sample parcel:
+
+   ```powershell
+   $login = Invoke-RestMethod -Method Post http://localhost:8080/api/v1/auth/login `
+     -ContentType 'application/json' `
+     -Body (@{ email = $env:ADMIN_EMAIL; password = $env:ADMIN_PASSWORD; portal = 'ADMIN' } | ConvertTo-Json)
+   $h = @{ Authorization = "Bearer $($login.token)" }
+   $n = (Invoke-RestMethod -Method Post http://localhost:8080/api/v1/admin/dev/tracking/sample-parcel -Headers $h).trackingNumber
+   ```
+
+4. Open `http://localhost:5173/track/$n`, call `.../advance` (or `?to=FAILED`), and reload the page
+   to see each state. More than `lookup-rate-limit` reloads in a minute shows the 429 state.
+
 ## Settings (`swiftdrop.tracking`, all optional)
 
 | Setting | Default | Meaning |
