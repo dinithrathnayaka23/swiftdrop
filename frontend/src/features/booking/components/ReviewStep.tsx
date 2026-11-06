@@ -26,11 +26,12 @@ export default function ReviewStep({ booking, onBack, onBooked }: ReviewStepProp
 
   useEffect(() => {
     let active = true;
-    setLoadError(null);
     bookingApi
       .estimate(booking)
       .then((result) => {
-        if (active) setEstimate(result);
+        if (!active) return;
+        setEstimate(result);
+        setLoadError(null);
       })
       .catch((err: unknown) => {
         if (active) setLoadError(getErrorMessage(err));
@@ -39,6 +40,12 @@ export default function ReviewStep({ booking, onBack, onBooked }: ReviewStepProp
       active = false;
     };
   }, [booking, attempt]);
+
+  function retry() {
+    setLoadError(null);
+    setEstimate(null);
+    setAttempt((n) => n + 1);
+  }
 
   async function confirm() {
     setSubmitError(null);
@@ -97,7 +104,7 @@ export default function ReviewStep({ booking, onBack, onBooked }: ReviewStepProp
         {loadError && (
           <div className="space-y-3">
             <Alert tone="error">{loadError}</Alert>
-            <Button variant="outline" size="sm" onClick={() => setAttempt((n) => n + 1)}>
+            <Button variant="outline" size="sm" onClick={retry}>
               Try Again
             </Button>
           </div>
