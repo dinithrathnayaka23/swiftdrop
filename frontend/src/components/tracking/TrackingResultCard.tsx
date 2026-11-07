@@ -25,7 +25,14 @@ function InfoPanel({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
-export default function TrackingResultCard({ result }: { result: TrackingResult }) {
+export default function TrackingResultCard({
+  result,
+  live,
+}: {
+  result: TrackingResult;
+  /** Shown at the end of the header row, e.g. the live-updates badge. */
+  live?: ReactNode;
+}) {
   const { formatDateTime } = useDateFormat();
   const meta = STATUS_META[result.currentStatus];
   const { icon: StatusIcon, className: iconClass } = STATUS_ICON[result.currentStatus];
@@ -44,6 +51,7 @@ export default function TrackingResultCard({ result }: { result: TrackingResult 
           #{result.trackingNumber}
         </h1>
         <ParcelStatusBadge status={result.currentStatus} />
+        {live && <span className="ml-auto">{live}</span>}
       </div>
       <p className="mt-1.5 text-sm text-slate-500">
         Last updated: {formatDateTime(result.lastUpdatedAt)}

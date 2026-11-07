@@ -11,7 +11,11 @@ import Button from '../../../components/ui/Button';
 import ButtonLink from '../../../components/ui/ButtonLink';
 import { useParcelTracking } from '../../../hooks/useParcelTracking';
 import { PATHS } from '../../../routes/paths';
+import type { TrackingResult } from '../../../types/tracking';
 import { isMockApiEnabled } from '../../../utils/env';
+import LiveIndicator from '../../shared-live/LiveIndicator';
+import type { LiveStatusUpdate } from '../../shared-live/types';
+import { useLiveUpdates } from '../../shared-live/useLiveUpdates';
 
 /** /track (search) and /track/:trackingNumber (result). Public, no sign-in needed. */
 export default function TrackingPage() {
@@ -88,6 +92,37 @@ function ShareButton() {
   );
 }
 
+/**
+ * The result with a live status change applied. The status version counts the status changes, so
+ * it equals the length of the history; an update that isn't newer than that is ignored.
+ */
+function withUpdate(result: TrackingResult, update: LiveStatusUpdate | null): TrackingResult {
+  if (!update || update.statusVersion <= result.history.length) return result;
+  return {
+    ...result,
+    currentStatus: update.status,
+    lastUpdatedAt: update.changedAt,
+    history: [...result.history, { statusCode: update.status, changedAt: update.changedAt }],
+  };
+}
+
+/** The found parcel, kept up to date from its live stream (off with the sample data). */
+function LiveTrackingResult({ result, reload }: { result: TrackingResult; reload: () => void }) {
+  const [update, setUpdate] = useState<LiveStatusUpdate | null>(null);
+  const shown = withUpdate(result, update);
+  const live = !isMockApiEnabled();
+
+  const connection = useLiveUpdates({
+    path: live ? `/public/tracking/${encodeURIComponent(result.trackingNumber)}/stream` : null,
+    knownVersions: { [shown.trackingNumber]: shown.history.length },
+    onUpdate: setUpdate,
+    // Changes may have been missed while disconnected: reload quietly.
+    onReconnect: reload,
+  });
+
+  return <TrackingResultCard result={shown} live={live && <LiveIndicator state={connection} />} />;
+}
+
 function TrackingResultView({ trackingNumber }: { trackingNumber: string }) {
   const tracking = useParcelTracking(trackingNumber);
 
@@ -105,7 +140,9 @@ function TrackingResultView({ trackingNumber }: { trackingNumber: string }) {
           </div>
         )}
 
-        {tracking.status === 'found' && <TrackingResultCard result={tracking.data} />}
+        {tracking.status === 'found' && (
+          <LiveTrackingResult result={tracking.data} reload={tracking.refresh} />
+        )}
 
         {tracking.status === 'not-found' && (
           <div className="rounded-2xl border border-slate-200 bg-white">

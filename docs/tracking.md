@@ -38,6 +38,13 @@ shape as the frontend's `TrackingResult`. Case and surrounding spaces in the num
 names, phone numbers, street addresses, postal codes, notes, failure reasons, proof, or any ids.
 `PublicTrackingMapperTest` checks the serialized JSON for this.
 
+**Live updates:** the result page (`/track/:trackingNumber`) follows the parcel's stream
+(`GET /api/v1/public/tracking/{trackingNumber}/stream`, see `docs/realtime.md`) and shows a
+**Live / Connecting… / Live updates paused** badge next to the status. A newer status is applied
+without reloading (the status version equals the number of history entries); after a reconnect
+the result is reloaded quietly. With the sample data (`VITE_USE_MOCK_API`) the stream and badge are
+off.
+
 Code: `PublicTrackingController` → `PublicTrackingService` (`ParcelService.findByTrackingNumber`,
 `ParcelStatusService.getHistory`) → `PublicTrackingMapper`.
 
@@ -60,6 +67,39 @@ Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/
 Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance?to=FAILED" -Headers $h
 Invoke-RestMethod "http://localhost:8080/api/v1/public/tracking/$n"
 ```
+
+## Admin Deliveries Tracking
+
+Screens (`features/admin-live-tracking`, DISPATCHER_ADMIN only):
+
+- `/admin/deliveries`: count cards (total, in transit, out for delivery, delivered, failed, each
+  with its share), filters (search, status, booking dates), the deliveries table and pages of
+  10/20/50. Rows and counts update live from the admin stream; a changed row is tinted briefly.
+- `/admin/deliveries/:trackingNumber`: one delivery on its own page (recipient, address with an
+  "Open in Maps" link, parcel information, merchant, courier, timeline), updated live from that
+  parcel's public stream. The path is spelled out in `features/admin-live-tracking/paths.ts` until
+  `PATHS.adminDeliveryDetail` exists (requested from Member 1).
+
+| Endpoint | Returns |
+| -------- | ------- |
+| `GET /api/v1/admin/live/deliveries?status=&search=&bookedFrom=&bookedTo=&page=&size=` | Paged rows, most recently changed first. `search` matches part of a tracking number, recipient or merchant name; dates are `yyyy-MM-dd` booking days in the System Settings time zone; `size` 1–100, default 10. |
+| `GET /api/v1/admin/live/deliveries/{trackingNumber}` | One delivery with its address, parcel information and history; 404 if unknown |
+| `GET /api/v1/admin/live/counts` | Parcels per status, every status present |
+| `GET /api/v1/admin/live/stream` | Every parcel's status changes as server-sent events (see `docs/realtime.md`) |
+
+Admin responses contain the recipient's name, phone and address; they're never public.
+
+**Limits for now:**
+
+- The parcel module lists one status at a time, so the table loads every status and filters in
+  memory. Fine at this project's volume; a filtered, paged query in `ParcelService` (Member 4)
+  would move it to the database.
+- Courier names, the courier and service-area filters, and estimated delivery times wait for the
+  dispatch module (Member 6). Creating deliveries, changing statuses and reporting issues belong to
+  other modules and aren't on these screens.
+- When the server ends an admin stream (timeout or shutdown), the shared `SecurityConfig` denies
+  Spring's async dispatch and logs errors; the browser reconnects. Fix requested from Member 1:
+  `auth.dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()`.
 
 ## Settings (`swiftdrop.tracking`, all optional)
 

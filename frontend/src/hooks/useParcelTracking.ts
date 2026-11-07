@@ -9,9 +9,15 @@ export type TrackingState =
   | { status: 'not-found' }
   | { status: 'error'; message: string };
 
-/** Loads public tracking info; `retry()` reloads after an error. */
-export function useParcelTracking(trackingNumber: string): TrackingState & { retry: () => void } {
+/**
+ * Loads public tracking info. `retry()` reloads after an error (showing "loading");
+ * `refresh()` reloads quietly, keeping the current result on screen until the new one arrives.
+ */
+export function useParcelTracking(
+  trackingNumber: string,
+): TrackingState & { retry: () => void; refresh: () => void } {
   const [attempt, setAttempt] = useState(0);
+  const [refreshes, setRefreshes] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; state: TrackingState } | null>(null);
   const key = `${trackingNumber}#${attempt}`;
 
@@ -30,9 +36,13 @@ export function useParcelTracking(trackingNumber: string): TrackingState & { ret
     return () => {
       active = false;
     };
-  }, [trackingNumber, key]);
+  }, [trackingNumber, key, refreshes]);
 
   // Anything loaded for a previous tracking number/attempt counts as still loading.
   const state: TrackingState = loaded?.key === key ? loaded.state : { status: 'loading' };
-  return { ...state, retry: () => setAttempt((n) => n + 1) };
+  return {
+    ...state,
+    retry: () => setAttempt((n) => n + 1),
+    refresh: () => setRefreshes((n) => n + 1),
+  };
 }

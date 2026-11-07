@@ -6,6 +6,7 @@ Live parcel status updates over server-sent events (report section 3.7), for any
 - `useLiveUpdates`: opens the stream, reconnects with backoff (1 s up to 30 s, then "offline"),
   and calls you back with each newer update. On reconnect (`onReconnect`), reload the current state
   over REST: the pushed messages only keep the screen fresh, the API is the true record.
+- `LiveIndicator`: the small "Live / Connecting… / Live updates paused" badge for that state.
 - `eventStream.ts`: reads the stream with `fetch()`, so it can send a bearer token and read error
   codes. Used by the hook; you shouldn't need it directly.
 
