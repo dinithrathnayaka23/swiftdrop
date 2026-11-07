@@ -1,6 +1,7 @@
 package com.swiftdrop.realtime.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
+import com.swiftdrop.common.exception.ApiException;
 import com.swiftdrop.common.exception.ErrorResponse;
 import com.swiftdrop.common.exception.RateLimitExceededException;
 import com.swiftdrop.common.ratelimit.RateLimiter;
@@ -14,10 +15,14 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
+import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -28,8 +33,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * Live status updates for one parcel, as server-sent events, for the public tracking page. No
  * sign-in, like the tracking look-up (SecurityConfig permits {@code /public/tracking/**}).
  *
- * <p>No {@code produces} on purpose: errors (404, 429) are still answered as the standard JSON
- * error body when the browser also accepts {@code application/json}.
+ * <p>No {@code produces} on purpose, and errors (404, 429) are answered by {@link #handleError}
+ * as the standard JSON error body, whatever the browser accepts.
  */
 @Tag(name = "Public tracking", description = "Track a parcel by its tracking number, without signing in")
 @RestController
@@ -72,5 +77,21 @@ public class PublicLiveTrackingController {
                 .cacheControl(CacheControl.noCache())
                 .header(NO_PROXY_BUFFERING_HEADER, "no")
                 .body(emitter);
+    }
+
+    /**
+     * This endpoint's errors (404, 429) in the standard error body, as the global handler writes
+     * it. Here the content type is set up front: a browser that only accepts text/event-stream
+     * would otherwise get a 500, because the JSON body can't be negotiated.
+     */
+    @ExceptionHandler(ApiException.class)
+    ResponseEntity<ErrorResponse> handleError(ApiException ex, HttpServletRequest request) {
+        HttpStatus status = ex.getStatus();
+        var response = ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON);
+        if (ex instanceof RateLimitExceededException limit) {
+            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(limit.getRetryAfterSeconds()));
+        }
+        return response.body(new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(),
+                ex.getCode().name(), ex.getMessage(), request.getRequestURI(), ex.getFieldErrors()));
     }
 }
