@@ -3,10 +3,15 @@ package com.swiftdrop.realtime.service;
 import com.swiftdrop.common.exception.RateLimitExceededException;
 import com.swiftdrop.realtime.dto.LiveStatusUpdate;
 import com.swiftdrop.tracking.config.TrackingProperties;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.event.EventListener;
@@ -37,6 +42,17 @@ public class LiveStreamHub {
     private final TrackingProperties properties;
 
     private final Set<LiveStream> streams = ConcurrentHashMap.newKeySet();
+
+    /**
+     * Sends the heartbeats. A private thread rather than a Spring scheduler: the app doesn't enable
+     * scheduling, and a TaskScheduler bean would replace the executor Spring MVC uses for async
+     * requests (which these streams are).
+     */
+    private final ScheduledExecutorService heartbeats = Executors.newSingleThreadScheduledExecutor(task -> {
+        Thread thread = new Thread(task, "realtime-heartbeat");
+        thread.setDaemon(true);
+        return thread;
+    });
 
     /**
      * One open stream.
@@ -82,6 +98,38 @@ public class LiveStreamHub {
         }
     }
 
+    /**
+     * A comment line on every open stream. Keeps idle streams open through nginx (its read timeout
+     * is 60 seconds; the interval is 25) and finds browsers that went away without closing.
+     */
+    public void sendHeartbeats() {
+        for (LiveStream stream : streams) {
+            send(stream, SseEmitter.event().comment("ping"));
+        }
+    }
+
+    @PostConstruct
+    void startHeartbeats() {
+        long interval = properties.heartbeatInterval().toMillis();
+        heartbeats.scheduleWithFixedDelay(() -> {
+            try {
+                sendHeartbeats();
+            } catch (RuntimeException ex) {
+                // Never let one failure stop the heartbeats for good.
+                log.warn("Live stream heartbeat failed: {}", ex.getClass().getSimpleName());
+            }
+        }, interval, interval, TimeUnit.MILLISECONDS);
+    }
+
+    /** On shutdown: stop the heartbeats and end every stream, so browsers reconnect elsewhere. */
+    @PreDestroy
+    void closeAll() {
+        heartbeats.shutdownNow();
+        for (LiveStream stream : streams) {
+            complete(stream);
+        }
+    }
+
     /** Number of open streams on this instance. */
     public int openStreamCount() {
         return streams.size();
@@ -103,10 +151,22 @@ public class LiveStreamHub {
         LiveStream stream = new LiveStream(emitter, clientKey, trackingNumber);
         emitter.onCompletion(() -> streams.remove(stream));
         emitter.onError(error -> streams.remove(stream));
+        // After stream-timeout: end the response normally; the browser reconnects and reloads.
+        emitter.onTimeout(() -> complete(stream));
         streams.add(stream);
         // Sent first so the response (and its headers) reaches the browser straight away.
         send(stream, SseEmitter.event().comment("connected"));
         return emitter;
+    }
+
+    /** Ends the stream and forgets it. */
+    void complete(LiveStream stream) {
+        streams.remove(stream);
+        try {
+            stream.emitter().complete();
+        } catch (IllegalStateException ex) {
+            // Already completed: nothing to do.
+        }
     }
 
     /** Sends one event; a stream that can't be written to is closed and forgotten. */
