@@ -15,12 +15,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.security.SecurityRequirements;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
-import java.time.Instant;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.CacheControl;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,9 +38,6 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class PublicLiveTrackingController {
 
     static final String RATE_LIMIT_KEY_PREFIX = "tracking:stream:";
-
-    /** Tells nginx not to buffer the response, so each event reaches the browser at once. */
-    static final String NO_PROXY_BUFFERING_HEADER = "X-Accel-Buffering";
 
     private final PublicTrackingService trackingService;
     private final LiveStreamHub streamHub;
@@ -72,26 +64,13 @@ public class PublicLiveTrackingController {
         }
         String knownNumber = trackingService.requireKnownTrackingNumber(trackingNumber);
         SseEmitter emitter = streamHub.openParcelStream(knownNumber, clientIp);
-        return ResponseEntity.ok()
-                .contentType(MediaType.TEXT_EVENT_STREAM)
-                .cacheControl(CacheControl.noCache())
-                .header(NO_PROXY_BUFFERING_HEADER, "no")
-                .body(emitter);
+        return StreamResponses.stream(emitter);
     }
 
-    /**
-     * This endpoint's errors (404, 429) in the standard error body, as the global handler writes
-     * it. Here the content type is set up front: a browser that only accepts text/event-stream
-     * would otherwise get a 500, because the JSON body can't be negotiated.
-     */
+    /** This endpoint's errors (404, 429) as the standard JSON error body, whatever the browser accepts. */
     @ExceptionHandler(ApiException.class)
     ResponseEntity<ErrorResponse> handleError(ApiException ex, HttpServletRequest request) {
-        HttpStatus status = ex.getStatus();
-        var response = ResponseEntity.status(status).contentType(MediaType.APPLICATION_JSON);
-        if (ex instanceof RateLimitExceededException limit) {
-            response.header(HttpHeaders.RETRY_AFTER, String.valueOf(limit.getRetryAfterSeconds()));
-        }
-        return response.body(new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(),
-                ex.getCode().name(), ex.getMessage(), request.getRequestURI(), ex.getFieldErrors()));
+        return StreamResponses.error(ex.getStatus(), ex.getCode(), ex.getMessage(), request.getRequestURI(),
+                ex.getFieldErrors(), ex);
     }
 }
