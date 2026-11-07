@@ -5,11 +5,11 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * One row of the admin Deliveries Tracking board ({@code GET /api/v1/admin/live/deliveries}).
- * Matches the frontend's {@code LiveDeliveryRow} (features/admin-live-tracking/types.ts). Admin
- * only, but still no contact details: the board needs none.
+ * One row of the admin Deliveries Tracking table ({@code GET /api/v1/admin/live/deliveries}).
+ * Admin only: contains the recipient's name and phone, as in the design.
  *
- * @param statusVersion 1 for CREATED, +1 per change; live updates with a higher version replace the row
+ * @param statusVersion 1 for CREATED, +1 per change; a live update with a higher version replaces the row
+ * @param merchantName  {@code null} for a customer booking
  * @param courierName   {@code null} until the dispatch module provides {@code CourierLookup}
  * @param lastUpdatedAt when the status last changed
  */
@@ -18,8 +18,11 @@ public record LiveDeliveryResponse(
         String trackingNumber,
         ParcelStatusCode status,
         long statusVersion,
-        String fromCity,
-        String toCity,
+        String recipientName,
+        String recipientPhone,
+        String merchantName,
         String courierName,
+        String destinationCity,
+        Instant bookedAt,
         Instant lastUpdatedAt) {
 }
