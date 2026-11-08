@@ -10,9 +10,9 @@ export const API_BASE_URL: string = import.meta.env.VITE_API_BASE_URL || '/api/v
 export const IS_DEV: boolean = import.meta.env.DEV;
 
 /**
- * Use sample tracking data in the browser instead of the tracking API, which isn't built yet.
+ * Use in-browser sample data for the booking, pricing and parcel screens instead of their APIs.
  * Controlled by VITE_USE_MOCK_API ("true"/"false"); defaults to on in local development and off
- * in production builds. Authentication always uses the real backend.
+ * in production builds. Sign-in and public tracking always use the real backend.
  */
 export function isMockApiEnabled(): boolean {
   const flag = import.meta.env.VITE_USE_MOCK_API;
