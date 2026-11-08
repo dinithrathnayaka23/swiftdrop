@@ -47,3 +47,4 @@ pnpm-debug.log*
 .factorypath
 .DS_Store
 Thumbs.db
+DEV_PLAN.md

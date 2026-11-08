@@ -1,7 +1,6 @@
 import { ArrowLeft, Check, SearchX, Share2, TriangleAlert } from 'lucide-react';
 import { useState } from 'react';
-import { Link, useParams } from 'react-router';
-import { MOCK_TRACKING_NUMBERS } from '../../../api/mock/mockTrackingApi';
+import { generatePath, Link, Navigate, useParams } from 'react-router';
 import LoadingState from '../../../components/feedback/LoadingState';
 import StateView from '../../../components/feedback/StateView';
 import TrackParcelIllustration from '../../../components/illustrations/TrackParcelIllustration';
@@ -11,17 +10,32 @@ import Button from '../../../components/ui/Button';
 import ButtonLink from '../../../components/ui/ButtonLink';
 import { useParcelTracking } from '../../../hooks/useParcelTracking';
 import { PATHS } from '../../../routes/paths';
-import { isMockApiEnabled } from '../../../utils/env';
+import RateLimitedView from '../components/RateLimitedView';
+
+/** The stored form of a tracking number, as the search boxes and the backend use it. */
+function normalizeTrackingNumber(value: string): string {
+  return value.trim().toUpperCase();
+}
 
 /** /track (search) and /track/:trackingNumber (result). Public, no sign-in needed. */
 export default function TrackingPage() {
   const { trackingNumber } = useParams();
-  return trackingNumber ? (
-    // key: reset state when a different number is tracked
-    <TrackingResultView key={trackingNumber} trackingNumber={trackingNumber} />
-  ) : (
-    <TrackingSearchView />
-  );
+  if (trackingNumber === undefined) return <TrackingSearchView />;
+
+  // A typed or shared URL like /track/sd123%20 goes to the clean /track/SD123 (or back to search).
+  const normalized = normalizeTrackingNumber(trackingNumber);
+  if (normalized !== trackingNumber) {
+    return (
+      <Navigate
+        replace
+        to={
+          normalized ? generatePath(PATHS.trackResult, { trackingNumber: normalized }) : PATHS.track
+        }
+      />
+    );
+  }
+  // key: reset state when a different number is tracked
+  return <TrackingResultView key={normalized} trackingNumber={normalized} />;
 }
 
 function TrackingSearchView() {
@@ -36,11 +50,6 @@ function TrackingSearchView() {
           Enter your tracking number to get the latest delivery status.
         </p>
         <TrackingSearchForm className="mt-8 w-full" autoFocus />
-        {isMockApiEnabled() && (
-          <p className="mt-4 text-xs text-slate-500">
-            Demo: try {MOCK_TRACKING_NUMBERS.inTransit} or {MOCK_TRACKING_NUMBERS.delivered}
-          </p>
-        )}
       </div>
     </div>
   );
@@ -127,6 +136,15 @@ function TrackingResultView({ trackingNumber }: { trackingNumber: string }) {
                 </>
               }
               actions={<ButtonLink to={PATHS.track}>Try Again</ButtonLink>}
+            />
+          </div>
+        )}
+
+        {tracking.status === 'rate-limited' && (
+          <div className="rounded-2xl border border-slate-200 bg-white">
+            <RateLimitedView
+              retryAfterSeconds={tracking.retryAfterSeconds}
+              onRetry={tracking.retry}
             />
           </div>
         )}
