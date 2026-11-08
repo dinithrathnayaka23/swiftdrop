@@ -32,11 +32,26 @@ public class PublicTrackingService {
      */
     @Transactional(readOnly = true)
     public PublicTrackingResponse track(String trackingNumber) {
+        ParcelDetails parcel = find(trackingNumber);
+        return PublicTrackingMapper.toResponse(parcel, parcelStatusService.getHistory(parcel.id()));
+    }
+
+    /**
+     * The stored form of a tracking number that belongs to a parcel, for example before opening its
+     * live stream. Case and surrounding spaces are ignored.
+     *
+     * @throws NotFoundException with the same message as {@link #track}, if no parcel has this number
+     */
+    @Transactional(readOnly = true)
+    public String requireKnownTrackingNumber(String trackingNumber) {
+        return find(trackingNumber).trackingNumber();
+    }
+
+    private ParcelDetails find(String trackingNumber) {
         if (trackingNumber == null || trackingNumber.isBlank()) {
             throw new NotFoundException(NOT_FOUND_MESSAGE);
         }
-        ParcelDetails parcel = parcelService.findByTrackingNumber(ParcelService.normalizeTrackingNumber(trackingNumber))
+        return parcelService.findByTrackingNumber(ParcelService.normalizeTrackingNumber(trackingNumber))
                 .orElseThrow(() -> new NotFoundException(NOT_FOUND_MESSAGE));
-        return PublicTrackingMapper.toResponse(parcel, parcelStatusService.getHistory(parcel.id()));
     }
 }

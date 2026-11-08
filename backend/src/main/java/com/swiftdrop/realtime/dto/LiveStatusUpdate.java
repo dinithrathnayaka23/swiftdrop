@@ -1,5 +1,6 @@
 package com.swiftdrop.realtime.dto;
 
+import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
 import java.time.Instant;
 
 /**
@@ -20,4 +21,10 @@ public record LiveStatusUpdate(
 
     /** Name of the server-sent event that carries this record. */
     public static final String EVENT_NAME = "status";
+
+    /** The public part of a status event: no parcel, merchant or user ids. */
+    public static LiveStatusUpdate from(ParcelStatusChangedEvent event) {
+        return new LiveStatusUpdate(event.trackingNumber(), event.previousStatus(), event.newStatus(),
+                event.statusVersion(), event.occurredAt());
+    }
 }
