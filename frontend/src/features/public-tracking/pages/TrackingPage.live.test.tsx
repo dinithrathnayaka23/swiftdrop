@@ -5,10 +5,6 @@ import type { TrackingResult } from '../../../types/tracking';
 import { useLiveUpdates } from '../../shared-live/useLiveUpdates';
 import TrackingPage from './TrackingPage';
 
-jest.mock('../../../utils/env', () => ({
-  ...jest.requireActual('../../../utils/env'),
-  isMockApiEnabled: () => false,
-}));
 jest.mock('../../../api/tracking', () => ({ trackingApi: { getTracking: jest.fn() } }));
 jest.mock('../../shared-live/useLiveUpdates', () => ({ useLiveUpdates: jest.fn() }));
 

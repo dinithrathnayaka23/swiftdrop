@@ -1,17 +1,23 @@
 import { useEffect, useState } from 'react';
 import { getErrorMessage } from '../api/errors';
-import { trackingApi } from '../api/tracking';
+import { trackingApi, TrackingRateLimitError } from '../api/tracking';
 import type { TrackingResult } from '../types/tracking';
 
 export type TrackingState =
   | { status: 'loading' }
   | { status: 'found'; data: TrackingResult }
   | { status: 'not-found' }
+  /** Too many look-ups (429): wait this long before searching again. */
+  | { status: 'rate-limited'; retryAfterSeconds: number }
   | { status: 'error'; message: string };
 
 /**
- * Loads public tracking info. `retry()` reloads after an error (showing "loading");
- * `refresh()` reloads quietly, keeping the current result on screen until the new one arrives.
+ * Loads public tracking info. `retry()` reloads after an error or a rate limit (showing
+ * "loading"); `refresh()` reloads quietly, keeping the current result on screen until the new one
+ * arrives.
+ *
+ * A 503 for maintenance needs nothing here: the API client switches the app to the maintenance
+ * page for every non-admin screen.
  */
 export function useParcelTracking(
   trackingNumber: string,
@@ -30,7 +36,12 @@ export function useParcelTracking(
         }
       },
       (err: unknown) => {
-        if (active) setLoaded({ key, state: { status: 'error', message: getErrorMessage(err) } });
+        if (!active) return;
+        const state: TrackingState =
+          err instanceof TrackingRateLimitError
+            ? { status: 'rate-limited', retryAfterSeconds: err.retryAfterSeconds }
+            : { status: 'error', message: getErrorMessage(err) };
+        setLoaded({ key, state });
       },
     );
     return () => {

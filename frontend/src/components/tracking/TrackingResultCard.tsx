@@ -1,11 +1,13 @@
-import { CircleCheck, CircleX, Clock, Truck, type LucideIcon } from 'lucide-react';
+import { CircleCheck, CircleX, Clock, Mail, Phone, Truck, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { ParcelStatusCode, TrackingResult } from '../../types/tracking';
 import { cn } from '../../utils/cn';
 import { useDateFormat } from '../../hooks/useDateFormat';
-import { buildTimeline, STATUS_META } from '../../utils/parcelStatus';
+import { useSettings } from '../../hooks/useSettings';
+import Alert from '../ui/Alert';
 import ParcelStatusBadge from './ParcelStatusBadge';
 import TrackingTimeline from './TrackingTimeline';
+import { buildTrackingTimeline, TRACKING_STATUS_TEXT } from './trackingSteps';
 
 const STATUS_ICON: Record<ParcelStatusCode, { icon: LucideIcon; className: string }> = {
   CREATED: { icon: Clock, className: 'bg-slate-100 text-slate-500' },
@@ -25,6 +27,38 @@ function InfoPanel({ title, children }: { title: string; children: ReactNode }) 
   );
 }
 
+const CONTACT_LINK =
+  'inline-flex items-center gap-2 rounded-sm font-medium text-brand-700 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-600';
+
+/** Support contact from the System Settings, shown when a delivery failed. */
+function SupportContact() {
+  const { contactEmail, contactPhone } = useSettings().settings;
+  return (
+    <div className="mt-4 rounded-lg bg-slate-50 p-4 text-sm">
+      <p className="font-medium text-slate-900">Need help with this delivery?</p>
+      <p className="mt-1 text-slate-500">
+        Contact our support team and quote your tracking number.
+      </p>
+      <ul className="mt-3 space-y-2">
+        <li>
+          <a href={`mailto:${contactEmail}`} className={CONTACT_LINK}>
+            <Mail className="size-4" aria-hidden="true" />
+            {contactEmail}
+          </a>
+        </li>
+        {contactPhone && (
+          <li>
+            <a href={`tel:${contactPhone.replace(/\s+/g, '')}`} className={CONTACT_LINK}>
+              <Phone className="size-4" aria-hidden="true" />
+              {contactPhone}
+            </a>
+          </li>
+        )}
+      </ul>
+    </div>
+  );
+}
+
 export default function TrackingResultCard({
   result,
   live,
@@ -34,7 +68,7 @@ export default function TrackingResultCard({
   live?: ReactNode;
 }) {
   const { formatDateTime } = useDateFormat();
-  const meta = STATUS_META[result.currentStatus];
+  const statusText = TRACKING_STATUS_TEXT[result.currentStatus];
   const { icon: StatusIcon, className: iconClass } = STATUS_ICON[result.currentStatus];
 
   const details: [string, string][] = [
@@ -57,8 +91,14 @@ export default function TrackingResultCard({
         Last updated: {formatDateTime(result.lastUpdatedAt)}
       </p>
 
+      {result.currentStatus === 'CREATED' && (
+        <Alert tone="info" title="Waiting for pickup" className="mt-6">
+          Delivery progress will show here once a courier has collected the parcel.
+        </Alert>
+      )}
+
       <div className="mt-8">
-        <TrackingTimeline steps={buildTimeline(result)} />
+        <TrackingTimeline steps={buildTrackingTimeline(result)} />
       </div>
 
       <div className="mt-8 grid gap-4 md:grid-cols-2">
@@ -80,9 +120,10 @@ export default function TrackingResultCard({
             >
               <StatusIcon className="size-5" aria-hidden="true" />
             </span>
-            <p className="text-base font-semibold text-slate-900">{meta.label}</p>
+            <p className="text-base font-semibold text-slate-900">{statusText.title}</p>
           </div>
-          <p className="mt-3 text-sm leading-6 text-slate-500">{meta.description}</p>
+          <p className="mt-3 text-sm leading-6 text-slate-500">{statusText.description}</p>
+          {result.currentStatus === 'FAILED' && <SupportContact />}
         </InfoPanel>
       </div>
     </div>
