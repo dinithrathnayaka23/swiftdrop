@@ -1,39 +1,51 @@
-import { Check } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { useDateFormat } from '../../hooks/useDateFormat';
-import type { StepState, TimelineStep } from '../../utils/parcelStatus';
+import type { TrackingStep, TrackingStepState } from './trackingSteps';
 
-function StepDot({ state }: { state: StepState }) {
+function StepDot({ state }: { state: TrackingStepState }) {
   return (
     <span
       className={cn(
         'relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full',
         state === 'complete' && 'bg-brand-600 text-white',
         state === 'current' && 'bg-blue-600 text-white ring-4 ring-blue-100',
+        state === 'failed' && 'bg-red-600 text-white ring-4 ring-red-100',
         state === 'upcoming' && 'border-2 border-slate-200 bg-white',
       )}
     >
-      {state === 'upcoming' ? (
-        <span className="size-2 rounded-full bg-slate-300" />
-      ) : (
+      {state === 'upcoming' && (
+        <span className="size-2 rounded-full bg-slate-300" aria-hidden="true" />
+      )}
+      {state === 'failed' && <X className="size-4" strokeWidth={3} aria-hidden="true" />}
+      {(state === 'complete' || state === 'current') && (
         <Check className="size-4" strokeWidth={3} aria-hidden="true" />
       )}
     </span>
   );
 }
 
-function lineClass(next: TimelineStep): string {
+function lineClass(next: TrackingStep): string {
   return next.state === 'upcoming' ? 'bg-slate-200' : 'bg-brand-500';
 }
 
-const STATE_TEXT: Record<StepState, string> = {
+function labelClass(state: TrackingStepState): string {
+  if (state === 'upcoming') return 'text-slate-400';
+  return state === 'failed' ? 'text-red-700' : 'text-slate-900';
+}
+
+const STATE_TEXT: Record<TrackingStepState, string> = {
   complete: 'completed',
   current: 'current step',
-  upcoming: 'not reached yet',
+  failed: 'delivery failed at this step',
+  upcoming: 'not reached',
 };
 
-/** Picked Up → In Transit → Out for Delivery → Delivered. Horizontal on sm+, vertical on phones. */
-export default function TrackingTimeline({ steps }: { steps: TimelineStep[] }) {
+/**
+ * Picked Up â†’ In Transit â†’ Out for Delivery â†’ Delivered. Horizontal on sm+, vertical on phones.
+ * A failed delivery stops at the step where it failed (red cross).
+ */
+export default function TrackingTimeline({ steps }: { steps: TrackingStep[] }) {
   const { formatShortDateTime } = useDateFormat();
   return (
     <>
@@ -52,12 +64,7 @@ export default function TrackingTimeline({ steps }: { steps: TimelineStep[] }) {
             )}
             <StepDot state={step.state} />
             <div className="pt-1">
-              <p
-                className={cn(
-                  'text-sm font-semibold',
-                  step.state === 'upcoming' ? 'text-slate-400' : 'text-slate-900',
-                )}
-              >
+              <p className={cn('text-sm font-semibold', labelClass(step.state))}>
                 {step.label}
                 <span className="sr-only"> ({STATE_TEXT[step.state]})</span>
               </p>
@@ -85,12 +92,7 @@ export default function TrackingTimeline({ steps }: { steps: TimelineStep[] }) {
               />
             )}
             <StepDot state={step.state} />
-            <p
-              className={cn(
-                'mt-3 pr-2 text-sm font-semibold',
-                step.state === 'upcoming' ? 'text-slate-400' : 'text-slate-900',
-              )}
-            >
+            <p className={cn('mt-3 pr-2 text-sm font-semibold', labelClass(step.state))}>
               {step.label}
               <span className="sr-only"> ({STATE_TEXT[step.state]})</span>
             </p>
