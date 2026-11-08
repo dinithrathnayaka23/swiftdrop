@@ -12,13 +12,18 @@ export type TrackingState =
   | { status: 'error'; message: string };
 
 /**
- * Loads public tracking info; `retry()` loads it again (after an error or a rate limit).
+ * Loads public tracking info. `retry()` reloads after an error or a rate limit (showing
+ * "loading"); `refresh()` reloads quietly, keeping the current result on screen until the new one
+ * arrives.
  *
  * A 503 for maintenance needs nothing here: the API client switches the app to the maintenance
  * page for every non-admin screen.
  */
-export function useParcelTracking(trackingNumber: string): TrackingState & { retry: () => void } {
+export function useParcelTracking(
+  trackingNumber: string,
+): TrackingState & { retry: () => void; refresh: () => void } {
   const [attempt, setAttempt] = useState(0);
+  const [refreshes, setRefreshes] = useState(0);
   const [loaded, setLoaded] = useState<{ key: string; state: TrackingState } | null>(null);
   const key = `${trackingNumber}#${attempt}`;
 
@@ -42,9 +47,13 @@ export function useParcelTracking(trackingNumber: string): TrackingState & { ret
     return () => {
       active = false;
     };
-  }, [trackingNumber, key]);
+  }, [trackingNumber, key, refreshes]);
 
   // Anything loaded for a previous tracking number/attempt counts as still loading.
   const state: TrackingState = loaded?.key === key ? loaded.state : { status: 'loading' };
-  return { ...state, retry: () => setAttempt((n) => n + 1) };
+  return {
+    ...state,
+    retry: () => setAttempt((n) => n + 1),
+    refresh: () => setRefreshes((n) => n + 1),
+  };
 }
