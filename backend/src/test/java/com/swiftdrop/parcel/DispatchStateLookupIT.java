@@ -28,6 +28,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Primary;
 
 /** The admin Parcels screen once the dispatch module provides a {@link DispatchStateLookup}. */
 @Import(DispatchStateLookupIT.FakeDispatch.class)
@@ -38,7 +39,9 @@ class DispatchStateLookupIT extends IntegrationTestBase {
     static class FakeDispatch {
         static final Set<UUID> OPEN_ASSIGNMENTS = ConcurrentHashMap.newKeySet();
 
+        // The dispatch module now provides the real bean; this one must win for the test.
         @Bean
+        @Primary
         DispatchStateLookup dispatchStateLookup() {
             return () -> Set.copyOf(OPEN_ASSIGNMENTS);
         }

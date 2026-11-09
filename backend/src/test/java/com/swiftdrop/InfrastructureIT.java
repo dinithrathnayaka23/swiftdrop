@@ -66,8 +66,10 @@ class InfrastructureIT extends IntegrationTestBase {
                 "delivery_assignments", "delivery_receipts", "notifications", "merchants",
                 "merchant_api_credentials", "merchant_webhooks", "webhook_deliveries", "pricing_rules",
                 "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas",
-                // V1_001: Admin System Settings (one row).
-                "system_settings");
+                                // V1_001: Admin System Settings (one row).
+                "system_settings",
+                // V6_001: the delivery zones a courier covers.
+                "courier_service_areas");
 
         // The six report statuses (V4_001); ParcelServiceIT checks the codes and their order.
         Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);
