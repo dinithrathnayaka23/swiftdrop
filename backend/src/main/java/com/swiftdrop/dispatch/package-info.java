@@ -1,7 +1,7 @@
 /**
  * <b>dispatch module.</b> Dispatch: assigning parcels to couriers, courier status updates, proof of delivery and failed-delivery handling. Publishes parcel events.
  *
- * <p>Owner: TBD (see docs/MODULE_OWNERSHIP.md).
+ * <p>Owner: Member 6 (see docs/MODULE_OWNERSHIP.md).
  *
  * <p>Layout:
  * <ul>
