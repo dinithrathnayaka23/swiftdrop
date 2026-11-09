@@ -15,7 +15,7 @@ Your **member number** (1-10) is used for:
 | `identity`     | Login/signup, JWT issuing, Google OAuth                     | TBD              | TBD      |
 | `user`         | Profiles, roles, merchant approval                          | TBD              | TBD      |
 | `parcel`       | Booking, fee estimate, tracking                             | TBD              | TBD      |
-| `dispatch`     | Courier assignment, status updates, proof of delivery/failure | TBD            | TBD      |
+| `dispatch`     | Courier assignment, status updates, proof of delivery/failure | 6 (couriers, assignment); 7 (status updates, proof) | TBD      |
 | `merchant`     | Merchant API keys, order API, webhooks                      | TBD              | TBD      |
 | `notification` | Event consumers, email / mock SMS, live updates (WebSocket) | TBD              | TBD      |
 | `config`       | Zones, pricing rules                                        | TBD              | TBD      |

@@ -19,7 +19,8 @@ in the `model` package of the module that owns it.
 | | `parcels` | `Parcel` | Booked by a customer (`customer_user_id`) or created by a merchant (`merchant_id`). |
 | | `parcel_status_history` | `ParcelStatusHistory` | Timeline entries, including proof of delivery and failure reasons. |
 | | `delivery_receipts` | `DeliveryReceipt` | One receipt per parcel. |
-| `dispatch` | `couriers` | `Courier` | Courier profile for a `COURIER` user (one per user). |
+| `dispatch` | `couriers` | `Courier` | Courier profile for a `COURIER` user (one per user). `availability_status` is `ONLINE`, `ON_BREAK` or `OFFLINE` (V6_001). |
+| | `courier_service_areas` | (element collection of `Courier`) | Delivery zones a courier covers, by `zone_id` (V6_001). |
 | | `delivery_assignments` | `DeliveryAssignment` | At most one open assignment (`ended_at IS NULL`) per parcel. |
 | `merchant` | `merchants` | `Merchant` | Business details and approval workflow (`MerchantApprovalStatus`). |
 | | `merchant_api_credentials` | `MerchantApiCredential` | Only a hash of each API key is stored. |
