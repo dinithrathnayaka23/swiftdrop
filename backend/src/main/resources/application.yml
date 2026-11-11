@@ -103,6 +103,10 @@ swiftdrop:
     # Access tokens are short-lived; the browser renews them silently with the session cookie.
     expiry: ${JWT_EXPIRY:900}     # seconds (15 minutes)
     issuer: swiftdrop
+  merchant:
+    api-keys:
+      # Server-side secret mixed into every merchant API key hash (at least 32 characters).
+      pepper: ${API_KEY_PEPPER}
   cors:
     allowed-origins: ${FRONTEND_URL:http://localhost:5173}
   security:
