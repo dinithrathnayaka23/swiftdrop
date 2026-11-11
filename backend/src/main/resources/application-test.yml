@@ -13,6 +13,10 @@ swiftdrop:
     # Test-only value, never used outside automated tests.
     secret: test-only-secret-key-that-is-at-least-32-bytes-long
     expiry: 600
+  merchant:
+    api-keys:
+      # Test-only value, never used outside automated tests.
+      pepper: test-only-api-key-pepper-at-least-32-bytes-long
   cors:
     allowed-origins: http://localhost:5173
   frontend:

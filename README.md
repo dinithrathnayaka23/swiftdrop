@@ -191,6 +191,7 @@ Secrets are never committed: `.env` is git-ignored.
 | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `SPRING_DATASOURCE_URL` | Database connection |
 | `RABBITMQ_HOST`, `RABBITMQ_PORT`, `RABBITMQ_USER`, `RABBITMQ_PASSWORD` | Message broker connection |
 | `JWT_SECRET`, `JWT_EXPIRY` | Token signing key (≥ 32 chars) and access token lifetime in seconds (default 900) |
+| `API_KEY_PEPPER` | Secret mixed into merchant API key hashes (≥ 32 chars); changing it invalidates every issued key |
 | `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Redis: sign-in sessions, rate limits, reset-email cooldown |
 | `AUTH_COOKIE_SECURE` | Session cookie only over HTTPS (browsers allow it on `http://localhost`) |
 | `RATE_LIMIT_ENABLED` | Per-IP and failed-sign-in limits on `/api/v1/auth` |
@@ -203,8 +204,8 @@ Secrets are never committed: `.env` is git-ignored.
 | `REFRESH_TOKEN_EXPIRY_REMEMBER_ME`, `REFRESH_TOKEN_EXPIRY_SESSION` | Session length with / without "Remember me" (seconds; default 30 days / 1 day) |
 
 > [!IMPORTANT]
-> The values in `.env.example` are for local development only. Generate a strong `JWT_SECRET`
-> (`openssl rand -base64 48`) and unique passwords for any shared or hosted environment.
+> The values in `.env.example` are for local development only. Generate a strong `JWT_SECRET` and
+> `API_KEY_PEPPER` (`openssl rand -base64 48`) and unique passwords for any shared or hosted environment.
 
 ## Testing
 
