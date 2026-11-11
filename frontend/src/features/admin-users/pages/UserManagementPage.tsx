@@ -6,11 +6,35 @@ const stats = [
 ];
 
 const users = [
-  { name: 'Nimali Perera', role: 'Dispatcher', team: 'Operations', lastLogin: '2h ago', status: 'Active' },
-  { name: 'Rashmi Fernando', role: 'Customer Support', team: 'Support', lastLogin: '4h ago', status: 'Active' },
+  {
+    name: 'Nimali Perera',
+    role: 'Dispatcher',
+    team: 'Operations',
+    lastLogin: '2h ago',
+    status: 'Active',
+  },
+  {
+    name: 'Rashmi Fernando',
+    role: 'Customer Support',
+    team: 'Support',
+    lastLogin: '4h ago',
+    status: 'Active',
+  },
   { name: 'Shan Alwis', role: 'Finance', team: 'Admin', lastLogin: '1 day ago', status: 'Pending' },
-  { name: 'Kasun Jayawardena', role: 'Courier manager', team: 'Dispatch', lastLogin: '3 days ago', status: 'Suspended' },
-  { name: 'Anika Nethmini', role: 'Merchant admin', team: 'Commercial', lastLogin: 'Today', status: 'Active' },
+  {
+    name: 'Kasun Jayawardena',
+    role: 'Courier manager',
+    team: 'Dispatch',
+    lastLogin: '3 days ago',
+    status: 'Suspended',
+  },
+  {
+    name: 'Anika Nethmini',
+    role: 'Merchant admin',
+    team: 'Commercial',
+    lastLogin: 'Today',
+    status: 'Active',
+  },
 ];
 
 const statusClasses: Record<string, string> = {
@@ -38,7 +62,10 @@ export default function UserManagementPage() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div
+            key={stat.label}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
             <p className="text-sm text-slate-500">{stat.label}</p>
             <div className="mt-3 flex items-end justify-between gap-3">
               <p className="text-3xl font-bold tracking-tight text-slate-900">{stat.value}</p>
@@ -54,13 +81,15 @@ export default function UserManagementPage() {
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Team access</h2>
-            <p className="text-sm text-slate-500">Review recent account activity and request changes.</p>
+            <p className="text-sm text-slate-500">
+              Review recent account activity and request changes.
+            </p>
           </div>
           <div className="flex items-center gap-2">
             <input
               aria-label="Search users"
               placeholder="Search users"
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 outline-none transition focus:border-sky-400 focus:bg-white sm:w-56"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700 transition outline-none focus:border-sky-400 focus:bg-white sm:w-56"
             />
           </div>
         </div>
@@ -74,7 +103,7 @@ export default function UserManagementPage() {
                 <th className="px-5 py-3 font-medium">Team</th>
                 <th className="px-5 py-3 font-medium">Last login</th>
                 <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Action</th>
+                <th className="px-5 py-3 text-right font-medium">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">
