@@ -1,6 +1,7 @@
 package com.swiftdrop.merchant.security;
 
 import com.swiftdrop.common.api.ApiPaths;
+import com.swiftdrop.common.exception.ApiException;
 import com.swiftdrop.common.security.SecurityErrorHandler;
 import com.swiftdrop.common.security.jwt.JwtService;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
@@ -45,7 +46,13 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        AuthenticatedMerchant principal = authenticate(request);
+        AuthenticatedMerchant principal;
+        try {
+            principal = authenticate(request);
+        } catch (ApiException ex) {
+            securityErrorHandler.handle(request, response, ex);
+            return;
+        }
         if (principal == null) {
             reject(request, response);
             return;
