@@ -1,14 +1,18 @@
 package com.swiftdrop.merchant.service;
 
 import com.swiftdrop.common.exception.ConflictException;
+import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.merchant.config.MerchantApiKeyProperties;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
+import com.swiftdrop.merchant.dto.response.ApiKeyResponse;
 import com.swiftdrop.merchant.dto.response.GeneratedApiKeyResponse;
+import com.swiftdrop.merchant.mapper.ApiKeyMapper;
 import com.swiftdrop.merchant.model.MerchantApiCredential;
 import com.swiftdrop.merchant.repository.MerchantApiCredentialRepository;
 import com.swiftdrop.merchant.repository.MerchantRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
@@ -41,6 +45,48 @@ public class MerchantApiKeyService {
             throw new ConflictException("You already have %d active API keys. Revoke one before creating another."
                     .formatted(properties.maxActiveKeys()));
         }
+        return issue(merchantId);
+    }
+
+    /** All keys of the merchant, newest first. Callers pass an approved merchant's ID. */
+    @Transactional(readOnly = true)
+    public List<ApiKeyResponse> list(UUID merchantId) {
+        Instant now = Instant.now();
+        return credentialRepository.findByMerchantIdOrderByCreatedAtDesc(merchantId).stream()
+                .map(credential -> ApiKeyMapper.toResponse(credential, now))
+                .toList();
+    }
+
+    /** Stops a key working at once. Revoking a key that is already revoked changes nothing. */
+    @Transactional
+    public ApiKeyResponse revoke(UUID merchantId, UUID apiCredentialId) {
+        MerchantApiCredential credential = findOwned(merchantId, apiCredentialId);
+        Instant now = Instant.now();
+        if (credential.getRevokedAt() == null) {
+            credential.setRevokedAt(now);
+            log.info("API key {} revoked for merchant {}", credential.getKeyIdentifier(), merchantId);
+        }
+        return ApiKeyMapper.toResponse(credential, now);
+    }
+
+    /**
+     * Revokes an active key and issues its replacement in one step. Works even at the active-key
+     * limit, since the count doesn't change.
+     */
+    @Transactional
+    public GeneratedApiKeyResponse rotate(UUID merchantId, UUID apiCredentialId) {
+        MerchantApiCredential old = findOwned(merchantId, apiCredentialId);
+        Instant now = Instant.now();
+        if (!isActive(old, now)) {
+            throw new ConflictException("Only an active API key can be rotated. Create a new key instead.");
+        }
+        old.setRevokedAt(now);
+        GeneratedApiKeyResponse replacement = issue(merchantId);
+        log.info("API key {} rotated to {} for merchant {}", old.getKeyIdentifier(), replacement.keyId(), merchantId);
+        return replacement;
+    }
+
+    private GeneratedApiKeyResponse issue(UUID merchantId) {
         ApiKeyCodec.NewKey key = codec.generate();
         MerchantApiCredential credential = new MerchantApiCredential();
         credential.setMerchant(merchantRepository.getReferenceById(merchantId));
@@ -74,8 +120,13 @@ public class MerchantApiKeyService {
         return Optional.of(new AuthenticatedMerchant(credential.getMerchant().getId(), credential.getId()));
     }
 
+    /** Not found rather than forbidden for another merchant's key, so key IDs can't be probed. */
+    private MerchantApiCredential findOwned(UUID merchantId, UUID apiCredentialId) {
+        return credentialRepository.findByIdAndMerchantId(apiCredentialId, merchantId)
+                .orElseThrow(() -> new NotFoundException("API key not found"));
+    }
+
     private static boolean isActive(MerchantApiCredential credential, Instant now) {
-        return credential.getRevokedAt() == null
-                && (credential.getExpiresAt() == null || credential.getExpiresAt().isAfter(now));
+        return ApiKeyMapper.statusOf(credential, now) == ApiKeyResponse.Status.ACTIVE;
     }
 }
