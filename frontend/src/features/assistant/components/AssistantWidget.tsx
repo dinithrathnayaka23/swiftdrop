@@ -33,8 +33,13 @@ function useSecondsLeft(retryAt: number | null): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
     if (retryAt === null || retryAt <= Date.now()) return;
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const tick = () => setNow(Date.now());
+    const first = setTimeout(tick, 0);
+    const timer = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(timer);
+    };
   }, [retryAt]);
   return retryAt === null ? 0 : Math.max(0, Math.ceil((retryAt - now) / 1000));
 }
