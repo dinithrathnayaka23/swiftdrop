@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { assistantApi } from '../../../api/assistant';
+import { AssistantRateLimitError, assistantApi } from '../../../api/assistant';
 import type { AssistantCard, AssistantMessage, AssistantMode } from '../types';
 
 /** The backend uses the last 10; sending more only costs bandwidth. */
@@ -26,12 +26,14 @@ export function useAssistantChat() {
   const [suggestions, setSuggestions] = useState<string[]>(STARTER_SUGGESTIONS);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  /** Time (ms) when the customer may ask again after a 429. */
+  const [retryAt, setRetryAt] = useState<number | null>(null);
   const nextId = useRef(1);
 
   const send = useCallback(
     async (text: string) => {
       const content = text.trim().slice(0, MAX_MESSAGE_CHARS);
-      if (!content || sending) return;
+      if (!content || sending || (retryAt !== null && Date.now() < retryAt)) return;
 
       const question: ChatEntry = { id: nextId.current++, role: 'user', content, cards: [] };
       const history = [...entries, question]
@@ -57,11 +59,14 @@ export function useAssistantChat() {
         setSuggestions(response.suggestions);
       } catch (err) {
         setError(err);
+        if (err instanceof AssistantRateLimitError) {
+          setRetryAt(Date.now() + err.retryAfterSeconds * 1000);
+        }
       } finally {
         setSending(false);
       }
     },
-    [entries, sending],
+    [entries, sending, retryAt],
   );
 
   /** Adds a reply that didn't come from the chat, e.g. the fee form's result. */
@@ -73,5 +78,5 @@ export function useAssistantChat() {
     setError(null);
   }, []);
 
-  return { entries, suggestions, sending, error, send, addReply };
+  return { entries, suggestions, sending, error, retryAt, send, addReply };
 }

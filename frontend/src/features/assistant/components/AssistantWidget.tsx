@@ -1,9 +1,12 @@
 import { Bot, Calculator, MessageCircle, SendHorizontal, ShieldCheck, X } from 'lucide-react';
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
-import { getErrorMessage } from '../../../api/errors';
+import { AssistantRateLimitError } from '../../../api/assistant';
+import { toApiRequestError } from '../../../api/errors';
+import { useSettings } from '../../../hooks/useSettings';
 import { cn } from '../../../utils/cn';
 import { MAX_MESSAGE_CHARS, useAssistantChat, WELCOME } from '../hooks/useAssistantChat';
 import AssistantCards from './AssistantCards';
+import ChatNotice, { type ChatState } from './ChatNotice';
 import FeeEstimateForm from './FeeEstimateForm';
 import MessageText from './MessageText';
 import TypingIndicator from './TypingIndicator';
@@ -25,12 +28,41 @@ function Bubble({ fromUser, children }: { fromUser: boolean; children: ReactNode
   );
 }
 
+/** Whole seconds until `retryAt`, updated every second; 0 once it has passed. */
+function useSecondsLeft(retryAt: number | null): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (retryAt === null || retryAt <= Date.now()) return;
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [retryAt]);
+  return retryAt === null ? 0 : Math.max(0, Math.ceil((retryAt - now) / 1000));
+}
+
 /** Floating chat button and panel for signed-in customers. */
 export default function AssistantWidget() {
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState('');
   const [view, setView] = useState<'chat' | 'fee'>('chat');
-  const { entries, suggestions, sending, error, send, addReply } = useAssistantChat();
+  const { entries, suggestions, sending, error, retryAt, send, addReply } = useAssistantChat();
+  const { settings } = useSettings();
+  const secondsLeft = useSecondsLeft(retryAt);
+
+  const lastReply = [...entries]
+    .reverse()
+    .find((entry) => entry.role === 'assistant' && entry.mode);
+  const basicMode = lastReply?.mode === 'RULES';
+  const state: ChatState =
+    settings.maintenanceMode || toApiRequestError(error).code === 'MAINTENANCE_MODE'
+      ? { kind: 'maintenance' }
+      : secondsLeft > 0
+        ? { kind: 'rate-limited', secondsLeft }
+        : error != null && !(error instanceof AssistantRateLimitError)
+          ? { kind: 'error', error }
+          : basicMode
+            ? { kind: 'basic-mode' }
+            : { kind: 'ready' };
+  const blocked = state.kind === 'maintenance' || state.kind === 'rate-limited';
   const listEnd = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
 
@@ -50,7 +82,7 @@ export default function AssistantWidget() {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!draft.trim() || sending) return;
+    if (!draft.trim() || sending || blocked) return;
     void send(draft);
     setDraft('');
   };
@@ -68,7 +100,14 @@ export default function AssistantWidget() {
               <Bot className="size-5" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className="text-sm font-semibold">SwiftDrop Assistant</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                SwiftDrop Assistant
+                {basicMode && (
+                  <span className="rounded-full bg-white/20 px-2 py-0.5 text-[0.65rem] font-semibold tracking-wide uppercase">
+                    Basic mode
+                  </span>
+                )}
+              </h2>
               <p className="text-xs text-brand-100">Tracking, fees and help</p>
             </div>
             <button
@@ -120,15 +159,12 @@ export default function AssistantWidget() {
                   </div>
                 ))}
                 {sending && <TypingIndicator />}
-                {error != null && (
-                  <p role="alert" className="text-center text-xs text-red-600">
-                    {getErrorMessage(error)}
-                  </p>
-                )}
                 <div ref={listEnd} />
               </div>
 
-              {suggestions.length > 0 && !sending && (
+              <ChatNotice state={state} />
+
+              {suggestions.length > 0 && !sending && !blocked && (
                 <div className="flex flex-wrap gap-2 border-t border-slate-100 px-4 pt-3">
                   {suggestions.map((suggestion) => (
                     <button
@@ -153,6 +189,7 @@ export default function AssistantWidget() {
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
                   maxLength={MAX_MESSAGE_CHARS}
+                  disabled={blocked}
                   placeholder="Ask about a parcel or a fee…"
                   autoComplete="off"
                   className="h-10 min-w-0 flex-1 rounded-full border border-slate-300 px-4 text-sm focus:border-brand-500 focus:ring-2 focus:ring-brand-200 focus:outline-none"
@@ -160,7 +197,7 @@ export default function AssistantWidget() {
                 <button
                   type="submit"
                   aria-label="Send"
-                  disabled={!draft.trim() || sending}
+                  disabled={!draft.trim() || sending || blocked}
                   className="flex size-10 shrink-0 items-center justify-center rounded-full bg-brand-600 text-white hover:bg-brand-700 disabled:opacity-50"
                 >
                   <SendHorizontal className="size-4" aria-hidden="true" />
