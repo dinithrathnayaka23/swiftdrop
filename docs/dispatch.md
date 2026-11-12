@@ -6,8 +6,9 @@ The dispatch module owns couriers (profile, vehicle, service areas, availability
 assignment of parcels to couriers. A courier is a `COURIER` account (user module) plus a profile row
 (`couriers`) owned by this module.
 
-> **Status:** courier management is built. Assigning parcels, the Operations Overview data and the
-> failed-delivery queue are not (see "Not done yet").
+> **Status:** courier management and assigning parcels (single, bulk, reassign, unassign) are built,
+> and assignments follow the parcel's status. The Operations Overview data and the failed-delivery
+> queue are not (see "Not done yet").
 
 ## For the parcel module: `DispatchStateLookup`
 
@@ -25,9 +26,89 @@ identified by their **account id** (`AuthenticatedUser.userId()`).
 | `openParcelIds(courierUserId)` | The courier's Today's Deliveries (oldest assignment first); load them with `ParcelService.findAllByIds`. |
 | `findCourierId(courierUserId)` | The courier profile id, or empty if the account has none. |
 
-An assignment is **open** while `delivery_assignments.ended_at IS NULL`. Whoever completes, reassigns
-or cancels an assignment must set `ended_at` (and the status): the "one open assignment per parcel"
-index, the Assigned tab and the workload counts all rely on it.
+## Assignment lifecycle (who ends assignments, and when)
+
+An assignment is **open** while `delivery_assignments.ended_at IS NULL`; the database allows one open
+assignment per parcel (`ux_delivery_assignments_open_per_parcel`). The Assigned tab, the courier app's
+ownership check and the workload counts all rely on it.
+
+**Only the dispatch module changes assignments.** Other modules (the courier app included) change the
+*parcel's* status with `ParcelStatusService`; dispatch hears about it and updates the assignment.
+
+```
+           assign                    PICKED_UP / IN_TRANSIT /
+ (none) ──────────▶ ASSIGNED ──────── OUT_FOR_DELIVERY event ──────▶ IN_PROGRESS
+                      │  │                                             │  │
+     unassign (admin) │  │ reassign (admin)          DELIVERED event   │  │ FAILED event
+                      ▼  ▼                                             ▼  ▼
+               CANCELLED  REASSIGNED  (+ a new open assignment)  COMPLETED  FAILED
+```
+
+| Ended by | When | Status | `ended_at` |
+| -------- | ---- | ------ | ---------- |
+| Admin: unassign | Parcel still `CREATED` | `CANCELLED` | now |
+| Admin: reassign | Parcel not `DELIVERED` / `FAILED` | `REASSIGNED` (+ reason) | now |
+| Status listener | Parcel became `DELIVERED` | `COMPLETED` | the event's `occurredAt` |
+| Status listener | Parcel became `FAILED` | `FAILED` (V6_002; never counts as completed) | the event's `occurredAt` |
+
+- Assigning **does not change the parcel's status**: it stays `CREATED` until the courier picks it up.
+- A parcel reassigned after pickup (`PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) starts `IN_PROGRESS`
+  with the new courier, because no new pickup event will come.
+- `ended_at` is never earlier than `assigned_at` (the database checks it).
+
+### The status listener
+
+`dispatch.event.AssignmentStatusListener` reads `ParcelStatusChangedEvent` from its own **durable**
+queue `swiftdrop.dispatch.parcel-events`, bound to `swiftdrop.parcel.events` with `parcel.status.#`
+(`dispatch.event.DispatchQueueConfig`). `AssignmentLifecycleService` applies it to the parcel's open
+assignment, row-locked so it can't overlap a reassignment:
+
+| Parcel status | Open assignment |
+| ------------- | --------------- |
+| `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY` | `ASSIGNED` → `IN_PROGRESS` (already `IN_PROGRESS`: unchanged) |
+| `DELIVERED` | → `COMPLETED`, `ended_at` set |
+| `FAILED` | → `FAILED`, `ended_at` set |
+| anything else (`CREATED`, unknown codes) | ignored (debug log) |
+
+- **Idempotent:** delivery is at least once and out of order. The listener only moves an open
+  assignment forward, and does nothing if the parcel has no open assignment, so duplicates and late
+  events are harmless; no event-id store is needed.
+- **Incomplete events** (no `parcelId` or `newStatus`) are skipped with a warning.
+- **Errors:** database errors are thrown, so the message is retried by the shared listener settings in
+  `application.yml` (`spring.rabbitmq.listener.simple`): `retry.max-attempts: 3`,
+  `retry.initial-interval: 1s`, `retry.multiplier: 2` (attempts at 0 s, +1 s, +2 s), then, because
+  `default-requeue-rejected: false`, the message is dead-lettered to `swiftdrop.parcel.events.dlx`
+  (routing key `dead`) → `swiftdrop.parcel.events.dlq`, like the notification and webhook queues. A
+  message that can't be read as JSON is dead-lettered straight away.
+
+## Assignments API (`DISPATCHER_ADMIN` only)
+
+All under `/api/v1/admin/dispatch`. The dispatcher who makes a change is taken from the sign-in token
+(`assigned_by_user_id`).
+
+| Endpoint | Notes |
+| -------- | ----- |
+| `POST /assignments` `{parcelId, courierId}` | 201 + `Location` + the assignment. Errors below. |
+| `POST /assignments/bulk` `{courierId, parcelIds}` | 1-50 parcels, each in its own transaction. **Always 200**, even if every parcel failed: `{"assigned": [assignment...], "failed": [{"parcelId", "reason"}...]}`. A repeated id is handled once. |
+| `GET /assignments/{assignmentId}` | One assignment (the `Location` above). |
+| `POST /parcels/{parcelId}/reassign` `{courierId, reason}` | `reason` required, max 500. Ends the open assignment as `REASSIGNED` and returns the new one. |
+| `POST /parcels/{parcelId}/unassign` `{reason?}` | Body optional; `reason` max 500. Returns the ended (`CANCELLED`) assignment. |
+
+An assignment is `{id, parcelId, courierId, courierUserId, status, assignedByUserId, assignedAt, endedAt, reason}`.
+
+| Rule | Error |
+| ---- | ----- |
+| Parcel exists | 404 |
+| Assign / unassign: parcel is `CREATED` | 409 |
+| Reassign: parcel is not `DELIVERED` / `FAILED` | 409 |
+| Assign: no open assignment (also when two admins race: the unique index answers the same 409) | 409 |
+| Reassign / unassign: there is an open assignment | 409 |
+| Reassign: a different courier than the current one | 409 |
+| Courier exists | 404 |
+| Courier is active, `ONLINE` (not On Break / Offline) and their account is `ACTIVE` | 409 |
+
+There is no "unassigned parcels" endpoint here: the screen uses `GET /api/v1/admin/parcels?tab=UNASSIGNED`
+(parcel module).
 
 ## Couriers API (`DISPATCHER_ADMIN` only)
 
@@ -39,6 +120,7 @@ All under `/api/v1/admin/couriers`. Lists use Spring's paged JSON (`content`, `p
 | `GET /?search&availability&serviceAreaId&vehicleType&active&page&size` | `search` matches name, email, phone or vehicle registration. Every row has today's `workload`. |
 | `GET /summary` | `total`, `online`, `onBreak`, `offline` (active couriers only) |
 | `GET /{courierId}` | One courier |
+| `GET /{courierId}/assignments?open&page&size` | The drawer tabs: `open=true` "Current Deliveries", `open=false` "History", left out for all. Newest assignment first. Each row: `id, parcelId, status, assignedAt, endedAt, reason, trackingNumber, parcelStatus, destinationCity`. 404 for an unknown courier. |
 | `POST /` | Adds a courier and their sign-in account. 201 + `Location`. Starts `OFFLINE`. 409 if the email or vehicle registration is taken, or a service area doesn't exist. |
 | `PATCH /{courierId}` | `vehicleType`, `vehicleRegistration`, `serviceAreaIds` (replaces the set; `[]` clears it). Send at least one. |
 | `PATCH /{courierId}/availability` | `{"availability": "ONLINE" \| "ON_BREAK" \| "OFFLINE"}`. A deactivated courier can't go online. |
@@ -51,8 +133,9 @@ courier can sign in at `/courier/login` straight away.
 Vehicle registrations are stored upper case with single spaces (`wp  cab 1234` → `WP CAB 1234`).
 
 **Workload** (`CourierResponse.workload`): `assigned` (open, not started), `inProgress` (open, being
-delivered), `completedToday` (since midnight, Sri Lanka time), `open = assigned + inProgress`,
-`todaysTotal = open + completedToday`. The "12 / 15" on the screen is `completedToday / todaysTotal`.
+delivered), `completedToday` (`COMPLETED` since midnight, Sri Lanka time; `FAILED` doesn't count),
+`open = assigned + inProgress`, `todaysTotal = open + completedToday`. The "12 / 15" on the screen is
+`completedToday / todaysTotal`.
 
 `serviceAreaIds` are delivery zone ids. Zone names come from the Service Areas API once it exists.
 
@@ -61,12 +144,13 @@ delivered), `completedToday` (since midnight, Sri Lanka time), `open = assigned 
 | Migration | Change |
 | --------- | ------ |
 | `V6_001__couriers_availability_and_service_areas.sql` | Availability becomes `ONLINE` / `ON_BREAK` / `OFFLINE` (was `AVAILABLE` / `BUSY` / `OFFLINE`); new table `courier_service_areas (courier_id, zone_id)` |
+| `V6_002__delivery_assignments_failed_status.sql` | `FAILED` added to `ck_delivery_assignments_status` |
 
 ## Not done yet
 
-- Assigning and reassigning parcels (single and bulk), and keeping assignment status in step with parcel
-  status changes (listening to `ParcelStatusChangedEvent`).
+- **Zone check on assignment:** a courier's service areas should cover the parcel's drop-off zone
+  (marked `TODO(zone check)` in `AssignmentService`). Waiting for the zones backend, as are zone names.
 - Operations Overview data and the Failed Deliveries queue. **Retry needs a decision with Member 4:**
   `FAILED` is an end state, so a retried parcel needs a `FAILED -> CREATED` transition.
-- Deactivating / reactivating a courier, and reacting when a courier's account is suspended (set them offline).
-- Zone names and the zone check on assignment (waiting for the zones backend).
+- Deactivating / reactivating a courier, and reacting when a courier's account is suspended (set them
+  offline). Their open assignments are kept when they go offline or on break: the dispatcher reassigns them.
