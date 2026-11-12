@@ -2,6 +2,8 @@ package com.swiftdrop.merchant.service;
 
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.merchant.api.MerchantApi;
+import com.swiftdrop.merchant.api.MerchantSummary;
 import com.swiftdrop.merchant.dto.NewMerchant;
 import com.swiftdrop.merchant.dto.response.MerchantResponse;
 import com.swiftdrop.merchant.mapper.MerchantMapper;
@@ -26,7 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
  */
 @Slf4j
 @Service
-public class MerchantService {
+public class MerchantService implements MerchantApi {
 
     private final MerchantRepository merchantRepository;
     private final UserService userService;
@@ -73,6 +75,22 @@ public class MerchantService {
         return merchantRepository.findByApprovalStatusOrderByCreatedAtAsc(status).stream()
                 .map(MerchantMapper::toResponse)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public boolean isApproved(UUID merchantId) {
+        return merchantRepository.findById(merchantId)
+                .map(merchant -> merchant.getApprovalStatus() == MerchantApprovalStatus.APPROVED)
+                .orElse(false);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public MerchantSummary getMerchant(UUID merchantId) {
+        return merchantRepository.findById(merchantId)
+                .map(MerchantMapper::toSummary)
+                .orElseThrow(() -> new NotFoundException("Merchant not found"));
     }
 
     /** Approves a pending merchant and activates its contact person's account. */
