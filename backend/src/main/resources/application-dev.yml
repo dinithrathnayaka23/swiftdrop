@@ -25,6 +25,12 @@ springdoc:
 swiftdrop:
   security:
     public-api-docs: true
+  # AI assistant: values come from the imported .env (or real environment variables). Empty = basic mode.
+  assistant:
+    provider: ${SWIFTDROP_ASSISTANT_PROVIDER:rules}
+    api-key: ${SWIFTDROP_ASSISTANT_API_KEY:}
+    model: ${SWIFTDROP_ASSISTANT_MODEL:}
+    base-url: ${SWIFTDROP_ASSISTANT_BASE_URL:}
 
 logging:
   level:

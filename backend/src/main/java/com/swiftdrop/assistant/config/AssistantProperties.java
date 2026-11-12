@@ -9,16 +9,11 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * default here, so nothing has to be added to the shared application.yml. Secrets come only from
  * the environment: {@code SWIFTDROP_ASSISTANT_API_KEY}.
  *
- * @param provider         which language model client to use. {@code rules} (the default) needs no
- *                         key and answers from simple rules, so demos and CI work offline.
- * @param apiKey           the provider's API key; never logged ({@link #toString()} hides it)
- * @param model            the provider's model name
- * @param baseUrl          the provider's API base URL; blank for the provider's default
- * @param timeout          how long one model call may take
- * @param maxMessageChars  longest message a user may send
+ * @param provider           {@code gemini}, {@code openai} or {@code rules} (the default: no key, works offline)
+ * @param apiKey             never logged ({@link #toString()} hides it)
+ * @param baseUrl            blank for the provider's default, see {@link #resolvedBaseUrl()}
  * @param maxHistoryMessages earlier messages sent back to the model with each question
- * @param maxReplyTokens   longest reply the model may write
- * @param rateLimit        questions per client IP (or per signed-in user)
+ * @param rateLimit          questions per signed-in customer
  */
 @ConfigurationProperties(prefix = "swiftdrop.assistant")
 public record AssistantProperties(
@@ -33,6 +28,11 @@ public record AssistantProperties(
         RateLimit rateLimit) {
 
     public static final String RULES_PROVIDER = "rules";
+    public static final String GEMINI_PROVIDER = "gemini";
+    public static final String OPENAI_PROVIDER = "openai";
+
+    static final String GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/";
+    static final String OPENAI_BASE_URL = "https://api.openai.com/v1";
 
     public AssistantProperties {
         provider = provider == null || provider.isBlank() ? RULES_PROVIDER : provider.trim().toLowerCase();
@@ -56,12 +56,24 @@ public record AssistantProperties(
         }
     }
 
-    /** True when a real language model is configured; otherwise the rule-based fallback answers. */
-    public boolean usesLanguageModel() {
-        return !RULES_PROVIDER.equals(provider) && !apiKey.isEmpty();
+    /** The configured base URL, or the provider's default; blank when neither is known. */
+    public String resolvedBaseUrl() {
+        if (!baseUrl.isEmpty()) {
+            return baseUrl;
+        }
+        return switch (provider) {
+            case GEMINI_PROVIDER -> GEMINI_BASE_URL;
+            case OPENAI_PROVIDER -> OPENAI_BASE_URL;
+            default -> "";
+        };
     }
 
-    /** Hides the API key, so logging these settings never leaks it. */
+    /** True when a real model is fully configured; otherwise the rule-based assistant answers. */
+    public boolean usesLanguageModel() {
+        return !RULES_PROVIDER.equals(provider) && !apiKey.isEmpty() && !model.isEmpty()
+                && !resolvedBaseUrl().isEmpty();
+    }
+
     @Override
     public String toString() {
         return "AssistantProperties[provider=" + provider + ", apiKey=" + (apiKey.isEmpty() ? "" : "****")
