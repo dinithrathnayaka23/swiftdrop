@@ -5,6 +5,7 @@ import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.dispatch.dto.response.AssignmentResponse;
 import com.swiftdrop.dispatch.dto.response.BulkAssignResponse;
+import com.swiftdrop.dispatch.dto.response.CourierAssignmentResponse;
 import com.swiftdrop.dispatch.mapper.AssignmentMapper;
 import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.Courier;
@@ -23,10 +24,17 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
@@ -177,6 +185,47 @@ public class AssignmentService {
     }
 
     // ---- Read --------------------------------------------------------------------------------
+
+    /** Newest assignment first. */
+    static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "assignedAt").and(Sort.by("id"));
+
+    /**
+     * A courier's assignments, newest first, with each parcel's tracking number, status and
+     * destination city (the parcels of a page are loaded in one call).
+     *
+     * @param open {@code true} only open ones, {@code false} only ended ones, {@code null} all
+     * @throws NotFoundException if there is no such courier
+     */
+    @Transactional(readOnly = true)
+    public Page<CourierAssignmentResponse> listForCourier(UUID courierId, Boolean open, int page, int size) {
+        if (!courierRepository.existsById(courierId)) {
+            throw new NotFoundException("Courier not found");
+        }
+        Pageable pageable = PageRequest.of(page, size, NEWEST_FIRST);
+        Page<DeliveryAssignment> found = open == null ? assignmentRepository.findByCourier_Id(courierId, pageable)
+                : open ? assignmentRepository.findByCourier_IdAndEndedAtIsNull(courierId, pageable)
+                : assignmentRepository.findByCourier_IdAndEndedAtIsNotNull(courierId, pageable);
+        if (found.isEmpty()) {
+            return found.map(assignment -> toRow(assignment, null));
+        }
+        Map<UUID, ParcelDetails> parcels = parcelService.findAllByIds(
+                        found.getContent().stream().map(DeliveryAssignment::getParcelId).collect(Collectors.toSet()))
+                .stream().collect(Collectors.toMap(ParcelDetails::id, Function.identity()));
+        return found.map(assignment -> toRow(assignment, parcels.get(assignment.getParcelId())));
+    }
+
+    private static CourierAssignmentResponse toRow(DeliveryAssignment assignment, ParcelDetails parcel) {
+        return new CourierAssignmentResponse(
+                assignment.getId(),
+                assignment.getParcelId(),
+                assignment.getAssignmentStatus(),
+                assignment.getAssignedAt(),
+                assignment.getEndedAt(),
+                assignment.getReassignmentReason(),
+                parcel == null ? null : parcel.trackingNumber(),
+                parcel == null ? null : parcel.currentStatus(),
+                parcel == null || parcel.dropoffAddress() == null ? null : parcel.dropoffAddress().city());
+    }
 
     /** @throws NotFoundException if there is no such assignment */
     @Transactional(readOnly = true)
