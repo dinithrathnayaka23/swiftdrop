@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.SecurityErrorHandler;
+import com.swiftdrop.common.security.jwt.JwtService;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
 import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import jakarta.servlet.FilterChain;
@@ -29,6 +30,9 @@ class ApiKeyAuthenticationFilterTest {
     private MerchantApiKeyService merchantApiKeyService;
 
     @Mock
+    private JwtService jwtService;
+
+    @Mock
     private SecurityErrorHandler securityErrorHandler;
 
     @Mock
@@ -43,7 +47,7 @@ class ApiKeyAuthenticationFilterTest {
     private final MockHttpServletResponse response = new MockHttpServletResponse();
 
     private void filter() throws Exception {
-        new ApiKeyAuthenticationFilter(merchantApiKeyService, securityErrorHandler)
+        new ApiKeyAuthenticationFilter(merchantApiKeyService, jwtService, securityErrorHandler)
                 .doFilter(request, response, chain);
     }
 
@@ -89,6 +93,26 @@ class ApiKeyAuthenticationFilterTest {
         assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
                 .containsExactly("ROLE_MERCHANT_API");
         verify(chain).doFilter(request, response);
+    }
+
+    @Test
+    void validBearerMerchantTokenSetsMerchantPrincipalAndAuthority() throws Exception {
+        request.setRequestURI(ApiPaths.ORDERS + "/SD7KQ2MX9TRB4H/status");
+        request.addHeader("Authorization", "Bearer merchant-token");
+        UUID merchantId = UUID.randomUUID();
+        UUID credentialId = UUID.randomUUID();
+        when(jwtService.parseMerchantApiToken("merchant-token"))
+                .thenReturn(Optional.of(new JwtService.MerchantApiTokenClaims(merchantId, credentialId)));
+
+        filter();
+
+        var authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication.getPrincipal())
+                .isEqualTo(new AuthenticatedMerchant(merchantId, credentialId));
+        assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
+                .containsExactly("ROLE_MERCHANT_API");
+        verify(chain).doFilter(request, response);
+        verifyNoInteractions(merchantApiKeyService);
     }
 
     @Test

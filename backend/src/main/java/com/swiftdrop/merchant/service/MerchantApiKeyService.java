@@ -71,7 +71,8 @@ public class MerchantApiKeyService {
         if (credential.getLastUsedAt() == null || credential.getLastUsedAt().isBefore(now.minus(LAST_USED_PRECISION))) {
             credential.setLastUsedAt(now);
         }
-        return Optional.of(new AuthenticatedMerchant(credential.getMerchant().getId(), credential.getId()));
+        return Optional.of(new AuthenticatedMerchant(
+                credential.getMerchant().getId(), credential.getId(), credential.getKeyIdentifier()));
     }
 
     private static boolean isActive(MerchantApiCredential credential, Instant now) {

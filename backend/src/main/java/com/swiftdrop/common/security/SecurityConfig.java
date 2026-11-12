@@ -40,6 +40,7 @@ public class SecurityConfig {
             ApiPaths.AUTH + "/**",
             ApiPaths.PUBLIC_TRACKING + "/**",
             ApiPaths.PUBLIC_SETTINGS,
+            ApiPaths.OAUTH_TOKEN,
             ApiPaths.HEALTH,
             "/actuator/health",
             "/actuator/health/**",
@@ -79,7 +80,7 @@ public class SecurityConfig {
                 })
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(
-                new ApiKeyAuthenticationFilter(merchantApiKeyService, errorHandler),
+                new ApiKeyAuthenticationFilter(merchantApiKeyService, jwtService, errorHandler),
                 JwtAuthenticationFilter.class);
         return http.build();
     }

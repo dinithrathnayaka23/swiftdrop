@@ -15,6 +15,7 @@ public final class ApiPaths {
     public static final String PUBLIC_SETTINGS = PUBLIC + "/settings";
     public static final String HEALTH = API_V1 + "/health";
     public static final String ORDERS = API_V1 + "/orders";
+    public static final String OAUTH_TOKEN = API_V1 + "/oauth/token";
 
     private ApiPaths() {
     }

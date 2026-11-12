@@ -2,6 +2,7 @@ package com.swiftdrop.merchant.security;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.SecurityErrorHandler;
+import com.swiftdrop.common.security.jwt.JwtService;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
 import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import jakarta.servlet.FilterChain;
@@ -28,12 +29,15 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private static final String MERCHANT_API_AUTHORITY = "ROLE_MERCHANT_API";
 
     private final MerchantApiKeyService merchantApiKeyService;
+    private final JwtService jwtService;
     private final SecurityErrorHandler securityErrorHandler;
 
     public ApiKeyAuthenticationFilter(
             MerchantApiKeyService merchantApiKeyService,
+            JwtService jwtService,
             SecurityErrorHandler securityErrorHandler) {
         this.merchantApiKeyService = merchantApiKeyService;
+        this.jwtService = jwtService;
         this.securityErrorHandler = securityErrorHandler;
     }
 
@@ -41,19 +45,11 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(
             HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
-        String apiKey = request.getHeader(API_KEY_HEADER);
-        if (apiKey == null || apiKey.isBlank()) {
+        AuthenticatedMerchant principal = authenticate(request);
+        if (principal == null) {
             reject(request, response);
             return;
         }
-
-        var merchant = merchantApiKeyService.authenticate(apiKey);
-        if (merchant.isEmpty()) {
-            reject(request, response);
-            return;
-        }
-
-        AuthenticatedMerchant principal = merchant.get();
         var authentication = new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
@@ -61,6 +57,21 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
         SecurityContextHolder.getContext().setAuthentication(authentication);
         chain.doFilter(request, response);
+    }
+
+    private AuthenticatedMerchant authenticate(HttpServletRequest request) {
+        String apiKey = request.getHeader(API_KEY_HEADER);
+        if (apiKey != null && !apiKey.isBlank()) {
+            return merchantApiKeyService.authenticate(apiKey).orElse(null);
+        }
+
+        String authorization = request.getHeader("Authorization");
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return null;
+        }
+        return jwtService.parseMerchantApiToken(authorization.substring("Bearer ".length()))
+                .map(token -> new AuthenticatedMerchant(token.merchantId(), token.apiCredentialId()))
+                .orElse(null);
     }
 
     @Override
