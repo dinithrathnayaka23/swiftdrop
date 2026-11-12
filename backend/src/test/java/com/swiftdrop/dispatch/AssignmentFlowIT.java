@@ -3,6 +3,7 @@ package com.swiftdrop.dispatch;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.swiftdrop.IntegrationTestBase;
+import com.swiftdrop.common.messaging.RabbitConfig;
 import com.swiftdrop.common.security.Role;
 import com.swiftdrop.parcel.dto.NewAddress;
 import com.swiftdrop.parcel.dto.NewParcel;
@@ -23,7 +24,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
@@ -44,6 +47,7 @@ class AssignmentFlowIT extends IntegrationTestBase {
     @Autowired private ParcelService parcelService;
     @Autowired private ParcelStatusService statusService;
     @Autowired private UserService userService;
+    @Autowired private AmqpAdmin amqpAdmin;
 
     // ---- Helpers -----------------------------------------------------------------------------
 
@@ -136,6 +140,17 @@ class AssignmentFlowIT extends IntegrationTestBase {
 
     private static boolean onlyRowHasStatus(JsonNode rows, String status) {
         return rows.size() == 1 && rows.get(0).get("status").asString().equals(status);
+    }
+
+    /**
+     * These tests publish status events. Nothing consumes the notification and webhook queues yet, so
+     * leave them empty for later tests: InfrastructureIT reads the first message on the notification
+     * queue and expects its own event.
+     */
+    @AfterEach
+    void leaveTheUnconsumedQueuesEmpty() {
+        amqpAdmin.purgeQueue(RabbitConfig.NOTIFICATION_QUEUE, false);
+        amqpAdmin.purgeQueue(RabbitConfig.WEBHOOK_QUEUE, false);
     }
 
     // ---- Tests -------------------------------------------------------------------------------
