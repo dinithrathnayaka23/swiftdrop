@@ -26,10 +26,27 @@ class AssistantPropertiesTest {
     }
 
     @Test
-    void usesALanguageModelOnlyWithAProviderAndAKey() {
-        assertThat(withProviderAndKey("some-provider", "secret").usesLanguageModel()).isTrue();
-        assertThat(withProviderAndKey("some-provider", " ").usesLanguageModel()).isFalse();
-        assertThat(withProviderAndKey("rules", "secret").usesLanguageModel()).isFalse();
+    void usesALanguageModelOnlyWithAKnownProviderAKeyAndAModel() {
+        assertThat(new AssistantProperties("gemini", "secret", "flash-lite", null, null, 0, 0, 0, null)
+                .usesLanguageModel()).isTrue();
+        assertThat(new AssistantProperties("gemini", " ", "flash-lite", null, null, 0, 0, 0, null)
+                .usesLanguageModel()).isFalse();
+        assertThat(new AssistantProperties("gemini", "secret", "", null, null, 0, 0, 0, null)
+                .usesLanguageModel()).isFalse();
+        assertThat(new AssistantProperties("rules", "secret", "flash-lite", null, null, 0, 0, 0, null)
+                .usesLanguageModel()).isFalse();
+        assertThat(new AssistantProperties("other", "secret", "m", null, null, 0, 0, 0, null)
+                .usesLanguageModel()).isFalse();
+        assertThat(new AssistantProperties("other", "secret", "m", "https://llm.example/v1", null, 0, 0, 0, null)
+                .usesLanguageModel()).isTrue();
+    }
+
+    @Test
+    void defaultsTheBaseUrlPerProvider() {
+        assertThat(withProviderAndKey("gemini", "k").resolvedBaseUrl()).isEqualTo(AssistantProperties.GEMINI_BASE_URL);
+        assertThat(withProviderAndKey("OpenAI", "k").resolvedBaseUrl()).isEqualTo(AssistantProperties.OPENAI_BASE_URL);
+        assertThat(new AssistantProperties("gemini", "k", null, " https://proxy.example/v1 ", null, 0, 0, 0, null)
+                .resolvedBaseUrl()).isEqualTo("https://proxy.example/v1");
     }
 
     @Test
