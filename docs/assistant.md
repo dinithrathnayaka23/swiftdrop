@@ -135,7 +135,7 @@ questions, and points price questions to the fee form.
 | `base-url` | `SWIFTDROP_ASSISTANT_BASE_URL` | per provider | `gemini`: `https://generativelanguage.googleapis.com/v1beta/openai/`; `openai`: `https://api.openai.com/v1`; `openrouter`: `https://openrouter.ai/api/v1`; `grok`: `https://api.x.ai/v1` |
 | `openrouter.api-key`, `openrouter.model` | `SWIFTDROP_ASSISTANT_OPENROUTER_API_KEY`, `_OPENROUTER_MODEL` | empty, `openrouter/free` | First fallback. Key from openrouter.ai. The default model `openrouter/free` picks a free model that supports tool calling; set a model id to use one model |
 | `grok.api-key`, `grok.model` | `SWIFTDROP_ASSISTANT_GROK_API_KEY`, `_GROK_MODEL` | empty | Second fallback. Key from console.x.ai; a current Grok model name |
-| `timeout` | `SWIFTDROP_ASSISTANT_TIMEOUT` | `30s` | Connect and read timeout for one model call |
+| `timeout` | `SWIFTDROP_ASSISTANT_TIMEOUT` | `15s` | Connect and read timeout for one model call; a slower model hands over to the next one |
 | `max-message-chars` | `SWIFTDROP_ASSISTANT_MAX_MESSAGE_CHARS` | 1000 | Longest user message |
 | `max-history-messages` | `SWIFTDROP_ASSISTANT_MAX_HISTORY_MESSAGES` | 10 | Messages sent to the model |
 | `max-reply-tokens` | `SWIFTDROP_ASSISTANT_MAX_REPLY_TOKENS` | 600 | `max_tokens` for the model |

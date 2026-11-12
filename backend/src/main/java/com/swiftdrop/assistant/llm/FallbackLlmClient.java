@@ -61,8 +61,11 @@ public class FallbackLlmClient implements LlmClient {
                 continue;
             }
             Model model = models.get(i);
+            long started = System.nanoTime();
             try {
-                return model.client().complete(request);
+                LlmResponse response = model.client().complete(request);
+                log.info("Assistant model {} answered in {} ms", model.name(), (System.nanoTime() - started) / 1_000_000);
+                return response;
             } catch (LlmUnavailableException ex) {
                 pause(i, model, ex.getMessage());
             } catch (RuntimeException ex) {

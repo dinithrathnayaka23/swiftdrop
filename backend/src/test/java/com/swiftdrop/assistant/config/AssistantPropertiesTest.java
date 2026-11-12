@@ -20,7 +20,7 @@ class AssistantPropertiesTest {
         assertThat(properties.provider()).isEqualTo(AssistantProperties.RULES_PROVIDER);
         assertThat(properties.apiKey()).isEmpty();
         assertThat(properties.usesLanguageModel()).isFalse();
-        assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(30));
+        assertThat(properties.timeout()).isEqualTo(Duration.ofSeconds(15));
         assertThat(properties.maxMessageChars()).isPositive();
         assertThat(properties.maxHistoryMessages()).isPositive();
         assertThat(properties.maxReplyTokens()).isPositive();

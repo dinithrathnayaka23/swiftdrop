@@ -56,7 +56,7 @@ public record AssistantProperties(
         model = model == null ? "" : model.trim();
         baseUrl = baseUrl == null ? "" : baseUrl.trim();
         if (timeout == null || !timeout.isPositive()) {
-            timeout = Duration.ofSeconds(30);
+            timeout = Duration.ofSeconds(15);
         }
         if (maxMessageChars <= 0) {
             maxMessageChars = 1000;
