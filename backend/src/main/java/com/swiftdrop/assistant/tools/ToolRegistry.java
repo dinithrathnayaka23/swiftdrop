@@ -130,7 +130,7 @@ public class ToolRegistry {
             return tool.run(new ToolArguments(arguments), context);
         } catch (InvalidToolArgumentException ex) {
             outcome = "invalid " + ex.field();
-            ObjectNode result = error(INVALID_INPUT, "Some details are missing or not valid: " + ex.field() + ".")
+            ObjectNode result = error(INVALID_INPUT, "Some details are missing or not valid: " + ex.getMessage() + ".")
                     .result();
             return ToolOutput.of(result.put("field", ex.field()));
         } finally {
