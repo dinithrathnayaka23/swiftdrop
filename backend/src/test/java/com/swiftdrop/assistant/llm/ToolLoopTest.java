@@ -93,7 +93,8 @@ class ToolLoopTest {
     @Test
     void whenTheModelFailsAfterAToolRoundTheRulesAnswerAndTheCardIsKept() {
         script.add(calls(new ToolCall("c1", TrackParcelTool.NAME, "{\"trackingNumber\":\"SD7KQ2MX9TRB4H\"}")));
-        var fallback = new FallbackLlmClient(model, new RuleBasedLlmClient(JSON), Instant::now);
+        var fallback = new FallbackLlmClient(List.of(new FallbackLlmClient.Model("gemini", model)), new RuleBasedLlmClient(JSON),
+                Instant::now);
 
         ChatResponse response = service(fallback).chat(ask("Where is SD7KQ2MX9TRB4H?"), CONTEXT);
 
@@ -104,7 +105,7 @@ class ToolLoopTest {
 
     @Test
     void basicModeTracksAParcelWithTheRealToolNameEndToEnd() {
-        var basicMode = new FallbackLlmClient(null, new RuleBasedLlmClient(JSON), Instant::now);
+        var basicMode = new FallbackLlmClient(List.of(), new RuleBasedLlmClient(JSON), Instant::now);
 
         ChatResponse response = service(basicMode).chat(ask("where is sd7kq2mx9trb4h?"), CONTEXT);
 

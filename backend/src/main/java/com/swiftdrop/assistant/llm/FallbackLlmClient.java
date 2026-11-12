@@ -3,7 +3,10 @@ package com.swiftdrop.assistant.llm;
 import com.swiftdrop.assistant.config.AssistantProperties;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Primary;
@@ -11,10 +14,10 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * The client the assistant uses: the language model when one is configured, otherwise the rules.
- * When the model fails (quota used up, timeout, server error, unreadable reply) that round is
- * answered by the rules, and the model is left alone for {@link #PAUSE_AFTER_FAILURE} instead of
- * being retried.
+ * The client the assistant uses: the configured models in order (main, then OpenRouter, then Grok),
+ * and the offline rules when none can answer. A model that fails (quota used up, timeout, server
+ * error, unreadable reply) is skipped for {@link #PAUSE_AFTER_FAILURE} instead of being retried, so
+ * the next one answers straight away.
  */
 @Slf4j
 @Primary
@@ -23,43 +26,58 @@ public class FallbackLlmClient implements LlmClient {
 
     static final Duration PAUSE_AFTER_FAILURE = Duration.ofSeconds(60);
 
-    private final LlmClient model;
+    /** A model in the chain. */
+    record Model(String name, LlmClient client) {
+    }
+
+    private final List<Model> models;
     private final RuleBasedLlmClient rules;
     private final Supplier<Instant> clock;
-    private volatile Instant modelPausedUntil = Instant.MIN;
+    private final AtomicReferenceArray<Instant> pausedUntil;
 
     @Autowired
     public FallbackLlmClient(AssistantProperties properties, RuleBasedLlmClient rules, JsonMapper json) {
-        this(properties.usesLanguageModel() ? OpenAiCompatibleLlmClient.create(properties, json) : null, rules,
-                Instant::now);
-        log.info("Assistant mode: {}", model == null ? "rules (no language model configured)"
-                : properties.provider() + " model " + properties.model());
+        this(properties.languageModels().stream()
+                        .map(endpoint -> new Model(endpoint.name() + " " + endpoint.model(),
+                                OpenAiCompatibleLlmClient.create(endpoint, json)))
+                        .toList(),
+                rules, Instant::now);
+        log.info("Assistant mode: {}", models.isEmpty() ? "rules (no language model configured)"
+                : models.stream().map(Model::name).collect(Collectors.joining(" -> ")) + " -> rules");
     }
 
-    FallbackLlmClient(LlmClient model, RuleBasedLlmClient rules, Supplier<Instant> clock) {
-        this.model = model;
+    FallbackLlmClient(List<Model> models, RuleBasedLlmClient rules, Supplier<Instant> clock) {
+        this.models = List.copyOf(models);
         this.rules = rules;
         this.clock = clock;
+        this.pausedUntil = new AtomicReferenceArray<>(models.size());
     }
 
     @Override
     public LlmResponse complete(LlmRequest request) {
-        if (model == null || clock.get().isBefore(modelPausedUntil)) {
-            return rules.complete(request);
+        for (int i = 0; i < models.size(); i++) {
+            Instant paused = pausedUntil.get(i);
+            if (paused != null && clock.get().isBefore(paused)) {
+                continue;
+            }
+            Model model = models.get(i);
+            long started = System.nanoTime();
+            try {
+                LlmResponse response = model.client().complete(request);
+                log.info("Assistant model {} answered in {} ms", model.name(), (System.nanoTime() - started) / 1_000_000);
+                return response;
+            } catch (LlmUnavailableException ex) {
+                pause(i, model, ex.getMessage());
+            } catch (RuntimeException ex) {
+                pause(i, model, ex.getClass().getSimpleName());
+            }
         }
-        try {
-            return model.complete(request);
-        } catch (LlmUnavailableException ex) {
-            return fallBack(ex.getMessage(), request);
-        } catch (RuntimeException ex) {
-            return fallBack(ex.getClass().getSimpleName(), request);
-        }
+        return rules.complete(request);
     }
 
-    private LlmResponse fallBack(String reason, LlmRequest request) {
-        modelPausedUntil = clock.get().plus(PAUSE_AFTER_FAILURE);
-        log.warn("Assistant model unavailable ({}); answering in basic mode for the next {} s", reason,
+    private void pause(int index, Model model, String reason) {
+        pausedUntil.set(index, clock.get().plus(PAUSE_AFTER_FAILURE));
+        log.warn("Assistant model {} unavailable ({}); skipping it for {} s", model.name(), reason,
                 PAUSE_AFTER_FAILURE.toSeconds());
-        return rules.complete(request);
     }
 }
