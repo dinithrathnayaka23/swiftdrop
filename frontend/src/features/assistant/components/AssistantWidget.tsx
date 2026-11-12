@@ -3,6 +3,7 @@ import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'rea
 import { getErrorMessage } from '../../../api/errors';
 import { cn } from '../../../utils/cn';
 import { MAX_MESSAGE_CHARS, useAssistantChat, WELCOME } from '../hooks/useAssistantChat';
+import AssistantCards from './AssistantCards';
 import MessageText from './MessageText';
 import TypingIndicator from './TypingIndicator';
 
@@ -83,9 +84,16 @@ export default function AssistantWidget() {
               <MessageText text={WELCOME} />
             </Bubble>
             {entries.map((entry) => (
-              <Bubble key={entry.id} fromUser={entry.role === 'user'}>
-                <MessageText text={entry.content} />
-              </Bubble>
+              <div key={entry.id} className="space-y-2">
+                <Bubble fromUser={entry.role === 'user'}>
+                  <MessageText text={entry.content} />
+                </Bubble>
+                {entry.cards.length > 0 && (
+                  <div className="max-w-[85%]">
+                    <AssistantCards cards={entry.cards} />
+                  </div>
+                )}
+              </div>
             ))}
             {sending && <TypingIndicator />}
             {error != null && (
