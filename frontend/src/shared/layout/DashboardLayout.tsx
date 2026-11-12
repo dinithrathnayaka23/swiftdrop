@@ -1,5 +1,5 @@
 import { Menu, X } from 'lucide-react';
-import { Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router';
 import ErrorBoundary from '../../components/feedback/ErrorBoundary';
 import LoadingState from '../../components/feedback/LoadingState';
@@ -10,6 +10,9 @@ import { SIDEBAR } from './navigation';
 import Sidebar from './Sidebar';
 import TrackingSearch from './TrackingSearch';
 import UserMenu from './UserMenu';
+
+// Loaded only for customers, so other roles never download the chat code.
+const AssistantWidget = lazy(() => import('../../features/assistant/components/AssistantWidget'));
 
 /**
  * Shell for the customer, merchant and admin areas: sidebar menu for the role, top bar with
@@ -101,6 +104,12 @@ export default function DashboardLayout() {
           </ErrorBoundary>
         </main>
       </div>
+
+      {user.role === 'CUSTOMER' && (
+        <Suspense fallback={null}>
+          <AssistantWidget />
+        </Suspense>
+      )}
     </div>
   );
 }
