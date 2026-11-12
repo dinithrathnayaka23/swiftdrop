@@ -2,6 +2,7 @@ package com.swiftdrop.merchant.repository;
 
 import com.swiftdrop.merchant.model.MerchantApiCredential;
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -18,4 +19,9 @@ public interface MerchantApiCredentialRepository extends JpaRepository<MerchantA
     @Query("select count(c) from MerchantApiCredential c where c.merchant.id = :merchantId"
             + " and c.revokedAt is null and (c.expiresAt is null or c.expiresAt > :now)")
     long countActive(@Param("merchantId") UUID merchantId, @Param("now") Instant now);
+
+    List<MerchantApiCredential> findByMerchantIdOrderByCreatedAtDesc(UUID merchantId);
+
+    /** Scoped to the merchant, so one merchant can't reach another's keys by guessing an ID. */
+    Optional<MerchantApiCredential> findByIdAndMerchantId(UUID id, UUID merchantId);
 }
