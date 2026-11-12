@@ -3,6 +3,8 @@ package com.swiftdrop.common.security;
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.jwt.JwtAuthenticationFilter;
 import com.swiftdrop.common.security.jwt.JwtService;
+import com.swiftdrop.merchant.security.ApiKeyAuthenticationFilter;
+import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -53,6 +55,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtService jwtService,
+                                                   MerchantApiKeyService merchantApiKeyService,
                                                    SecurityErrorHandler errorHandler,
                                                    @Value("${swiftdrop.security.public-api-docs:false}")
                                                    boolean publicApiDocs) throws Exception {
@@ -75,6 +78,9 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
+        http.addFilterBefore(
+                new ApiKeyAuthenticationFilter(merchantApiKeyService, errorHandler),
+                JwtAuthenticationFilter.class);
         return http.build();
     }
 
