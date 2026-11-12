@@ -145,21 +145,19 @@ log says which mode is active ("Assistant mode: ...").
 
 - **Docker Compose:** put the four `SWIFTDROP_ASSISTANT_*` values in the repo-root `.env` (see `.env.example`).
   `docker-compose.yml` passes them to the backend container as environment variables.
-- **`.\mvnw.cmd` with the `dev` profile:** set them as real environment variables in the same PowerShell window:
+- **`.\mvnw.cmd` with the `dev` profile:** put the same values in the repo-root `.env` and run
 
   ```powershell
-  $env:SWIFTDROP_ASSISTANT_PROVIDER = "gemini"
-  $env:SWIFTDROP_ASSISTANT_API_KEY = "<your AI Studio key>"
-  $env:SWIFTDROP_ASSISTANT_MODEL = "<a Flash-Lite model name>"
   cd backend
   .\mvnw.cmd spring-boot:run "-Dspring-boot.run.profiles=dev"
   ```
 
-  `application-dev.yml` also imports the repo-root `.env`, but **that does not set these values**. The `.env` file
-  is read as a plain properties file, and Spring maps the upper-case `SWIFTDROP_ASSISTANT_API_KEY` form to
-  `swiftdrop.assistant.api-key` only for real environment variables. The other `.env` values work because
-  `application.yml` has a `${...}` placeholder for each of them; the assistant deliberately has none (its defaults
-  live in `AssistantProperties`). Without the environment variables the backend starts in Basic mode.
+  `application-dev.yml` imports `.env` as a plain properties file and maps the four values with placeholders
+  (`api-key: ${SWIFTDROP_ASSISTANT_API_KEY:}` and so on). The placeholders are needed: Spring maps the upper-case
+  `SWIFTDROP_ASSISTANT_API_KEY` form to `swiftdrop.assistant.api-key` by itself only for real environment
+  variables, not for values read from a file. Real environment variables still win over `.env`.
+- **Other profiles without Docker** (no placeholders): set them as real environment variables, e.g.
+  `$env:SWIFTDROP_ASSISTANT_API_KEY = "..."`. Without them the backend starts in Basic mode.
 
 ## Testing and evaluation
 
