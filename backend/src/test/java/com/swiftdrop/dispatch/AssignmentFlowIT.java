@@ -13,6 +13,7 @@ import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.model.ParcelType;
 import com.swiftdrop.parcel.service.ParcelService;
 import com.swiftdrop.parcel.service.ParcelStatusService;
+import com.swiftdrop.tracking.service.CourierLookup;
 import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.model.AccountStatus;
 import com.swiftdrop.user.service.UserService;
@@ -48,6 +49,7 @@ class AssignmentFlowIT extends IntegrationTestBase {
     @Autowired private ParcelStatusService statusService;
     @Autowired private UserService userService;
     @Autowired private AmqpAdmin amqpAdmin;
+    @Autowired private CourierLookup courierLookup;
 
     // ---- Helpers -----------------------------------------------------------------------------
 
@@ -175,6 +177,8 @@ class AssignmentFlowIT extends IntegrationTestBase {
         assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
         assertThat(parcelTab("ASSIGNED", city, admin)).containsExactly(parcel.id().toString());
         assertThat(parcelTab("UNASSIGNED", city, admin)).containsExactly(waiting.id().toString());
+        assertThat(courierLookup.currentCourierNames(List.of(parcel.id(), waiting.id())))
+                .containsOnlyKeys(parcel.id()).containsValue("Ramesh Perera");
 
         // Twice: 409. Offline courier: 409. Unknown parcel: 404.
         assertThat(assign(parcel.id(), second, admin).statusCode()).isEqualTo(409);

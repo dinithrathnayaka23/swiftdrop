@@ -26,6 +26,13 @@ identified by their **account id** (`AuthenticatedUser.userId()`).
 | `openParcelIds(courierUserId)` | The courier's Today's Deliveries (oldest assignment first); load them with `ParcelService.findAllByIds`. |
 | `findCourierId(courierUserId)` | The courier profile id, or empty if the account has none. |
 
+## For live tracking: `CourierLookup`
+
+`CourierNameLookupService` is the tracking module's `CourierLookup` bean, so the admin Deliveries
+Tracking board shows the courier's name. `currentCourierNames(parcelIds)` finds the open assignments of
+all the parcels in one query and reads each distinct courier's account once; parcels without an open
+assignment are left out.
+
 ## Assignment lifecycle (who ends assignments, and when)
 
 An assignment is **open** while `delivery_assignments.ended_at IS NULL`; the database allows one open
@@ -78,8 +85,7 @@ assignment, row-locked so it can't overlap a reassignment:
   `application.yml` (`spring.rabbitmq.listener.simple`): `retry.max-attempts: 3`,
   `retry.initial-interval: 1s`, `retry.multiplier: 2` (attempts at 0 s, +1 s, +2 s), then, because
   `default-requeue-rejected: false`, the message is dead-lettered to `swiftdrop.parcel.events.dlx`
-  (routing key `dead`) → `swiftdrop.parcel.events.dlq`, like the notification and webhook queues. A
-  message that can't be read as JSON is dead-lettered straight away.
+  (routing key `dead`) → `swiftdrop.parcel.events.dlq`, like the notification and webhook queues.
 
 ## Assignments API (`DISPATCHER_ADMIN` only)
 

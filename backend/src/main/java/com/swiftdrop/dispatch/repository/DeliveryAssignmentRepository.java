@@ -55,6 +55,14 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     /** A courier's ended assignments. */
     Page<DeliveryAssignment> findByCourier_IdAndEndedAtIsNotNull(UUID courierId, Pageable pageable);
 
+    /** The courier account of each of these parcels' open assignment; parcels without one are left out. */
+    @Query("""
+            select new com.swiftdrop.dispatch.repository.OpenAssignmentCourier(a.parcelId, c.userId)
+            from DeliveryAssignment a join a.courier c
+            where a.parcelId in :parcelIds and a.endedAt is null
+            """)
+    List<OpenAssignmentCourier> findOpenCouriersByParcelIds(@Param("parcelIds") Collection<UUID> parcelIds);
+
     /**
      * Per courier and status: open ASSIGNED and IN_PROGRESS assignments, plus the assignments
      * COMPLETED since {@code startOfDay}. Couriers with none are missing from the result.
