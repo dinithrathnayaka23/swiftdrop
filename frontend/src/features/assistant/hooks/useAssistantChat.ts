@@ -64,5 +64,14 @@ export function useAssistantChat() {
     [entries, sending],
   );
 
-  return { entries, suggestions, sending, error, send };
+  /** Adds a reply that didn't come from the chat, e.g. the fee form's result. */
+  const addReply = useCallback((content: string, cards: AssistantCard[]) => {
+    setEntries((current) => [
+      ...current,
+      { id: nextId.current++, role: 'assistant', content, cards },
+    ]);
+    setError(null);
+  }, []);
+
+  return { entries, suggestions, sending, error, send, addReply };
 }
