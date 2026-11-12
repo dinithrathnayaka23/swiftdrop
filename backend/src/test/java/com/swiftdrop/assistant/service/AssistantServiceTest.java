@@ -64,7 +64,7 @@ class AssistantServiceTest {
     private final ScriptedLlm llm = new ScriptedLlm();
     private final AssistantService service = new AssistantService(llm,
             new ToolRegistry(new StaticListableBeanFactory(Map.of("track", TRACK)).getBeanProvider(AssistantTool.class), JSON),
-            new MessageSanitizer(), new AssistantProperties("gemini", "key", null, null, null, 40, 3, 0, null));
+            new MessageSanitizer(), new AssistantProperties("gemini", "key", null, null, null, 40, 3, 0, null), JSON);
 
     private static LlmResponse callTrack(String id) {
         return new LlmResponse("", List.of(new ToolCall(id, "track_parcel", "{}")), 40, LlmResponse.Source.MODEL);

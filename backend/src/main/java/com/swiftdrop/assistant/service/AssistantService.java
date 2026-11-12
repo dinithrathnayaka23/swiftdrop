@@ -4,12 +4,16 @@ import com.swiftdrop.assistant.config.AssistantPrompts;
 import com.swiftdrop.assistant.config.AssistantProperties;
 import com.swiftdrop.assistant.dto.request.ChatMessage;
 import com.swiftdrop.assistant.dto.request.ChatRequest;
+import com.swiftdrop.assistant.dto.request.FeeEstimateRequest;
 import com.swiftdrop.assistant.dto.response.AssistantCard;
 import com.swiftdrop.assistant.dto.response.ChatResponse;
+import com.swiftdrop.assistant.dto.response.FeeEstimateCardsResponse;
 import com.swiftdrop.assistant.llm.LlmClient;
 import com.swiftdrop.assistant.llm.LlmRequest;
 import com.swiftdrop.assistant.llm.LlmResponse;
+import com.swiftdrop.assistant.tools.EstimateFeeTool;
 import com.swiftdrop.assistant.tools.ToolContext;
+import com.swiftdrop.assistant.tools.ToolOutput;
 import com.swiftdrop.assistant.tools.ToolRegistry;
 import com.swiftdrop.common.exception.BadRequestException;
 import java.util.ArrayList;
@@ -17,6 +21,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import tools.jackson.databind.json.JsonMapper;
 
 /** Answers one question: caps and sanitises the history, then runs the model and its tool calls. */
 @Slf4j
@@ -31,6 +36,7 @@ public class AssistantService {
     private final ToolRegistry toolRegistry;
     private final MessageSanitizer sanitizer;
     private final AssistantProperties properties;
+    private final JsonMapper json;
 
     public ChatResponse chat(ChatRequest request, ToolContext context) {
         long started = System.nanoTime();
@@ -59,6 +65,16 @@ public class AssistantService {
         log.info("Assistant answered in {} ms: mode {}, {} tokens, {} cards", (System.nanoTime() - started) / 1_000_000,
                 mode, tokens, turn.cards().size());
         return new ChatResponse(reply, turn.cards(), suggestions(turn.cards()), mode);
+    }
+
+    /** The fee form: runs estimate_fee directly, without the model. */
+    public FeeEstimateCardsResponse estimateFee(FeeEstimateRequest request, ToolContext context) {
+        ToolOutput output = toolRegistry.run(EstimateFeeTool.NAME, json.valueToTree(request), context);
+        String message = output.result().path("message").asString();
+        if ("INVALID_INPUT".equals(output.result().path("error").asString(""))) {
+            throw new BadRequestException(message);
+        }
+        return new FeeEstimateCardsResponse(output.card() == null ? List.of() : List.of(output.card()), message);
     }
 
     /** The latest messages within the history cap, each checked against the length limit and sanitised. */
