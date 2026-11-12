@@ -10,10 +10,10 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-import com.swiftdrop.assistant.config.AssistantProperties;
 import com.swiftdrop.assistant.llm.LlmRequest.Text;
 import com.swiftdrop.assistant.llm.LlmRequest.ToolCalls;
 import com.swiftdrop.assistant.llm.LlmRequest.ToolResult;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -49,7 +49,8 @@ class OpenAiCompatibleLlmClientTest {
     private final RestClient.Builder builder = RestClient.builder();
     private final MockRestServiceServer server = MockRestServiceServer.bindTo(builder).build();
     private final OpenAiCompatibleLlmClient client = new OpenAiCompatibleLlmClient(builder,
-            new AssistantProperties("gemini", "test-key", "gemini-flash-lite", null, null, 0, 0, 0, null),
+            new LlmEndpoint("gemini", "test-key", "gemini-flash-lite",
+                    "https://generativelanguage.googleapis.com/v1beta/openai/", Duration.ofSeconds(30)),
             JsonMapper.builder().build());
 
     @Test

@@ -1,6 +1,5 @@
 package com.swiftdrop.assistant.llm;
 
-import com.swiftdrop.assistant.config.AssistantProperties;
 import com.swiftdrop.assistant.llm.LlmRequest.Message;
 import com.swiftdrop.assistant.llm.LlmRequest.Text;
 import com.swiftdrop.assistant.llm.LlmRequest.ToolCalls;
@@ -24,29 +23,29 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Calls an OpenAI-compatible Chat Completions endpoint ({@code POST <base>/chat/completions}):
- * Gemini by default, or OpenAI. Only standard fields are sent. Any failure becomes an
+ * Gemini, OpenAI, OpenRouter or Grok. Only standard fields are sent. Any failure becomes an
  * {@link LlmUnavailableException}; there are no retries.
  */
 public class OpenAiCompatibleLlmClient implements LlmClient {
 
     private final RestClient http;
-    private final AssistantProperties properties;
+    private final LlmEndpoint endpoint;
     private final JsonMapper json;
     private final String url;
 
     /** {@code http} is pre-configured with timeouts (see {@link #create}) or bound to a mock server in tests. */
-    OpenAiCompatibleLlmClient(RestClient.Builder http, AssistantProperties properties, JsonMapper json) {
-        this.http = http.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + properties.apiKey()).build();
-        this.properties = properties;
+    OpenAiCompatibleLlmClient(RestClient.Builder http, LlmEndpoint endpoint, JsonMapper json) {
+        this.http = http.defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + endpoint.apiKey()).build();
+        this.endpoint = endpoint;
         this.json = json;
-        this.url = properties.resolvedBaseUrl().replaceAll("/+$", "") + "/chat/completions";
+        this.url = endpoint.baseUrl().replaceAll("/+$", "") + "/chat/completions";
     }
 
-    public static OpenAiCompatibleLlmClient create(AssistantProperties properties, JsonMapper json) {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(properties.timeout()).build();
+    public static OpenAiCompatibleLlmClient create(LlmEndpoint endpoint, JsonMapper json) {
+        HttpClient client = HttpClient.newBuilder().connectTimeout(endpoint.timeout()).build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(client);
-        requestFactory.setReadTimeout(properties.timeout());
-        return new OpenAiCompatibleLlmClient(RestClient.builder().requestFactory(requestFactory), properties, json);
+        requestFactory.setReadTimeout(endpoint.timeout());
+        return new OpenAiCompatibleLlmClient(RestClient.builder().requestFactory(requestFactory), endpoint, json);
     }
 
     @Override
@@ -72,7 +71,7 @@ public class OpenAiCompatibleLlmClient implements LlmClient {
 
     private ObjectNode requestBody(LlmRequest request) {
         ObjectNode body = json.createObjectNode()
-                .put("model", properties.model())
+                .put("model", endpoint.model())
                 .put("max_tokens", request.maxReplyTokens());
         ArrayNode messages = body.putArray("messages");
         messages.addObject().put("role", "system").put("content", request.systemPrompt());

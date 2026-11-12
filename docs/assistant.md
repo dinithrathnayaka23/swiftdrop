@@ -7,9 +7,10 @@ customer's own recent parcels, delivery fees, parcel types and contact details b
 as tools. It never guesses: facts come only from tool results, and the reply carries **cards** built by the server
 from those results. There is no RAG, multi-agent setup, fine-tuning or MCP.
 
-The model is Google **Gemini** (free tier) through its OpenAI-compatible Chat Completions endpoint, called with
-Spring `RestClient` (no SDK). Switching to OpenAI is a settings change. Without a key, or when the model fails, an
-offline rule-based client answers instead ("Basic mode").
+The main model is Google **Gemini** (free tier) through its OpenAI-compatible Chat Completions endpoint, called with
+Spring `RestClient` (no SDK). When it fails (for example its free quota is used up), **OpenRouter** and then **Grok**
+(xAI) answer instead, through the same Chat Completions format. When none of them can answer, an offline rule-based
+client does ("Basic mode").
 
 ## Endpoints
 
@@ -71,7 +72,7 @@ With no active pricing rule: `cards` is empty and `message` says prices aren't a
 ```
 AssistantController (role, rate limit, validation)
   -> AssistantService: length check, keep the last 10 messages, hide emails and phone numbers
-  -> FallbackLlmClient -> OpenAiCompatibleLlmClient (Gemini)   or   RuleBasedLlmClient
+  -> FallbackLlmClient -> Gemini -> OpenRouter -> Grok (OpenAiCompatibleLlmClient each) -> RuleBasedLlmClient
   -> up to 3 rounds: model asks for tools -> ToolRegistry (allowlist, argument checks) -> tool -> result back
   -> final text + cards from the tool results + suggestions
 ```
@@ -115,7 +116,7 @@ or write tools exist.
 | Failure | What happens |
 | ------- | ------------ |
 | No key or model configured | Basic mode for every question (`mode: RULES`) |
-| 429 (free quota used up), timeout, 5xx, unreadable or empty reply | That round is answered by Basic mode; the model is not called again for 60 seconds. No retries |
+| 429 (free quota used up), 402, timeout, 5xx, unreadable or empty reply | The next model in the chain answers that round (Gemini → OpenRouter → Grok → Basic mode). The failed model is skipped for 60 seconds. No retries |
 | Bad tool arguments or an unknown tool | An error result goes back to the model; after 3 rounds, a safe "please rephrase" reply |
 | No active pricing rule | "Prices aren't available right now", plus the contact details |
 | Unknown tracking number | "I couldn't find that number." No hints |
@@ -128,17 +129,21 @@ questions, and points price questions to the fee form.
 
 | Setting | Environment variable | Default | Meaning |
 | ------- | -------------------- | ------- | ------- |
-| `provider` | `SWIFTDROP_ASSISTANT_PROVIDER` | `rules` | `gemini`, `openai` or `rules` (Basic mode, no key) |
+| `provider` | `SWIFTDROP_ASSISTANT_PROVIDER` | `rules` | Main model: `gemini`, `openai`, `openrouter`, `grok` or `rules` (none) |
 | `api-key` | `SWIFTDROP_ASSISTANT_API_KEY` | empty | From Google AI Studio. Never commit it; `toString()` hides it |
 | `model` | `SWIFTDROP_ASSISTANT_MODEL` | empty | A current Flash-Lite model name from AI Studio (biggest free quota) |
-| `base-url` | `SWIFTDROP_ASSISTANT_BASE_URL` | per provider | `gemini`: `https://generativelanguage.googleapis.com/v1beta/openai/`; `openai`: `https://api.openai.com/v1` |
+| `base-url` | `SWIFTDROP_ASSISTANT_BASE_URL` | per provider | `gemini`: `https://generativelanguage.googleapis.com/v1beta/openai/`; `openai`: `https://api.openai.com/v1`; `openrouter`: `https://openrouter.ai/api/v1`; `grok`: `https://api.x.ai/v1` |
+| `openrouter.api-key`, `openrouter.model` | `SWIFTDROP_ASSISTANT_OPENROUTER_API_KEY`, `_OPENROUTER_MODEL` | empty, `openrouter/free` | First fallback. Key from openrouter.ai. The default model `openrouter/free` picks a free model that supports tool calling; set a model id to use one model |
+| `grok.api-key`, `grok.model` | `SWIFTDROP_ASSISTANT_GROK_API_KEY`, `_GROK_MODEL` | empty | Second fallback. Key from console.x.ai; a current Grok model name |
 | `timeout` | `SWIFTDROP_ASSISTANT_TIMEOUT` | `30s` | Connect and read timeout for one model call |
 | `max-message-chars` | `SWIFTDROP_ASSISTANT_MAX_MESSAGE_CHARS` | 1000 | Longest user message |
 | `max-history-messages` | `SWIFTDROP_ASSISTANT_MAX_HISTORY_MESSAGES` | 10 | Messages sent to the model |
 | `max-reply-tokens` | `SWIFTDROP_ASSISTANT_MAX_REPLY_TOKENS` | 600 | `max_tokens` for the model |
 | `rate-limit` | `SWIFTDROP_ASSISTANT_RATE_LIMIT_REQUESTS`, `_WINDOW` | 20 / 1m | Questions per customer |
 
-The model is used only when the provider isn't `rules` and a key, a model and a base URL are all set. The startup
+Each model is used only when its key and model are set (OpenRouter's model defaults to `openrouter/free`; the main one
+also needs a provider other than `rules`).
+Any one of them is enough to leave Basic mode. The startup
 log says which mode is active ("Assistant mode: ...").
 
 ### How the values reach the backend

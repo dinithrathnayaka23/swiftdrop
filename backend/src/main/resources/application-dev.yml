@@ -31,6 +31,13 @@ swiftdrop:
     api-key: ${SWIFTDROP_ASSISTANT_API_KEY:}
     model: ${SWIFTDROP_ASSISTANT_MODEL:}
     base-url: ${SWIFTDROP_ASSISTANT_BASE_URL:}
+    # Tried in this order when the main model fails (e.g. its free quota is used up).
+    openrouter:
+      api-key: ${SWIFTDROP_ASSISTANT_OPENROUTER_API_KEY:}
+      model: ${SWIFTDROP_ASSISTANT_OPENROUTER_MODEL:}
+    grok:
+      api-key: ${SWIFTDROP_ASSISTANT_GROK_API_KEY:}
+      model: ${SWIFTDROP_ASSISTANT_GROK_MODEL:}
 
 logging:
   level:
