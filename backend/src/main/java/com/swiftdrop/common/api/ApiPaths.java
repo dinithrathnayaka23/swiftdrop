@@ -14,6 +14,7 @@ public final class ApiPaths {
     public static final String PUBLIC_TRACKING = PUBLIC + "/tracking";
     public static final String PUBLIC_SETTINGS = PUBLIC + "/settings";
     public static final String HEALTH = API_V1 + "/health";
+    public static final String ORDERS = API_V1 + "/orders";
 
     private ApiPaths() {
     }
