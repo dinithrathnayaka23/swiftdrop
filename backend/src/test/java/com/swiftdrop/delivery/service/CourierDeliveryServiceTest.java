@@ -3,17 +3,23 @@ package com.swiftdrop.delivery.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.swiftdrop.common.exception.BadRequestException;
+import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.delivery.dto.request.UpdateDeliveryStatusRequest;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryDetailResponse;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryItemResponse;
 import com.swiftdrop.delivery.dto.response.TodaysDeliveriesResponse;
 import com.swiftdrop.dispatch.api.DispatchApi;
 import com.swiftdrop.parcel.dto.AddressDetails;
 import com.swiftdrop.parcel.dto.ParcelDetails;
+import com.swiftdrop.parcel.dto.StatusChange;
 import com.swiftdrop.parcel.dto.StatusHistoryEntry;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.model.ParcelType;
@@ -26,6 +32,9 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -168,6 +177,76 @@ class CourierDeliveryServiceTest {
         assertThatThrownBy(() -> service.getByTrackingNumber("SD2", COURIER)).isInstanceOf(NotFoundException.class);
         assertThatThrownBy(() -> service.getByTrackingNumber("   ", COURIER)).isInstanceOf(NotFoundException.class);
         verify(parcelStatusService, never()).getHistory(any());
+    }
+
+    @Test
+    void updateStatusRecordsTheStepAsTheCourierAndReturnsTheNewState() {
+        ParcelDetails before = parcel("SD1", ParcelStatusCode.CREATED);
+        ParcelDetails after = withStatus(before, ParcelStatusCode.PICKED_UP);
+        when(dispatchApi.isAssignedTo(before.id(), COURIER)).thenReturn(true);
+        when(parcelService.getParcel(before.id())).thenReturn(after);
+        when(parcelStatusService.getHistory(before.id())).thenReturn(List.of(
+                entry(before.id(), null, ParcelStatusCode.CREATED),
+                entry(before.id(), ParcelStatusCode.CREATED, ParcelStatusCode.PICKED_UP)));
+
+        CourierDeliveryDetailResponse detail = service.updateStatus(before.id(), COURIER,
+                new UpdateDeliveryStatusRequest(ParcelStatusCode.PICKED_UP, "Collected from the front desk"));
+
+        ArgumentCaptor<StatusChange> change = ArgumentCaptor.forClass(StatusChange.class);
+        verify(parcelStatusService).changeStatus(eq(before.id()), change.capture());
+        assertThat(change.getValue().newStatus()).isEqualTo(ParcelStatusCode.PICKED_UP);
+        assertThat(change.getValue().changedByUserId()).isEqualTo(COURIER);
+        assertThat(change.getValue().note()).isEqualTo("Collected from the front desk");
+        assertThat(change.getValue().failureReason()).isNull();
+        assertThat(change.getValue().recipientName()).isNull();
+
+        assertThat(detail.currentStatus()).isEqualTo(ParcelStatusCode.PICKED_UP);
+        assertThat(detail.allowedActions()).containsExactly(ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.FAILED);
+        assertThat(detail.timeline()).hasSize(2);
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ParcelStatusCode.class, names = {"DELIVERED", "FAILED", "CREATED"})
+    void updateStatusRefusesStatusesWithTheirOwnScreen(ParcelStatusCode status) {
+        UUID parcelId = UUID.randomUUID();
+
+        UpdateDeliveryStatusRequest request = new UpdateDeliveryStatusRequest(status, null);
+
+        assertThatThrownBy(() -> service.updateStatus(parcelId, COURIER, request))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(dispatchApi, parcelStatusService, parcelService);
+    }
+
+    @Test
+    void updateStatusOfAnotherCouriersParcelIsNotFoundAndChangesNothing() {
+        UUID parcelId = UUID.randomUUID();
+        when(dispatchApi.isAssignedTo(parcelId, COURIER)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.updateStatus(parcelId, COURIER,
+                new UpdateDeliveryStatusRequest(ParcelStatusCode.PICKED_UP, null)))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage(CourierDeliveryService.NOT_FOUND);
+        verify(parcelStatusService, never()).changeStatus(any(), any());
+    }
+
+    @Test
+    void updateStatusPassesOnTheStateMachinesConflict() {
+        UUID parcelId = UUID.randomUUID();
+        when(dispatchApi.isAssignedTo(parcelId, COURIER)).thenReturn(true);
+        when(parcelStatusService.changeStatus(eq(parcelId), any()))
+                .thenThrow(new ConflictException("A parcel that is PICKED_UP cannot be changed to PICKED_UP"));
+
+        assertThatThrownBy(() -> service.updateStatus(parcelId, COURIER,
+                new UpdateDeliveryStatusRequest(ParcelStatusCode.PICKED_UP, null)))
+                .isInstanceOf(ConflictException.class);
+        verify(parcelService, never()).getParcel(any());
+    }
+
+    private static ParcelDetails withStatus(ParcelDetails p, ParcelStatusCode status) {
+        return new ParcelDetails(p.id(), p.trackingNumber(), p.customerUserId(), p.merchantId(),
+                p.externalOrderReference(), p.pickupAddress(), p.dropoffAddress(), p.parcelType(), p.weightKg(),
+                p.lengthCm(), p.widthCm(), p.heightCm(), p.contentDescription(), p.deliveryInstructions(), status,
+                p.pricingRuleId(), p.quotedFee(), p.feeCurrency(), p.createdAt(), p.updatedAt());
     }
 
     private static StatusHistoryEntry entry(UUID parcelId, ParcelStatusCode previous, ParcelStatusCode status) {
