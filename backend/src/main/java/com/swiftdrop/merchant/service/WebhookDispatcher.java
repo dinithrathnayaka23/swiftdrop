@@ -9,9 +9,7 @@ import com.swiftdrop.merchant.repository.MerchantWebhookRepository;
 import com.swiftdrop.merchant.repository.WebhookDeliveryRepository;
 import com.swiftdrop.parcel.model.Parcel;
 import com.swiftdrop.parcel.repository.ParcelRepository;
-import java.io.IOException;
 import java.net.URI;
-import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
@@ -23,6 +21,7 @@ import javax.crypto.spec.SecretKeySpec;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -101,6 +100,7 @@ public class WebhookDispatcher {
                     .header("X-SwiftDrop-Signature", signature(timestamp, payload,
                             secretService.decrypt(webhook.getSigningSecretEncrypted())))
                     .header("X-SwiftDrop-Timestamp", timestamp)
+                    .contentType(MediaType.APPLICATION_JSON)
                     .body(payload)
                     .exchange((request, response) -> new HttpResult(response.getStatusCode().value(),
                             response.getBody() == null ? null
