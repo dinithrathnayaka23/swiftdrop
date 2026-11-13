@@ -36,6 +36,12 @@ public class AdminMerchantController {
         return merchantService.listByStatus(status);
     }
 
+    /** One merchant with its review details; 404 if there is none with this ID. */
+    @GetMapping("/{merchantId}")
+    public MerchantResponse get(@PathVariable UUID merchantId) {
+        return merchantService.getForAdmin(merchantId);
+    }
+
     @PostMapping("/{merchantId}/approve")
     public MerchantResponse approve(@PathVariable UUID merchantId,
                                     @AuthenticationPrincipal AuthenticatedUser admin) {

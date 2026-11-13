@@ -77,6 +77,14 @@ public class MerchantService implements MerchantApi {
                 .toList();
     }
 
+    /** Full merchant details for the admin detail page, including review information. */
+    @Transactional(readOnly = true)
+    public MerchantResponse getForAdmin(UUID merchantId) {
+        return merchantRepository.findById(merchantId)
+                .map(MerchantMapper::toResponse)
+                .orElseThrow(() -> new NotFoundException("Merchant not found"));
+    }
+
     @Override
     @Transactional(readOnly = true)
     public boolean isApproved(UUID merchantId) {
