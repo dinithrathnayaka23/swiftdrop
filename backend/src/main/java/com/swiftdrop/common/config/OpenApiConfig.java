@@ -7,12 +7,14 @@ import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springdoc.core.models.GroupedOpenApi;
 
 /** Swagger UI at /swagger-ui.html (enabled in the dev profile only). */
 @Configuration
 public class OpenApiConfig {
 
     private static final String BEARER = "bearerAuth";
+    private static final String API_KEY = "apiKeyAuth";
 
     @Bean
     public OpenAPI swiftDropOpenApi() {
@@ -22,7 +24,18 @@ public class OpenApiConfig {
                         .description("Parcel Delivery & Courier Management System")
                         .version("v1"))
                 .components(new Components().addSecuritySchemes(BEARER,
-                        new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT")))
+                        new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT"))
+                        .addSecuritySchemes(API_KEY,
+                                new SecurityScheme().type(SecurityScheme.Type.APIKEY)
+                                        .in(SecurityScheme.In.HEADER).name("X-API-Key")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER));
+    }
+
+    @Bean
+    public GroupedOpenApi merchantApi() {
+        return GroupedOpenApi.builder()
+                .group("merchant-api")
+                .pathsToMatch("/api/v1/orders/**", "/api/v1/oauth/**")
+                .build();
     }
 }

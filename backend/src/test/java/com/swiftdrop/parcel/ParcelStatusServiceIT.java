@@ -43,7 +43,10 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
     private UUID customerId;
     private UUID courierId;
 
-    /** No consumer reads these queues yet, so empty them to keep other tests' events out. */
+    /**
+     * Empty both queues to keep other tests' events out. The events are read from the notification
+     * queue, which has no consumer yet; WebhookDispatcher consumes the webhook queue.
+     */
     @BeforeEach
     @AfterEach
     void emptyQueues() {
@@ -70,10 +73,10 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
                 BigDecimal.ONE, null, null, null, null, null, null, new BigDecimal("450.00")));
     }
 
-    private ParcelStatusChangedEvent nextWebhookEvent() {
-        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(RabbitConfig.WEBHOOK_QUEUE, 5_000,
+    private ParcelStatusChangedEvent nextStatusEvent() {
+        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(RabbitConfig.NOTIFICATION_QUEUE, 5_000,
                 new ParameterizedTypeReference<>() { });
-        assertThat(event).as("event on " + RabbitConfig.WEBHOOK_QUEUE).isNotNull();
+        assertThat(event).as("event on " + RabbitConfig.NOTIFICATION_QUEUE).isNotNull();
         return event;
     }
 
@@ -96,8 +99,8 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
         assertThat(history.getLast().recipientName()).isEqualTo("Kamala Silva");
         assertThat(history.getLast().changedByUserId()).isEqualTo(courierId);
 
-        List<ParcelStatusChangedEvent> events = List.of(nextWebhookEvent(), nextWebhookEvent(), nextWebhookEvent(),
-                nextWebhookEvent());
+        List<ParcelStatusChangedEvent> events = List.of(nextStatusEvent(), nextStatusEvent(), nextStatusEvent(),
+                nextStatusEvent());
         assertThat(events).extracting(ParcelStatusChangedEvent::newStatus)
                 .containsExactly("PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED");
         assertThat(events).extracting(ParcelStatusChangedEvent::statusVersion).containsExactly(2L, 3L, 4L, 5L);
@@ -116,7 +119,7 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
 
         assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
         assertThat(statusService.getHistory(parcel.id())).hasSize(1);
-        assertThat(rabbitTemplate.receive(RabbitConfig.WEBHOOK_QUEUE, 500)).isNull();
+        assertThat(rabbitTemplate.receive(RabbitConfig.NOTIFICATION_QUEUE, 500)).isNull();
     }
 
     @Test
