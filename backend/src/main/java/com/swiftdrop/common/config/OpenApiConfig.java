@@ -25,7 +25,7 @@ public class OpenApiConfig {
                         .version("v1"))
                 .components(new Components().addSecuritySchemes(BEARER,
                         new SecurityScheme().type(SecurityScheme.Type.HTTP).scheme("bearer").bearerFormat("JWT"))
-                        .addSecurityScheme(API_KEY,
+                        .addSecuritySchemes(API_KEY,
                                 new SecurityScheme().type(SecurityScheme.Type.APIKEY)
                                         .in(SecurityScheme.In.HEADER).name("X-API-Key")))
                 .addSecurityItem(new SecurityRequirement().addList(BEARER));
