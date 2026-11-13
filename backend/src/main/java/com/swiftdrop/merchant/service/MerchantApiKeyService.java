@@ -117,7 +117,8 @@ public class MerchantApiKeyService {
         if (credential.getLastUsedAt() == null || credential.getLastUsedAt().isBefore(now.minus(LAST_USED_PRECISION))) {
             credential.setLastUsedAt(now);
         }
-        return Optional.of(new AuthenticatedMerchant(credential.getMerchant().getId(), credential.getId()));
+        return Optional.of(new AuthenticatedMerchant(
+                credential.getMerchant().getId(), credential.getId(), credential.getKeyIdentifier()));
     }
 
     /** Not found rather than forbidden for another merchant's key, so key IDs can't be probed. */

@@ -98,7 +98,8 @@ class MerchantApiKeyServiceTest {
 
         Optional<AuthenticatedMerchant> result = apiKeyService.authenticate(rawKey);
 
-        assertThat(result).contains(new AuthenticatedMerchant(merchant.getId(), credential.getId()));
+        assertThat(result).contains(new AuthenticatedMerchant(
+                merchant.getId(), credential.getId(), credential.getKeyIdentifier()));
         assertThat(credential.getLastUsedAt()).isNotNull();
     }
 
