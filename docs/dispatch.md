@@ -7,7 +7,7 @@ assignment of parcels to couriers. A courier is a `COURIER` account (user module
 (`couriers`) owned by this module.
 
 > **Status:** courier management and assigning parcels (single, bulk, reassign, unassign) are built,
-> and assignments follow the parcel's status. The Operations Overview data and the failed-delivery
+> with the service-area check, and assignments follow the parcel's status. The Operations Overview data and the failed-delivery
 > queue are not (see "Not done yet").
 
 ## For the parcel module: `DispatchStateLookup`
@@ -112,6 +112,14 @@ An assignment is `{id, parcelId, courierId, courierUserId, status, assignedByUse
 | Reassign: a different courier than the current one | 409 |
 | Courier exists | 404 |
 | Courier is active, `ONLINE` (not On Break / Offline) and their account is `ACTIVE` | 409 |
+| Courier covers the parcel's **pickup** area (see below) | 409 `This courier does not cover the pickup area (<zone name>)` |
+
+**Zone check** (assign, each parcel of a bulk assignment, and reassign): a courier **with** service
+areas must cover the parcel's pickup zone. The pickup zone is the pickup address's `zoneId`, or, when
+that is empty (today always: booking doesn't store it yet), `ZoneApi.findZoneId(district, city,
+postalCode)` of the pickup address. A courier **without** service areas may take any parcel, and a
+parcel whose pickup zone can't be found (outside every active zone) isn't checked. See `docs/config.md`
+for how places are matched.
 
 There is no "unassigned parcels" endpoint here: the screen uses `GET /api/v1/admin/parcels?tab=UNASSIGNED`
 (parcel module).
@@ -127,8 +135,8 @@ All under `/api/v1/admin/couriers`. Lists use Spring's paged JSON (`content`, `p
 | `GET /summary` | `total`, `online`, `onBreak`, `offline` (active couriers only) |
 | `GET /{courierId}` | One courier |
 | `GET /{courierId}/assignments?open&page&size` | The drawer tabs: `open=true` "Current Deliveries", `open=false` "History", left out for all. Newest assignment first. Each row: `id, parcelId, status, assignedAt, endedAt, reason, trackingNumber, parcelStatus, destinationCity`. 404 for an unknown courier. |
-| `POST /` | Adds a courier and their sign-in account. 201 + `Location`. Starts `OFFLINE`. 409 if the email or vehicle registration is taken, or a service area doesn't exist. |
-| `PATCH /{courierId}` | `vehicleType`, `vehicleRegistration`, `serviceAreaIds` (replaces the set; `[]` clears it). Send at least one. |
+| `POST /` | Adds a courier and their sign-in account. 201 + `Location`. Starts `OFFLINE`. 409 if the email or vehicle registration is taken; 400 `Unknown or inactive service area`. |
+| `PATCH /{courierId}` | `vehicleType`, `vehicleRegistration`, `serviceAreaIds` (replaces the set; `[]` clears it). Send at least one. Every id must be an active zone (400), so drop a zone deactivated since. |
 | `PATCH /{courierId}/availability` | `{"availability": "ONLINE" \| "ON_BREAK" \| "OFFLINE"}`. A deactivated courier can't go online. |
 
 `POST /` takes `fullName`, `email`, `phone` (E.164), `password`, `vehicleType`, `vehicleRegistration`
@@ -143,7 +151,9 @@ delivered), `completedToday` (`COMPLETED` since midnight, Sri Lanka time; `FAILE
 `open = assigned + inProgress`, `todaysTotal = open + completedToday`. The "12 / 15" on the screen is
 `completedToday / todaysTotal`.
 
-`serviceAreaIds` are delivery zone ids. Zone names come from the Service Areas API once it exists.
+`serviceAreaIds` are delivery zone ids (config module, `docs/config.md`). Every courier also has
+`serviceAreas: [{id, name}]` sorted by name, named with one `ZoneApi.zoneNames` call per list page or
+courier; a zone deactivated since keeps its name.
 
 ## Database
 
@@ -154,8 +164,6 @@ delivered), `completedToday` (`COMPLETED` since midnight, Sri Lanka time; `FAILE
 
 ## Not done yet
 
-- **Zone check on assignment:** a courier's service areas should cover the parcel's drop-off zone
-  (marked `TODO(zone check)` in `AssignmentService`). Waiting for the zones backend, as are zone names.
 - Operations Overview data and the Failed Deliveries queue. **Retry needs a decision with Member 4:**
   `FAILED` is an end state, so a retried parcel needs a `FAILED -> CREATED` transition.
 - Deactivating / reactivating a courier, and reacting when a courier's account is suspended (set them

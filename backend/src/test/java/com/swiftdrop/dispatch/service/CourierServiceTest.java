@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -13,12 +14,14 @@ import com.swiftdrop.common.exception.BadRequestException;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
 import com.swiftdrop.dispatch.dto.response.CourierResponse;
 import com.swiftdrop.dispatch.dto.response.CourierSummaryResponse;
 import com.swiftdrop.dispatch.dto.response.CourierWorkload;
+import com.swiftdrop.dispatch.dto.response.ServiceAreaRef;
 import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.Courier;
 import com.swiftdrop.dispatch.model.CourierAvailability;
@@ -35,6 +38,7 @@ import com.swiftdrop.user.model.AccountStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -65,6 +69,7 @@ class CourierServiceTest {
     @Mock private DeliveryAssignmentRepository assignmentRepository;
     @Mock private UserApi userApi;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private ZoneApi zoneApi;
     @InjectMocks private CourierService service;
 
     // ---- Helpers -----------------------------------------------------------------------------
@@ -241,12 +246,34 @@ class CourierServiceTest {
     }
 
     @Test
-    void updateReportsAConflictForAnUnknownServiceArea() {
+    void updateRefusesAnUnknownOrInactiveServiceArea() {
         courierExists();
-        when(courierRepository.saveAndFlush(any(Courier.class))).thenThrow(new DataIntegrityViolationException("fk"));
+        when(zoneApi.missingOrInactive(Set.of(ZONE_B))).thenReturn(Set.of(ZONE_B));
 
         assertThatThrownBy(() -> service.update(COURIER_ID, new UpdateCourierRequest(null, null, Set.of(ZONE_B))))
-                .isInstanceOf(ConflictException.class);
+                .isInstanceOf(BadRequestException.class).hasMessage(CourierService.UNKNOWN_SERVICE_AREA);
+        verify(courierRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createRefusesAnUnknownOrInactiveServiceArea() {
+        when(userApi.emailExists("ramesh@example.com")).thenReturn(false);
+        when(zoneApi.missingOrInactive(Set.of(ZONE_A))).thenReturn(Set.of(ZONE_A));
+
+        assertThatThrownBy(() -> service.create(createRequest(Set.of(ZONE_A))))
+                .isInstanceOf(BadRequestException.class).hasMessage(CourierService.UNKNOWN_SERVICE_AREA);
+        verify(userApi, never()).createUser(any());
+    }
+
+    @Test
+    void anEmptySetOfServiceAreasNeedsNoCheck() {
+        courierExists();
+        userExists(AccountStatus.ACTIVE);
+        when(courierRepository.saveAndFlush(any(Courier.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.update(COURIER_ID, new UpdateCourierRequest(null, null, Set.of()));
+
+        verifyNoInteractions(zoneApi);
     }
 
     @Test
@@ -377,7 +404,39 @@ class CourierServiceTest {
 
         assertThat(service.list(CourierFilter.none(), 0, 20).getContent()).isEmpty();
 
-        verifyNoInteractions(assignmentRepository);
+        verifyNoInteractions(assignmentRepository, zoneApi);
+    }
+
+    @Test
+    void theListNamesEveryCouriersServiceAreasWithOneZoneApiCall() {
+        Courier first = courier(); // covers ZONE_A
+        Courier second = courier();
+        second.setId(UUID.randomUUID());
+        second.getServiceAreaIds().clear();
+        second.getServiceAreaIds().addAll(Set.of(ZONE_A, ZONE_B));
+        when(courierRepository.findAll(ArgumentMatchers.<Specification<Courier>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(first, second)));
+        userExists(AccountStatus.ACTIVE);
+        when(zoneApi.zoneNames(Set.of(ZONE_A, ZONE_B))).thenReturn(Map.of(ZONE_A, "Kandy", ZONE_B, "Colombo 01"));
+
+        List<CourierResponse> rows = service.list(CourierFilter.none(), 0, 20).getContent();
+
+        assertThat(rows.get(0).serviceAreas()).containsExactly(new ServiceAreaRef(ZONE_A, "Kandy"));
+        assertThat(rows.get(1).serviceAreas()).containsExactly( // sorted by name
+                new ServiceAreaRef(ZONE_B, "Colombo 01"), new ServiceAreaRef(ZONE_A, "Kandy"));
+        assertThat(rows.get(1).serviceAreaIds()).containsExactlyInAnyOrder(ZONE_A, ZONE_B);
+        verify(zoneApi, times(1)).zoneNames(any());
+    }
+
+    @Test
+    void oneCourierWithoutServiceAreasNeedsNoNames() {
+        Courier courier = courier();
+        courier.getServiceAreaIds().clear();
+        when(courierRepository.findById(COURIER_ID)).thenReturn(Optional.of(courier));
+        userExists(AccountStatus.ACTIVE);
+
+        assertThat(service.get(COURIER_ID).serviceAreas()).isEmpty();
+        verifyNoInteractions(zoneApi);
     }
 
     @Test
