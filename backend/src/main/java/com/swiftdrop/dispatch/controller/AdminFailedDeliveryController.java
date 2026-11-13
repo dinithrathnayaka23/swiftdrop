@@ -2,20 +2,30 @@ package com.swiftdrop.dispatch.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.exception.BadRequestException;
+import com.swiftdrop.common.security.AuthenticatedUser;
+import com.swiftdrop.dispatch.dto.request.CloseDeliveryRequest;
 import com.swiftdrop.dispatch.dto.request.FailedDeliveryScope;
+import com.swiftdrop.dispatch.dto.request.RetryDeliveryRequest;
 import com.swiftdrop.dispatch.dto.response.DefaultFailedActionResponse;
+import com.swiftdrop.dispatch.dto.response.FailedDecisionResponse;
 import com.swiftdrop.dispatch.dto.response.FailedDeliveryResponse;
 import com.swiftdrop.dispatch.service.FailedDeliveryService;
+import jakarta.validation.Valid;
 import java.util.Locale;
+import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
-/** The admin Failed Deliveries screen: the queue, and (next) retrying or closing a failed attempt. */
+/** The admin Failed Deliveries screen: the queue, and retrying or closing a failed attempt. */
 @RestController
 @RequestMapping(AdminFailedDeliveryController.PATH)
 @PreAuthorize("hasRole('DISPATCHER_ADMIN')")
@@ -37,6 +47,25 @@ public class AdminFailedDeliveryController {
             @RequestParam(defaultValue = "20") int size) {
         checkPage(page, size);
         return new PagedModel<>(failedDeliveryService.list(scopeOf(scope), page, size));
+    }
+
+    /**
+     * Retries a failed attempt: the parcel goes back to CREATED (Unassigned). Assign a courier with
+     * the normal assign call afterwards. 409 unless the parcel is FAILED_ATTEMPT.
+     */
+    @PostMapping("/parcels/{parcelId}/retry")
+    public FailedDecisionResponse retry(@PathVariable UUID parcelId,
+                                        @Valid @RequestBody(required = false) RetryDeliveryRequest request,
+                                        @AuthenticationPrincipal AuthenticatedUser admin) {
+        return failedDeliveryService.retry(parcelId, request == null ? null : request.note(),
+                UUID.fromString(admin.userId()));
+    }
+
+    /** Closes a failed attempt as FAILED (end state) with a reason. 409 unless the parcel is FAILED_ATTEMPT. */
+    @PostMapping("/parcels/{parcelId}/close")
+    public FailedDecisionResponse close(@PathVariable UUID parcelId, @Valid @RequestBody CloseDeliveryRequest request,
+                                        @AuthenticationPrincipal AuthenticatedUser admin) {
+        return failedDeliveryService.close(parcelId, request.reason(), UUID.fromString(admin.userId()));
     }
 
     /** The System Settings default action, to pre-select Retry or pre-fill the close reason. */

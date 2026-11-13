@@ -1,12 +1,17 @@
 package com.swiftdrop.dispatch.service;
 
+import com.swiftdrop.common.exception.ConflictException;
+import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.dispatch.dto.request.FailedDeliveryScope;
 import com.swiftdrop.dispatch.dto.response.DefaultFailedActionResponse;
+import com.swiftdrop.dispatch.dto.response.FailedDecisionResponse;
 import com.swiftdrop.dispatch.dto.response.FailedDeliveryResponse;
+import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.Courier;
 import com.swiftdrop.dispatch.model.DeliveryAssignment;
 import com.swiftdrop.dispatch.repository.DeliveryAssignmentRepository;
 import com.swiftdrop.parcel.dto.ParcelDetails;
+import com.swiftdrop.parcel.dto.StatusChange;
 import com.swiftdrop.parcel.dto.StatusHistoryEntry;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.service.ParcelService;
@@ -14,6 +19,7 @@ import com.swiftdrop.parcel.service.ParcelStatusService;
 import com.swiftdrop.settings.service.SystemSettingsService;
 import com.swiftdrop.user.api.UserApi;
 import com.swiftdrop.user.api.UserSummary;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -21,15 +27,18 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * The Failed Deliveries queue: parcels whose delivery attempt failed (FAILED_ATTEMPT, waiting for the
  * dispatcher) or that were closed as FAILED, and the dispatcher's decision on them.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FailedDeliveryService {
@@ -85,6 +94,61 @@ public class FailedDeliveryService {
                     parcel.dropoffAddress() == null ? null : parcel.dropoffAddress().city());
         });
     }
+
+    // ---- Decisions ---------------------------------------------------------------------------
+
+    /**
+     * Retries a failed attempt: the parcel goes back to CREATED and shows in Unassigned again. It does
+     * not assign a courier: the dispatcher does that next with the normal assign call, so a late
+     * FAILED_ATTEMPT event can't end the new assignment within this call.
+     *
+     * @throws NotFoundException if there is no such parcel
+     * @throws ConflictException if the parcel is not in FAILED_ATTEMPT
+     */
+    @Transactional
+    public FailedDecisionResponse retry(UUID parcelId, String note, UUID adminUserId) {
+        requireFailedAttempt(parcelService.getParcel(parcelId));
+        endOpenAssignment(parcelId);
+        parcelStatusService.changeStatus(parcelId, StatusChange.to(ParcelStatusCode.CREATED, adminUserId,
+                StringUtils.hasText(note) ? note.trim() : null));
+        log.info("Failed delivery of parcel {} retried", parcelId);
+        return new FailedDecisionResponse(parcelId, ParcelStatusCode.CREATED);
+    }
+
+    /**
+     * Closes a failed attempt for good: the parcel becomes FAILED (an end state) with the reason.
+     *
+     * @throws NotFoundException if there is no such parcel
+     * @throws ConflictException if the parcel is not in FAILED_ATTEMPT
+     */
+    @Transactional
+    public FailedDecisionResponse close(UUID parcelId, String reason, UUID adminUserId) {
+        requireFailedAttempt(parcelService.getParcel(parcelId));
+        endOpenAssignment(parcelId);
+        parcelStatusService.changeStatus(parcelId, StatusChange.failed(adminUserId, reason.trim(), null));
+        log.info("Failed delivery of parcel {} closed", parcelId);
+        return new FailedDecisionResponse(parcelId, ParcelStatusCode.FAILED);
+    }
+
+    private static void requireFailedAttempt(ParcelDetails parcel) {
+        if (parcel.currentStatus() != ParcelStatusCode.FAILED_ATTEMPT) {
+            throw new ConflictException("Only a parcel whose delivery attempt failed can be retried or closed");
+        }
+    }
+
+    /**
+     * Ends an assignment still open after the failed attempt (the status listener normally ended it
+     * already; this covers a lagging event). Same row lock as reassign and the listener.
+     */
+    private void endOpenAssignment(UUID parcelId) {
+        assignmentRepository.findOpenByParcelIdForUpdate(parcelId).ifPresent(open -> {
+            open.setAssignmentStatus(AssignmentStatus.FAILED);
+            open.setEndedAt(AssignmentService.endTime(open, Instant.now()));
+            log.info("Assignment {} of parcel {} ended before the dispatcher's decision", open.getId(), parcelId);
+        });
+    }
+
+    // ---- Settings ----------------------------------------------------------------------------
 
     /** The System Settings default action for a failed delivery. */
     public DefaultFailedActionResponse defaultAction() {
