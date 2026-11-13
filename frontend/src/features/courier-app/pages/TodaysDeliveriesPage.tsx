@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { useLocation } from 'react-router';
 import LoadingState from '../../../components/feedback/LoadingState';
 import { EmptyState, ErrorState } from '../../../components/feedback/States';
 import Alert from '../../../components/ui/Alert';
@@ -6,7 +7,7 @@ import Button from '../../../components/ui/Button';
 import { courierApi } from '../api';
 import DeliveryCard from '../components/DeliveryCard';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
-import type { CourierDeliveryCounts } from '../types';
+import type { CourierDeliveryCounts, CourierNotice } from '../types';
 
 function CountTile({ label, value }: { label: string; value: number }) {
   return (
@@ -30,9 +31,15 @@ function Counts({ counts }: { counts: CourierDeliveryCounts }) {
 /** The courier's open deliveries, oldest first. Refreshes every minute and when the app regains focus. */
 export default function TodaysDeliveriesPage() {
   const { state, refresh, retry } = useAutoRefresh(() => courierApi.getToday());
+  const notice = (useLocation().state as Partial<CourierNotice> | null)?.notice;
 
   return (
     <section>
+      {notice && (
+        <Alert tone="success" className="mb-4">
+          {notice}
+        </Alert>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Today's Deliveries</h1>

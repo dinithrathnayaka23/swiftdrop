@@ -68,6 +68,49 @@ describe('mockCourierApi', () => {
     ).rejects.toMatchObject({ status: 404 });
   });
 
+  it('lists the failure reasons with the ones that need a note', async () => {
+    const reasons = await mockCourierApi.getFailureReasons();
+    expect(reasons.map((r) => r.code)).toEqual([
+      'RECIPIENT_UNAVAILABLE',
+      'WRONG_ADDRESS',
+      'REFUSED',
+      'ACCESS_ISSUE',
+      'DAMAGED',
+      'OTHER',
+    ]);
+    expect(reasons.filter((r) => r.noteRequired).map((r) => r.code)).toEqual(['DAMAGED', 'OTHER']);
+  });
+
+  it('reports a failure with the reason text and drops it from today’s list', async () => {
+    const id = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e01'; // OUT_FOR_DELIVERY
+    const after = await mockCourierApi.reportFailure(id, {
+      reasonCode: 'OTHER',
+      note: ' Gate locked ',
+    });
+
+    expect(after.currentStatus).toBe('FAILED');
+    expect(after.allowedActions).toEqual([]);
+    expect(after.timeline.at(-1)?.failureReason).toBe('Other: Gate locked');
+    expect((await mockCourierApi.getToday()).deliveries.map((d) => d.parcelId)).not.toContain(id);
+    expect(await mockCourierApi.getDelivery(id)).toBeNull();
+  });
+
+  it('refuses a failure without a required note, before pickup, or for an unknown reason', async () => {
+    const out = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e01';
+    const waiting = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e04';
+    await expect(
+      mockCourierApi.reportFailure(out, { reasonCode: 'DAMAGED' }),
+    ).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(mockCourierApi.reportFailure(out, { reasonCode: 'NOPE' })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      mockCourierApi.reportFailure(waiting, { reasonCode: 'REFUSED' }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
   it('only includes the pickup stop in the list while the parcel waits for pickup', async () => {
     const { deliveries } = await mockCourierApi.getToday();
     expect(deliveries.filter((d) => d.pickup !== null).map((d) => d.currentStatus)).toEqual([

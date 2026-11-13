@@ -8,6 +8,7 @@ import type {
   CourierDeliveryDetail,
   CourierStop,
   CourierTimelineEntry,
+  FailureReason,
 } from '../types';
 
 /**
@@ -189,10 +190,38 @@ function toDetail(sample: Sample): CourierDeliveryDetail {
   };
 }
 
+const FAILURE_REASONS: FailureReason[] = [
+  { code: 'RECIPIENT_UNAVAILABLE', label: 'Recipient unavailable', noteRequired: false },
+  { code: 'WRONG_ADDRESS', label: 'Wrong address', noteRequired: false },
+  { code: 'REFUSED', label: 'Refused by recipient', noteRequired: false },
+  { code: 'ACCESS_ISSUE', label: 'Access issue', noteRequired: false },
+  { code: 'DAMAGED', label: 'Parcel damaged', noteRequired: true },
+  { code: 'OTHER', label: 'Other', noteRequired: true },
+];
+
+/**
+ * The sample, while it is still the courier's. As in the backend, a delivered or failed parcel's
+ * assignment ends, so it leaves Today's Deliveries and its details are no longer found.
+ */
+function openSample(parcelId: string): Sample | undefined {
+  return samples.find((s) => s.parcelId === parcelId && NEXT[s.status].length > 0);
+}
+
+function notFound(): ApiRequestError {
+  return new ApiRequestError('Delivery not found', { status: 404, code: 'NOT_FOUND' });
+}
+
+function conflict(from: ParcelStatusCode, to: ParcelStatusCode): ApiRequestError {
+  return new ApiRequestError(`A parcel that is ${from} cannot be changed to ${to}`, {
+    status: 409,
+    code: 'CONFLICT',
+  });
+}
+
 export const mockCourierApi: CourierApi = {
   async getToday() {
     await delay(300);
-    const deliveries = samples.map(toItem);
+    const deliveries = samples.filter((s) => NEXT[s.status].length > 0).map(toItem);
     return {
       counts: {
         total: deliveries.length,
@@ -207,7 +236,7 @@ export const mockCourierApi: CourierApi = {
 
   async getDelivery(parcelId) {
     await delay(300);
-    const sample = samples.find((s) => s.parcelId === parcelId);
+    const sample = openSample(parcelId);
     return sample ? toDetail(sample) : null;
   },
 
@@ -215,21 +244,14 @@ export const mockCourierApi: CourierApi = {
     await delay(300);
     const wanted = trackingNumber.replace(/\s+/g, '').toUpperCase();
     const sample = samples.find((s) => s.trackingNumber === wanted);
-    return sample ? toDetail(sample) : null;
+    return sample && openSample(sample.parcelId) ? toDetail(sample) : null;
   },
 
   async updateStatus(parcelId, { status, note }) {
     await delay(300);
-    const sample = samples.find((s) => s.parcelId === parcelId);
-    if (!sample) {
-      throw new ApiRequestError('Delivery not found', { status: 404, code: 'NOT_FOUND' });
-    }
-    if (!NEXT[sample.status].includes(status)) {
-      throw new ApiRequestError(
-        `A parcel that is ${sample.status} cannot be changed to ${status}`,
-        { status: 409, code: 'CONFLICT' },
-      );
-    }
+    const sample = openSample(parcelId);
+    if (!sample) throw notFound();
+    if (!NEXT[sample.status].includes(status)) throw conflict(sample.status, status);
     sample.history = [
       ...timeline(sample),
       {
@@ -240,6 +262,43 @@ export const mockCourierApi: CourierApi = {
       },
     ];
     sample.status = status;
+    return toDetail(sample);
+  },
+
+  async getFailureReasons() {
+    await delay(200);
+    return FAILURE_REASONS.map((reason) => ({ ...reason }));
+  },
+
+  async reportFailure(parcelId, { reasonCode, note }) {
+    await delay(300);
+    const reason = FAILURE_REASONS.find((r) => r.code === reasonCode);
+    if (!reason) {
+      throw new ApiRequestError('Choose one of the failure reasons', {
+        status: 400,
+        code: 'BAD_REQUEST',
+      });
+    }
+    const trimmed = note?.trim() || null;
+    if (reason.noteRequired && !trimmed) {
+      throw new ApiRequestError('Add a note to explain this reason', {
+        status: 400,
+        code: 'BAD_REQUEST',
+      });
+    }
+    const sample = openSample(parcelId);
+    if (!sample) throw notFound();
+    if (!NEXT[sample.status].includes('FAILED')) throw conflict(sample.status, 'FAILED');
+    sample.history = [
+      ...timeline(sample),
+      {
+        status: 'FAILED',
+        changedAt: new Date().toISOString(),
+        note: null,
+        failureReason: trimmed ? `${reason.label}: ${trimmed}` : reason.label,
+      },
+    ];
+    sample.status = 'FAILED';
     return toDetail(sample);
   },
 };

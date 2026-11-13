@@ -2,7 +2,7 @@ import { apiClient } from '../../api/client';
 import { ApiRequestError, request } from '../../api/errors';
 import { isMockApiEnabled } from '../../utils/env';
 import { mockCourierApi } from './mock/mockCourierApi';
-import type { CourierApi, CourierDeliveryDetail, TodaysDeliveries } from './types';
+import type { CourierApi, CourierDeliveryDetail, FailureReason, TodaysDeliveries } from './types';
 
 /** Treats 404 as "not one of your deliveries" (null) so pages can show their not-found state. */
 async function orNull<T>(call: () => Promise<T>): Promise<T | null> {
@@ -46,6 +46,17 @@ const httpCourierApi: CourierApi = {
       apiClient.post<CourierDeliveryDetail>(
         `/courier/deliveries/${encodeURIComponent(parcelId)}/status`,
         { status, note: note?.trim() || undefined },
+      ),
+    ),
+
+  getFailureReasons: () =>
+    request(() => apiClient.get<FailureReason[]>('/courier/failure-reasons')),
+
+  reportFailure: (parcelId, { reasonCode, note }) =>
+    request(() =>
+      apiClient.post<CourierDeliveryDetail>(
+        `/courier/deliveries/${encodeURIComponent(parcelId)}/fail`,
+        { reasonCode, note: note?.trim() || undefined },
       ),
     ),
 };

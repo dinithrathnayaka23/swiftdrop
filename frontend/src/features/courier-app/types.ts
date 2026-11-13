@@ -81,6 +81,28 @@ export interface UpdateStatusRequest {
   note?: string;
 }
 
+/** Router state Today's Deliveries shows as a message, e.g. after a failed delivery is reported. */
+export interface CourierNotice {
+  notice: string;
+}
+
+/** One choice on the Failed Delivery form (GET /courier/failure-reasons). */
+export interface FailureReason {
+  code: string;
+  label: string;
+  /** The courier must add a note with this reason. */
+  noteRequired: boolean;
+}
+
+/** Longest note the backend accepts with a failed delivery. */
+export const MAX_FAILURE_NOTE = 500;
+
+/** POST /courier/deliveries/{parcelId}/fail */
+export interface ReportFailureRequest {
+  reasonCode: string;
+  note?: string;
+}
+
 /**
  * The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the
  * courier's. Changes reject with an ApiRequestError (404 not theirs, 409 the parcel can't take that
@@ -92,4 +114,8 @@ export interface CourierApi {
   findByTrackingNumber(trackingNumber: string): Promise<CourierDeliveryDetail | null>;
   /** Records the step and resolves to the delivery as it is afterwards. */
   updateStatus(parcelId: string, request: UpdateStatusRequest): Promise<CourierDeliveryDetail>;
+  /** The reasons a courier can give for a failed delivery, in display order. */
+  getFailureReasons(): Promise<FailureReason[]>;
+  /** Marks the delivery as failed (400 unknown reason or missing required note). */
+  reportFailure(parcelId: string, request: ReportFailureRequest): Promise<CourierDeliveryDetail>;
 }

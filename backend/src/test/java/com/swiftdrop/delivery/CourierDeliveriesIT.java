@@ -32,7 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The courier app end to end: own deliveries only, in assignment order, and status updates. */
+/** The courier app end to end: own deliveries only, in assignment order, status updates and failures. */
 class CourierDeliveriesIT extends IntegrationTestBase {
 
     private static final String ADMIN_EMAIL = "admin@test.swiftdrop.local"; // application-test.yml
@@ -198,12 +198,105 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     }
 
     @Test
+    void theFailureReasonsComeInDisplayOrder() throws Exception {
+        Courier courier = newCourier();
+
+        HttpResponse<String> response = get("/api/v1/courier/failure-reasons", courier.token());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        List<String> codes = new ArrayList<>();
+        JsonNode body = json.readTree(response.body());
+        body.forEach(reason -> codes.add(reason.get("code").asString()));
+        assertThat(codes).containsExactly("RECIPIENT_UNAVAILABLE", "WRONG_ADDRESS", "REFUSED", "ACCESS_ISSUE",
+                "DAMAGED", "OTHER");
+        assertThat(body.get(5).get("label").asString()).isEqualTo("Other");
+        assertThat(body.get(5).get("noteRequired").asBoolean()).isTrue();
+        assertThat(body.get(0).get("noteRequired").asBoolean()).isFalse();
+    }
+
+    @Test
+    void reportingAFailureWritesTheHistoryAndTheFailureRow() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+        parcelStatusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, courier.userId(), null));
+
+        HttpResponse<String> response = post(DELIVERIES + "/" + parcel.id() + "/fail", """
+                {"reasonCode":"OTHER","note":"Gate locked, no answer"}""", courier.token());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.get("currentStatus").asString()).isEqualTo("FAILED");
+        assertThat(body.get("allowedActions").isEmpty()).isTrue();
+        JsonNode last = body.get("timeline").get(body.get("timeline").size() - 1);
+        assertThat(last.get("failureReason").asString()).isEqualTo("Other: Gate locked, no answer");
+
+        var row = db.queryForMap("""
+                SELECT f.courier_user_id, f.reason_code, f.note, h.status_code
+                FROM delivery_failures f JOIN parcel_status_history h USING (status_history_id)
+                WHERE f.parcel_id = ?""", parcel.id());
+        assertThat(row.get("courier_user_id")).isEqualTo(courier.userId());
+        assertThat(row.get("reason_code")).isEqualTo("OTHER");
+        assertThat(row.get("note")).isEqualTo("Gate locked, no answer");
+        assertThat(row.get("status_code")).isEqualTo("FAILED");
+
+        // FAILED is an end state: a second report is refused and nothing more is written.
+        assertThat(post(DELIVERIES + "/" + parcel.id() + "/fail", """
+                {"reasonCode":"REFUSED"}""", courier.token()).statusCode()).isIn(404, 409);
+        assertThat(failureCount(parcel)).isEqualTo(1);
+    }
+
+    @Test
+    void aFailureNeedsAKnownReasonAndANoteWhenTheReasonAsksForOne() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+        parcelStatusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, courier.userId(), null));
+        String path = DELIVERIES + "/" + parcel.id() + "/fail";
+
+        assertThat(post(path, "{}", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, """
+                {"reasonCode":"LOST_IN_SPACE"}""", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, """
+                {"reasonCode":"DAMAGED","note":"   "}""", courier.token()).statusCode()).isEqualTo(400);
+
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.PICKED_UP);
+        assertThat(failureCount(parcel)).isZero();
+    }
+
+    @Test
+    void aFailureOnlyForTheCouriersOwnParcelAndOnlyAfterPickup() throws Exception {
+        Courier owner = newCourier();
+        Courier other = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, owner, Instant.now());
+        String path = DELIVERIES + "/" + parcel.id() + "/fail";
+        String body = """
+                {"reasonCode":"RECIPIENT_UNAVAILABLE"}""";
+
+        assertThat(post(path, body, other.token()).statusCode()).isEqualTo(404);
+        // Still CREATED: the parcel module doesn't allow CREATED -> FAILED.
+        assertThat(post(path, body, owner.token()).statusCode()).isEqualTo(409);
+
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
+        assertThat(failureCount(parcel)).isZero();
+    }
+
+    @Test
     void onlyCouriersMayUseTheCourierApp() throws Exception {
         assertThat(get(DELIVERIES + "/today").statusCode()).isEqualTo(401);
         assertThat(get(DELIVERIES + "/today", adminToken()).statusCode()).isEqualTo(403);
     }
 
     // ---- Helpers -------------------------------------------------------------------------------
+
+    private int failureCount(ParcelDetails parcel) {
+        Integer count = db.queryForObject("SELECT count(*) FROM delivery_failures WHERE parcel_id = ?",
+                Integer.class, parcel.id());
+        return count == null ? 0 : count;
+    }
 
     private String adminToken() throws Exception {
         return token(ADMIN_EMAIL, ADMIN_PASSWORD, "ADMIN");
