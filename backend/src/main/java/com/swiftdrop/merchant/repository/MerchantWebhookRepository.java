@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface MerchantWebhookRepository extends JpaRepository<MerchantWebhook, UUID> {
 
     Optional<MerchantWebhook> findFirstByMerchantIdOrderByCreatedAtAsc(UUID merchantId);
+
+    Optional<MerchantWebhook> findFirstByMerchantIdAndActiveTrueOrderByCreatedAtAsc(UUID merchantId);
 }

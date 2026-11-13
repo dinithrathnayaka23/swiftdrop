@@ -8,4 +8,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface WebhookDeliveryRepository extends JpaRepository<WebhookDelivery, UUID> {
 
     List<WebhookDelivery> findByWebhookMerchantId(UUID merchantId);
+
+    boolean existsByWebhookIdAndStatusHistoryId(UUID webhookId, UUID statusHistoryId);
 }

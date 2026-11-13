@@ -40,6 +40,24 @@ public class WebhookSecretService {
         return new GeneratedSecret(encoded, encrypt(encoded));
     }
 
+    public String decrypt(String encryptedValue) {
+        try {
+            byte[] encrypted = Base64.getDecoder().decode(encryptedValue);
+            if (encrypted.length <= IV_LENGTH) {
+                throw new IllegalArgumentException("Encrypted webhook secret is too short");
+            }
+            byte[] iv = new byte[IV_LENGTH];
+            byte[] ciphertext = new byte[encrypted.length - IV_LENGTH];
+            System.arraycopy(encrypted, 0, iv, 0, IV_LENGTH);
+            System.arraycopy(encrypted, IV_LENGTH, ciphertext, 0, ciphertext.length);
+            Cipher cipher = Cipher.getInstance(CIPHER);
+            cipher.init(Cipher.DECRYPT_MODE, encryptionKey, new GCMParameterSpec(TAG_LENGTH_BITS, iv));
+            return new String(cipher.doFinal(ciphertext), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException | IllegalArgumentException ex) {
+            throw new IllegalStateException("Unable to decrypt webhook secret", ex);
+        }
+    }
+
     private String encrypt(String value) {
         try {
             byte[] iv = new byte[IV_LENGTH];
