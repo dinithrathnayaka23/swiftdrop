@@ -1,7 +1,9 @@
 /**
- * <b>config module.</b> Business configuration: delivery zones and pricing rules used by fee estimation. (Not Spring configuration; that lives in common.config.)
+ * <b>config module.</b> Business configuration: delivery zones ("service areas") used by fee
+ * estimation and courier dispatch. (Not Spring configuration; that lives in common.config. Pricing
+ * rules are in the pricing module.) Other modules use {@code config.api.ZoneApi}; see docs/config.md.
  *
- * <p>Owner: TBD (see docs/MODULE_OWNERSHIP.md).
+ * <p>Owner: Member 6 (see docs/MODULE_OWNERSHIP.md).
  *
  * <p>Layout:
  * <ul>
