@@ -117,11 +117,24 @@ class AssignmentLifecycleServiceTest {
     }
 
     @Test
-    void theEndIsNeverBeforeTheAssignmentStarted() {
-        DeliveryAssignment assignment = openAssignment(AssignmentStatus.IN_PROGRESS);
+    void anEndingEventOlderThanTheOpenAssignmentIsIgnored() {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.ASSIGNED);
 
+        // e.g. the previous attempt's FAILED_ATTEMPT, delivered after a retry and a new assignment
+        service.apply(event(PARCEL_ID, "FAILED_ATTEMPT", ASSIGNED_AT.minusMillis(1)));
         service.apply(event(PARCEL_ID, "DELIVERED", ASSIGNED_AT.minusSeconds(30)));
 
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.ASSIGNED);
+        assertThat(assignment.getEndedAt()).isNull();
+    }
+
+    @Test
+    void anEndingEventAtTheSameMomentStillEndsTheAssignment() {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.IN_PROGRESS);
+
+        service.apply(event(PARCEL_ID, "FAILED_ATTEMPT", ASSIGNED_AT));
+
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.FAILED);
         assertThat(assignment.getEndedAt()).isEqualTo(ASSIGNED_AT);
     }
 
