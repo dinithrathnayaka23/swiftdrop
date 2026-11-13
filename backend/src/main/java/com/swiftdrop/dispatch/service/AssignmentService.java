@@ -3,6 +3,7 @@ package com.swiftdrop.dispatch.service;
 import com.swiftdrop.common.exception.ApiException;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.response.AssignmentResponse;
 import com.swiftdrop.dispatch.dto.response.BulkAssignResponse;
 import com.swiftdrop.dispatch.dto.response.CourierAssignmentResponse;
@@ -13,6 +14,7 @@ import com.swiftdrop.dispatch.model.CourierAvailability;
 import com.swiftdrop.dispatch.model.DeliveryAssignment;
 import com.swiftdrop.dispatch.repository.CourierRepository;
 import com.swiftdrop.dispatch.repository.DeliveryAssignmentRepository;
+import com.swiftdrop.parcel.dto.AddressDetails;
 import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.service.ParcelService;
@@ -25,6 +27,7 @@ import java.util.Collection;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
@@ -65,16 +68,18 @@ public class AssignmentService {
     private final CourierRepository courierRepository;
     private final ParcelService parcelService;
     private final UserApi userApi;
+    private final ZoneApi zoneApi;
     /** One transaction per parcel in a bulk assignment, so one failure doesn't undo the others. */
     private final TransactionTemplate perParcel;
 
     public AssignmentService(DeliveryAssignmentRepository assignmentRepository, CourierRepository courierRepository,
-                             ParcelService parcelService, UserApi userApi,
+                             ParcelService parcelService, UserApi userApi, ZoneApi zoneApi,
                              PlatformTransactionManager transactionManager) {
         this.assignmentRepository = assignmentRepository;
         this.courierRepository = courierRepository;
         this.parcelService = parcelService;
         this.userApi = userApi;
+        this.zoneApi = zoneApi;
         this.perParcel = new TransactionTemplate(transactionManager);
         this.perParcel.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     }
@@ -123,7 +128,7 @@ public class AssignmentService {
         if (assignmentRepository.existsByParcelIdAndEndedAtIsNull(parcelId)) {
             throw new ConflictException(ALREADY_ASSIGNED);
         }
-        Courier courier = assignableCourier(courierId);
+        Courier courier = assignableCourier(courierId, parcel);
         DeliveryAssignment saved = insert(newAssignment(parcelId, courier, assignedByUserId, AssignmentStatus.ASSIGNED));
         log.info("Parcel {} assigned to courier {}", parcelId, courierId);
         return AssignmentMapper.toResponse(saved);
@@ -150,7 +155,7 @@ public class AssignmentService {
         if (current.getCourier().getId().equals(courierId)) {
             throw new ConflictException("This parcel is already assigned to this courier");
         }
-        Courier courier = assignableCourier(courierId);
+        Courier courier = assignableCourier(courierId, parcel);
 
         end(current, AssignmentStatus.REASSIGNED, reason.trim());
         assignmentRepository.saveAndFlush(current); // ended before the new row, for the one-open-per-parcel index
@@ -237,12 +242,13 @@ public class AssignmentService {
     // ---- Helpers -----------------------------------------------------------------------------
 
     /**
-     * The courier, if they may be given parcels now: active, online, and their account can sign in.
+     * The courier, if they may be given this parcel now: active, online, their account can sign in,
+     * and they cover the parcel's pickup area.
      *
      * @throws NotFoundException if there is no such courier
-     * @throws ConflictException if the courier can't take parcels
+     * @throws ConflictException if the courier can't take the parcel
      */
-    private Courier assignableCourier(UUID courierId) {
+    private Courier assignableCourier(UUID courierId, ParcelDetails parcel) {
         Courier courier = courierRepository.findById(courierId)
                 .orElseThrow(() -> new NotFoundException("Courier not found"));
         if (!courier.isActive()) {
@@ -258,9 +264,43 @@ public class AssignmentService {
         if (user.accountStatus() != AccountStatus.ACTIVE) {
             throw new ConflictException("This courier's account is not active, so they cannot be given parcels");
         }
-        // TODO(zone check): refuse a courier whose service areas (courier.getServiceAreaIds()) don't
-        //  cover the parcel's drop-off zone (parcel.dropoffAddress().zoneId()). Waiting for the zones backend.
+        requireCoversPickup(courier, parcel);
         return courier;
+    }
+
+    /**
+     * A courier with service areas must cover the parcel's pickup zone. A courier without service
+     * areas may take any parcel, and a parcel whose pickup zone isn't known is not checked.
+     *
+     * @throws ConflictException naming the pickup zone if the courier doesn't cover it
+     */
+    private void requireCoversPickup(Courier courier, ParcelDetails parcel) {
+        Set<UUID> areas = courier.getServiceAreaIds();
+        if (areas.isEmpty()) {
+            return;
+        }
+        Optional<UUID> pickupZone = pickupZone(parcel);
+        if (pickupZone.isEmpty() || areas.contains(pickupZone.get())) {
+            return;
+        }
+        UUID zoneId = pickupZone.get();
+        String zoneName = zoneApi.zoneNames(List.of(zoneId)).getOrDefault(zoneId, "unknown");
+        throw new ConflictException("This courier does not cover the pickup area (%s)".formatted(zoneName));
+    }
+
+    /**
+     * The zone stored on the pickup address, or else the active zone covering it (parcels booked
+     * before zones existed, or by a module that doesn't store the zone).
+     */
+    private Optional<UUID> pickupZone(ParcelDetails parcel) {
+        AddressDetails pickup = parcel.pickupAddress();
+        if (pickup == null) {
+            return Optional.empty();
+        }
+        if (pickup.zoneId() != null) {
+            return Optional.of(pickup.zoneId());
+        }
+        return zoneApi.findZoneId(pickup.district(), pickup.city(), pickup.postalCode());
     }
 
     private static DeliveryAssignment newAssignment(UUID parcelId, Courier courier, UUID assignedByUserId,
