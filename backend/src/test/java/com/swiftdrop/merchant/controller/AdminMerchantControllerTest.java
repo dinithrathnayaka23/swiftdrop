@@ -1,9 +1,11 @@
 package com.swiftdrop.merchant.controller;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.AuthenticatedUser;
 import com.swiftdrop.common.security.Role;
 import com.swiftdrop.merchant.dto.request.RejectMerchantRequest;
@@ -40,6 +42,24 @@ class AdminMerchantControllerTest {
         when(merchantService.listByStatus(MerchantApprovalStatus.PENDING)).thenReturn(List.of());
 
         assertThat(controller.list(MerchantApprovalStatus.PENDING)).isEmpty();
+    }
+
+    @Test
+    void getReturnsTheMerchantDetails() {
+        UUID merchantId = UUID.randomUUID();
+        MerchantResponse details = new MerchantResponse(merchantId, "BrightMart", "PV00234567", "a@b.lk", "+94",
+                "addr", MerchantApprovalStatus.PENDING, null, null, null);
+        when(merchantService.getForAdmin(merchantId)).thenReturn(details);
+
+        assertThat(controller.get(merchantId)).isEqualTo(details);
+    }
+
+    @Test
+    void getPassesNotFoundThrough() {
+        UUID merchantId = UUID.randomUUID();
+        when(merchantService.getForAdmin(merchantId)).thenThrow(new NotFoundException("Merchant not found"));
+
+        assertThatThrownBy(() -> controller.get(merchantId)).isInstanceOf(NotFoundException.class);
     }
 
     @Test
