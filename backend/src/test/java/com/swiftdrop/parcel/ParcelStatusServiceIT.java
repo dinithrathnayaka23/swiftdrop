@@ -123,14 +123,49 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
     }
 
     @Test
-    void failedDeliveryIsAnEndState() {
+    void aFailedAttemptIsRetriedThenClosedAsAnEndState() {
         ParcelDetails parcel = newParcel();
         statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierId, null));
-        statusService.changeStatus(parcel.id(), StatusChange.failed(courierId, "Parcel damaged", null));
 
-        assertThat(statusService.getHistory(parcel.id()).getLast().failureReason()).isEqualTo("Parcel damaged");
+        // The old direct arrow is gone: nothing saved, nothing published.
         assertThatThrownBy(() -> statusService.changeStatus(parcel.id(),
-                StatusChange.to(ParcelStatusCode.IN_TRANSIT, courierId, null)))
+                StatusChange.failed(courierId, "Parcel damaged", null)))
+                .isInstanceOf(ConflictException.class);
+
+        // The courier reports a failed attempt (reason kept).
+        statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(courierId, "Recipient not at home", null));
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(statusService.getHistory(parcel.id()).getLast().failureReason()).isEqualTo("Recipient not at home");
+
+        // The dispatcher retries: back to CREATED with a history row and an event.
+        StatusHistoryEntry retried = statusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.CREATED, courierId, "Second attempt tomorrow"));
+        assertThat(retried.previousStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(retried.failureReason()).isNull();
+
+        // Second attempt fails too and the dispatcher closes it.
+        statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierId, null));
+        statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(courierId, "Address not found", null));
+        statusService.changeStatus(parcel.id(), StatusChange.failed(courierId, "Address does not exist", null));
+
+        List<StatusHistoryEntry> history = statusService.getHistory(parcel.id());
+        assertThat(history).extracting(StatusHistoryEntry::status).containsExactly(ParcelStatusCode.CREATED,
+                ParcelStatusCode.PICKED_UP, ParcelStatusCode.FAILED_ATTEMPT, ParcelStatusCode.CREATED,
+                ParcelStatusCode.PICKED_UP, ParcelStatusCode.FAILED_ATTEMPT, ParcelStatusCode.FAILED);
+        assertThat(history.getLast().failureReason()).isEqualTo("Address does not exist");
+
+        List<ParcelStatusChangedEvent> events = List.of(nextStatusEvent(), nextStatusEvent(), nextStatusEvent(),
+                nextStatusEvent(), nextStatusEvent(), nextStatusEvent());
+        assertThat(events).extracting(ParcelStatusChangedEvent::newStatus).containsExactly("PICKED_UP",
+                "FAILED_ATTEMPT", "CREATED", "PICKED_UP", "FAILED_ATTEMPT", "FAILED");
+        assertThat(events.get(2).previousStatus()).isEqualTo("FAILED_ATTEMPT");
+        assertThat(events.get(2).statusHistoryId()).isEqualTo(retried.id());
+        assertThat(events).extracting(ParcelStatusChangedEvent::statusVersion)
+                .containsExactly(2L, 3L, 4L, 5L, 6L, 7L);
+
+        // FAILED is an end state.
+        assertThatThrownBy(() -> statusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.CREATED, courierId, null)))
                 .isInstanceOf(ConflictException.class);
     }
 }
