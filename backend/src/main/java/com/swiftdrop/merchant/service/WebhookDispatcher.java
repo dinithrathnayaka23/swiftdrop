@@ -5,6 +5,7 @@ import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
 import com.swiftdrop.merchant.model.MerchantWebhook;
 import com.swiftdrop.merchant.model.WebhookDelivery;
 import com.swiftdrop.merchant.model.WebhookDeliveryStatus;
+import com.swiftdrop.merchant.config.WebhookRetryProperties;
 import com.swiftdrop.merchant.repository.MerchantWebhookRepository;
 import com.swiftdrop.merchant.repository.WebhookDeliveryRepository;
 import com.swiftdrop.parcel.model.Parcel;
@@ -49,6 +50,7 @@ public class WebhookDispatcher {
     private final ParcelRepository parcelRepository;
     private final WebhookSecretService secretService;
     private final JsonMapper jsonMapper;
+    private final WebhookRetryProperties retryProperties;
 
     private final RestClient restClient = createRestClient();
 
@@ -90,6 +92,11 @@ public class WebhookDispatcher {
         deliveryRepository.save(delivery);
     }
 
+    void retry(WebhookDelivery delivery) {
+        deliver(delivery.getWebhook(), delivery, delivery.getPayloadJson());
+        deliveryRepository.save(delivery);
+    }
+
     private void deliver(MerchantWebhook webhook, WebhookDelivery delivery, String payload) {
         Instant attemptedAt = Instant.now();
         String timestamp = Long.toString(attemptedAt.getEpochSecond());
@@ -110,15 +117,28 @@ public class WebhookDispatcher {
             if (result.status() >= 200 && result.status() < 300) {
                 delivery.setDeliveryStatus(WebhookDeliveryStatus.DELIVERED);
                 delivery.setDeliveredAt(attemptedAt);
+                delivery.setNextRetryAt(null);
+                delivery.setLastErrorMessage(null);
             } else {
-                delivery.setDeliveryStatus(WebhookDeliveryStatus.FAILED);
-                delivery.setLastErrorMessage("Webhook endpoint returned HTTP " + result.status());
+                scheduleFailure(delivery, "Webhook endpoint returned HTTP " + result.status(), attemptedAt);
             }
-        } catch (RestClientException | IllegalStateException ex) {
-            delivery.setDeliveryStatus(WebhookDeliveryStatus.FAILED);
-            delivery.setLastErrorMessage("Webhook request failed: " + ex.getClass().getSimpleName());
+        } catch (RestClientException | IllegalArgumentException | IllegalStateException ex) {
+            scheduleFailure(delivery, "Webhook request failed: " + ex.getClass().getSimpleName(), attemptedAt);
             log.warn("Webhook delivery {} failed: {}", delivery.getId(), ex.getClass().getSimpleName());
         }
+    }
+
+    private void scheduleFailure(WebhookDelivery delivery, String error, Instant attemptedAt) {
+        int nextRetryCount = delivery.getRetryCount() + 1;
+        delivery.setRetryCount(nextRetryCount);
+        delivery.setLastErrorMessage(error);
+        if (nextRetryCount > retryProperties.backoff().size()) {
+            delivery.setDeliveryStatus(WebhookDeliveryStatus.FAILED);
+            delivery.setNextRetryAt(null);
+            return;
+        }
+        delivery.setDeliveryStatus(WebhookDeliveryStatus.PENDING);
+        delivery.setNextRetryAt(attemptedAt.plus(retryProperties.backoff().get(nextRetryCount - 1)));
     }
 
     private String payload(ParcelStatusChangedEvent event, Parcel parcel) {
