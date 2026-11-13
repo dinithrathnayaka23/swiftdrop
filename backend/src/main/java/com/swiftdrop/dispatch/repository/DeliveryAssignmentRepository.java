@@ -55,6 +55,14 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     /** A courier's ended assignments. */
     Page<DeliveryAssignment> findByCourier_IdAndEndedAtIsNotNull(UUID courierId, Pageable pageable);
 
+    /** The FAILED assignments (failed attempts) of these parcels, with their couriers, in one query. */
+    @Query("""
+            select a from DeliveryAssignment a join fetch a.courier
+            where a.parcelId in :parcelIds
+              and a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.FAILED
+            """)
+    List<DeliveryAssignment> findFailedByParcelIds(@Param("parcelIds") Collection<UUID> parcelIds);
+
     /** The courier account of each of these parcels' open assignment; parcels without one are left out. */
     @Query("""
             select new com.swiftdrop.dispatch.repository.OpenAssignmentCourier(a.parcelId, c.userId)
