@@ -25,6 +25,9 @@ springdoc:
 swiftdrop:
   security:
     public-api-docs: true
+  merchant:
+    webhooks:
+      allow-private-hosts: true
 
 logging:
   level:
