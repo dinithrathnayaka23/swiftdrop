@@ -40,6 +40,14 @@ const httpCourierApi: CourierApi = {
       ),
     );
   },
+
+  updateStatus: (parcelId, { status, note }) =>
+    request(() =>
+      apiClient.post<CourierDeliveryDetail>(
+        `/courier/deliveries/${encodeURIComponent(parcelId)}/status`,
+        { status, note: note?.trim() || undefined },
+      ),
+    ),
 };
 
 /** The courier app's deliveries. Sample data when the mock API is on (VITE_USE_MOCK_API). */

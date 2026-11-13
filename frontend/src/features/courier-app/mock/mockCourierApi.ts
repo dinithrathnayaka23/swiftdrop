@@ -1,3 +1,4 @@
+import { ApiRequestError } from '../../../api/errors';
 import { delay } from '../../../api/mock/delay';
 import type { ParcelType } from '../../../types/parcel';
 import type { ParcelStatusCode } from '../../../types/tracking';
@@ -35,6 +36,8 @@ interface Sample {
   weightKg: number;
   contentDescription: string | null;
   deliveryInstructions: string | null;
+  /** Set once the courier changes the status here; until then the history is made up from the status. */
+  history?: CourierTimelineEntry[];
 }
 
 function stop(
@@ -146,6 +149,7 @@ function hoursAgo(hours: number): string {
 }
 
 function timeline(sample: Sample): CourierTimelineEntry[] {
+  if (sample.history) return sample.history;
   const steps = FLOW.includes(sample.status)
     ? FLOW.slice(0, FLOW.indexOf(sample.status) + 1)
     : [...FLOW, sample.status];
@@ -212,5 +216,30 @@ export const mockCourierApi: CourierApi = {
     const wanted = trackingNumber.replace(/\s+/g, '').toUpperCase();
     const sample = samples.find((s) => s.trackingNumber === wanted);
     return sample ? toDetail(sample) : null;
+  },
+
+  async updateStatus(parcelId, { status, note }) {
+    await delay(300);
+    const sample = samples.find((s) => s.parcelId === parcelId);
+    if (!sample) {
+      throw new ApiRequestError('Delivery not found', { status: 404, code: 'NOT_FOUND' });
+    }
+    if (!NEXT[sample.status].includes(status)) {
+      throw new ApiRequestError(
+        `A parcel that is ${sample.status} cannot be changed to ${status}`,
+        { status: 409, code: 'CONFLICT' },
+      );
+    }
+    sample.history = [
+      ...timeline(sample),
+      {
+        status,
+        changedAt: new Date().toISOString(),
+        note: note?.trim() || null,
+        failureReason: null,
+      },
+    ];
+    sample.status = status;
+    return toDetail(sample);
   },
 };

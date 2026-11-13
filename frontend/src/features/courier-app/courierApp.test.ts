@@ -44,6 +44,30 @@ describe('mockCourierApi', () => {
     expect(await mockCourierApi.getDelivery('nope')).toBeNull();
   });
 
+  it('moves a delivery one step on and adds it to the history', async () => {
+    const id = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e03'; // PICKED_UP
+    const after = await mockCourierApi.updateStatus(id, {
+      status: 'IN_TRANSIT',
+      note: ' Left hub ',
+    });
+
+    expect(after.currentStatus).toBe('IN_TRANSIT');
+    expect(after.allowedActions).toEqual(['OUT_FOR_DELIVERY', 'FAILED']);
+    expect(after.timeline.at(-1)).toEqual(
+      expect.objectContaining({ status: 'IN_TRANSIT', note: 'Left hub' }),
+    );
+  });
+
+  it('refuses a step the parcel cannot take (409) and an unknown delivery (404)', async () => {
+    const id = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e04'; // CREATED
+    await expect(mockCourierApi.updateStatus(id, { status: 'IN_TRANSIT' })).rejects.toMatchObject({
+      status: 409,
+    });
+    await expect(
+      mockCourierApi.updateStatus('nope', { status: 'PICKED_UP' }),
+    ).rejects.toMatchObject({ status: 404 });
+  });
+
   it('only includes the pickup stop in the list while the parcel waits for pickup', async () => {
     const { deliveries } = await mockCourierApi.getToday();
     expect(deliveries.filter((d) => d.pickup !== null).map((d) => d.currentStatus)).toEqual([

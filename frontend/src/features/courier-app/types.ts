@@ -63,9 +63,33 @@ export interface CourierDeliveryDetail extends Omit<CourierDelivery, 'pickup'> {
   timeline: CourierTimelineEntry[];
 }
 
-/** The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the courier's. */
+/** The steps recorded on Update Status; DELIVERED and FAILED have their own screens. */
+export type CourierStepStatus = 'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY';
+
+export const COURIER_STEP_STATUSES: readonly CourierStepStatus[] = [
+  'PICKED_UP',
+  'IN_TRANSIT',
+  'OUT_FOR_DELIVERY',
+];
+
+/** Longest note the backend accepts on a status update. */
+export const MAX_STATUS_NOTE = 500;
+
+/** POST /courier/deliveries/{parcelId}/status */
+export interface UpdateStatusRequest {
+  status: CourierStepStatus;
+  note?: string;
+}
+
+/**
+ * The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the
+ * courier's. Changes reject with an ApiRequestError (404 not theirs, 409 the parcel can't take that
+ * step now).
+ */
 export interface CourierApi {
   getToday(): Promise<TodaysDeliveries>;
   getDelivery(parcelId: string): Promise<CourierDeliveryDetail | null>;
   findByTrackingNumber(trackingNumber: string): Promise<CourierDeliveryDetail | null>;
+  /** Records the step and resolves to the delivery as it is afterwards. */
+  updateStatus(parcelId: string, request: UpdateStatusRequest): Promise<CourierDeliveryDetail>;
 }
