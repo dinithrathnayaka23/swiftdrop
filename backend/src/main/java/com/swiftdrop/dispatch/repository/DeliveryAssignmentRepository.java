@@ -1,5 +1,6 @@
 package com.swiftdrop.dispatch.repository;
 
+import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.DeliveryAssignment;
 import jakarta.persistence.LockModeType;
 import java.time.Instant;
@@ -9,6 +10,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -54,6 +56,45 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
 
     /** A courier's ended assignments. */
     Page<DeliveryAssignment> findByCourier_IdAndEndedAtIsNotNull(UUID courierId, Pageable pageable);
+
+    // ---- Operations ----------------------------------------------------------------------------
+
+    /** Open assignments with this status (e.g. IN_PROGRESS = active deliveries), with their couriers. */
+    @EntityGraph(attributePaths = "courier")
+    Page<DeliveryAssignment> findByEndedAtIsNullAndAssignmentStatus(AssignmentStatus status, Pageable pageable);
+
+    long countByEndedAtIsNullAndAssignmentStatus(AssignmentStatus status);
+
+    /** Assignments that ended with this status since {@code since} (e.g. COMPLETED or FAILED today). */
+    long countByAssignmentStatusAndEndedAtGreaterThanEqual(AssignmentStatus status, Instant since);
+
+    /**
+     * Active couriers by today's workload (open + completed since {@code startOfDay}), busiest first;
+     * ties by courier age (oldest first) so the cut-off is stable. Pass a page size for the limit.
+     */
+    @Query("""
+            select new com.swiftdrop.dispatch.repository.CourierDayLoad(c.id, c.userId, c.availabilityStatus,
+                sum(case when a.endedAt is null
+                              and a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.ASSIGNED
+                         then 1 else 0 end),
+                sum(case when a.endedAt is null
+                              and a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.IN_PROGRESS
+                         then 1 else 0 end),
+                sum(case when a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.COMPLETED
+                              and a.endedAt >= :startOfDay
+                         then 1 else 0 end))
+            from Courier c left join DeliveryAssignment a on a.courier = c
+            where c.active = true
+            group by c.id, c.userId, c.availabilityStatus, c.createdAt
+            order by sum(case when (a.endedAt is null
+                                    and a.assignmentStatus in (com.swiftdrop.dispatch.model.AssignmentStatus.ASSIGNED,
+                                                               com.swiftdrop.dispatch.model.AssignmentStatus.IN_PROGRESS))
+                                   or (a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.COMPLETED
+                                       and a.endedAt >= :startOfDay)
+                              then 1 else 0 end) desc,
+                     c.createdAt asc, c.id asc
+            """)
+    List<CourierDayLoad> findBusiestActiveCouriers(@Param("startOfDay") Instant startOfDay, Pageable limit);
 
     /** The FAILED assignments (failed attempts) of these parcels, with their couriers, in one query. */
     @Query("""
