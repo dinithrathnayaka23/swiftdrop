@@ -3,9 +3,11 @@ package com.swiftdrop.tracking.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.exception.BadRequestException;
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
@@ -67,13 +70,47 @@ class DevTrackingDemoServiceTest {
     }
 
     @Test
-    void advanceToFailedSendsAFailureReason() {
+    void advanceToFailedAttemptRecordsTheAttemptWithAReason() {
         parcelIs(ParcelStatusCode.IN_TRANSIT);
+
+        service.advance(NUMBER, ParcelStatusCode.FAILED_ATTEMPT, adminId);
+
+        verify(parcelStatusService).changeStatus(parcelId,
+                StatusChange.failedAttempt(adminId, DevTrackingDemoService.FAILURE_REASON, null));
+        verifyNoMoreInteractions(parcelStatusService);
+    }
+
+    @Test
+    void advanceToFailedFromOnTheWayRecordsTheAttemptThenCloses() {
+        parcelIs(ParcelStatusCode.OUT_FOR_DELIVERY);
+
+        service.advance(NUMBER, ParcelStatusCode.FAILED, adminId);
+
+        InOrder order = inOrder(parcelStatusService);
+        order.verify(parcelStatusService).changeStatus(parcelId,
+                StatusChange.failedAttempt(adminId, DevTrackingDemoService.FAILURE_REASON, null));
+        order.verify(parcelStatusService).changeStatus(parcelId,
+                StatusChange.failed(adminId, DevTrackingDemoService.CLOSE_REASON, null));
+    }
+
+    @Test
+    void advanceToFailedFromAFailedAttemptOnlyCloses() {
+        parcelIs(ParcelStatusCode.FAILED_ATTEMPT);
 
         service.advance(NUMBER, ParcelStatusCode.FAILED, adminId);
 
         verify(parcelStatusService).changeStatus(parcelId,
-                StatusChange.failed(adminId, DevTrackingDemoService.FAILURE_REASON, null));
+                StatusChange.failed(adminId, DevTrackingDemoService.CLOSE_REASON, null));
+        verifyNoMoreInteractions(parcelStatusService);
+    }
+
+    @Test
+    void advancingAFailedAttemptRetriesIt() {
+        parcelIs(ParcelStatusCode.FAILED_ATTEMPT);
+
+        service.advance(NUMBER, null, adminId);
+
+        verify(parcelStatusService).changeStatus(parcelId, StatusChange.to(ParcelStatusCode.CREATED, adminId, null));
     }
 
     @ParameterizedTest
@@ -86,7 +123,7 @@ class DevTrackingDemoServiceTest {
     }
 
     @Test
-    void onlyFailedCanBeChosenAsTheTarget() {
+    void onlyAFailureCanBeChosenAsTheTarget() {
         parcelIs(ParcelStatusCode.CREATED);
 
         assertThatThrownBy(() -> service.advance(NUMBER, ParcelStatusCode.DELIVERED, adminId))
