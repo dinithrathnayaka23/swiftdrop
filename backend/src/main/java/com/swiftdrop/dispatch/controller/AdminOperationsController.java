@@ -2,6 +2,7 @@ package com.swiftdrop.dispatch.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.dispatch.dto.response.ActiveDeliveryResponse;
+import com.swiftdrop.dispatch.dto.response.OverviewResponse;
 import com.swiftdrop.dispatch.service.OperationsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
@@ -29,5 +30,11 @@ public class AdminOperationsController {
             @RequestParam(defaultValue = "20") int size) {
         AdminFailedDeliveryController.checkPage(page, size);
         return new PagedModel<>(operationsService.activeDeliveries(page, size));
+    }
+
+    /** Today's numbers (Sri Lanka time) and the five busiest couriers. */
+    @GetMapping("/overview")
+    public OverviewResponse overview() {
+        return operationsService.overview();
     }
 }
