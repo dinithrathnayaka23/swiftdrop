@@ -202,8 +202,9 @@ Secrets are never committed: `.env` is git-ignored.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME` | First admin account, created on startup if it doesn't exist |
 | `FRONTEND_BASE_URL`, `PASSWORD_RESET_EXPIRY` | Web app address used in email links; reset link lifetime (seconds) |
 | `REFRESH_TOKEN_EXPIRY_REMEMBER_ME`, `REFRESH_TOKEN_EXPIRY_SESSION` | Session length with / without "Remember me" (seconds; default 30 days / 1 day) |
-| `WEBHOOK_SECRET_KEY` | AES-GCM key material for encrypting merchant webhook signing secrets (≥ 32 characters) |
-| `WEBHOOK_RETRY_DELAY_1` ... `WEBHOOK_RETRY_DELAY_5` | Webhook retry backoff delays (defaults: 1m, 5m, 30m, 2h, 6h) |
+| `WEBHOOK_SECRET_KEY` | AES-GCM key material for encrypting merchant webhook signing secrets (at least 32 characters) |
+| `WEBHOOK_ALLOW_PRIVATE_HOSTS` | Allow private or localhost webhook targets for development only (default `false`) |
+| `WEBHOOK_RETRY_DELAY_1` ... `WEBHOOK_RETRY_DELAY_5` | Webhook retry backoff delays (defaults: `1m`, `5m`, `30m`, `2h`, `6h`) |
 
 > [!IMPORTANT]
 > The values in `.env.example` are for local development only. Generate a strong `JWT_SECRET` and
