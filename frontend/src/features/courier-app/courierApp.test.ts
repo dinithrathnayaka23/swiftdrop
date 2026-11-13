@@ -6,7 +6,7 @@ describe('courierActions', () => {
   const id = 'p1';
 
   it('sends each next status to the screen that records it', () => {
-    expect(courierActions(id, ['OUT_FOR_DELIVERY', 'FAILED'])).toEqual([
+    expect(courierActions(id, ['OUT_FOR_DELIVERY', 'FAILED_ATTEMPT'])).toEqual([
       expect.objectContaining({
         label: 'Mark Out for Delivery',
         to: '/courier/deliveries/p1/status?status=OUT_FOR_DELIVERY',
@@ -36,7 +36,7 @@ describe('mockCourierApi', () => {
   it('finds a delivery by tracking number ignoring case and spaces', async () => {
     const found = await mockCourierApi.findByTrackingNumber('sd 2611 1200 03');
     expect(found?.parcelId).toBe('7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e03');
-    expect(found?.allowedActions).toEqual(['IN_TRANSIT', 'FAILED']);
+    expect(found?.allowedActions).toEqual(['IN_TRANSIT', 'FAILED_ATTEMPT']);
   });
 
   it('returns null for an unknown delivery', async () => {

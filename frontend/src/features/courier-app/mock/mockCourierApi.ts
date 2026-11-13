@@ -15,10 +15,12 @@ import type {
  */
 const NEXT: Record<ParcelStatusCode, ParcelStatusCode[]> = {
   CREATED: ['PICKED_UP'],
-  PICKED_UP: ['IN_TRANSIT', 'FAILED'],
-  IN_TRANSIT: ['OUT_FOR_DELIVERY', 'FAILED'],
-  OUT_FOR_DELIVERY: ['DELIVERED', 'FAILED'],
+  PICKED_UP: ['IN_TRANSIT', 'FAILED_ATTEMPT'],
+  IN_TRANSIT: ['OUT_FOR_DELIVERY', 'FAILED_ATTEMPT'],
+  OUT_FOR_DELIVERY: ['DELIVERED', 'FAILED_ATTEMPT'],
   DELIVERED: [],
+  // Retrying (CREATED) or closing (FAILED) a failed attempt is the dispatcher's, not the courier's.
+  FAILED_ATTEMPT: [],
   FAILED: [],
 };
 

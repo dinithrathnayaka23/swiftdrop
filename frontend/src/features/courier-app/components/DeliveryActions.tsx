@@ -20,7 +20,7 @@ export default function DeliveryActions({ parcelId, allowedActions }: DeliveryAc
           variant={action.variant}
           size="lg"
           fullWidth
-          className={action.status === 'FAILED' ? 'border-red-300 text-red-700' : undefined}
+          className={action.status === 'FAILED_ATTEMPT' ? 'border-red-300 text-red-700' : undefined}
         >
           {action.label}
         </ButtonLink>

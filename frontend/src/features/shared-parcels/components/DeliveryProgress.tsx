@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import { cn } from '../../../utils/cn';
+import { isFailureStatus } from '../../../utils/parcelStatus';
 import { formatShortDate, formatTime, type ProgressStep } from '../parcelDisplay';
 import { statusVisual } from './statusVisuals';
 
@@ -7,7 +8,7 @@ const STATE_TEXT = { complete: 'completed', current: 'current step', upcoming: '
 
 function StepIcon({ step }: { step: ProgressStep }) {
   const Icon = statusVisual(step.code).icon;
-  const failed = step.code === 'FAILED';
+  const failed = isFailureStatus(step.code);
   return (
     <span
       className={cn(
