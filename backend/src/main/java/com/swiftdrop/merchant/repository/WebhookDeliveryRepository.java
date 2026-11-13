@@ -11,6 +11,13 @@ public interface WebhookDeliveryRepository extends JpaRepository<WebhookDelivery
 
     List<WebhookDelivery> findByWebhookMerchantId(UUID merchantId);
 
+    org.springframework.data.domain.Page<WebhookDelivery> findByWebhookMerchantId(UUID merchantId,
+                                                                                   org.springframework.data.domain.Pageable pageable);
+
+    org.springframework.data.domain.Page<WebhookDelivery> findByWebhookMerchantIdAndDeliveryStatus(
+            UUID merchantId, WebhookDeliveryStatus deliveryStatus,
+            org.springframework.data.domain.Pageable pageable);
+
     boolean existsByWebhookIdAndStatusHistoryId(UUID webhookId, UUID statusHistoryId);
 
     List<WebhookDelivery> findTop100ByDeliveryStatusAndNextRetryAtLessThanEqualOrderByNextRetryAtAsc(
