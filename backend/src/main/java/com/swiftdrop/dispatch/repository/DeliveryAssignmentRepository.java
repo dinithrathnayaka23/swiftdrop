@@ -1,11 +1,16 @@
 package com.swiftdrop.dispatch.repository;
 
 import com.swiftdrop.dispatch.model.DeliveryAssignment;
+import jakarta.persistence.LockModeType;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -29,6 +34,34 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
             order by a.assignedAt
             """)
     List<UUID> findOpenParcelIdsByCourierUserId(@Param("courierUserId") UUID courierUserId);
+
+    /** Whether the parcel has an open assignment (to anyone). */
+    boolean existsByParcelIdAndEndedAtIsNull(UUID parcelId);
+
+    /**
+     * The parcel's open assignment, row-locked until the transaction ends, so a reassignment, an
+     * unassignment and the status listener can't change it at the same time.
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select a from DeliveryAssignment a where a.parcelId = :parcelId and a.endedAt is null")
+    Optional<DeliveryAssignment> findOpenByParcelIdForUpdate(@Param("parcelId") UUID parcelId);
+
+    /** All of a courier's assignments (open and ended). */
+    Page<DeliveryAssignment> findByCourier_Id(UUID courierId, Pageable pageable);
+
+    /** A courier's open assignments. */
+    Page<DeliveryAssignment> findByCourier_IdAndEndedAtIsNull(UUID courierId, Pageable pageable);
+
+    /** A courier's ended assignments. */
+    Page<DeliveryAssignment> findByCourier_IdAndEndedAtIsNotNull(UUID courierId, Pageable pageable);
+
+    /** The courier account of each of these parcels' open assignment; parcels without one are left out. */
+    @Query("""
+            select new com.swiftdrop.dispatch.repository.OpenAssignmentCourier(a.parcelId, c.userId)
+            from DeliveryAssignment a join a.courier c
+            where a.parcelId in :parcelIds and a.endedAt is null
+            """)
+    List<OpenAssignmentCourier> findOpenCouriersByParcelIds(@Param("parcelIds") Collection<UUID> parcelIds);
 
     /**
      * Per courier and status: open ASSIGNED and IN_PROGRESS assignments, plus the assignments
