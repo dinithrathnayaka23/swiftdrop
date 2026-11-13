@@ -11,6 +11,7 @@ import com.swiftdrop.common.exception.BadRequestException;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
@@ -71,13 +72,16 @@ public class CourierService {
 
     static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id"));
 
+    static final String UNKNOWN_SERVICE_AREA = "Unknown or inactive service area";
+
     private static final String NOT_SAVED =
-            "The courier could not be saved: the vehicle registration is already in use or a service area does not exist";
+            "The courier could not be saved: the vehicle registration is already in use";
 
     private final CourierRepository courierRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
     private final UserApi userApi;
     private final PasswordEncoder passwordEncoder;
+    private final ZoneApi zoneApi;
 
     // ---- Add and change ----------------------------------------------------------------------
 
@@ -85,7 +89,8 @@ public class CourierService {
      * Creates the courier's account (active, email already verified, so they can sign in at once)
      * and profile in one transaction. The new courier starts OFFLINE.
      *
-     * @throws ConflictException if the email or the vehicle registration is already used, or a service area does not exist
+     * @throws ConflictException   if the email or the vehicle registration is already used
+     * @throws BadRequestException if a service area is unknown or inactive
      */
     @Transactional
     public CourierResponse create(CreateCourierRequest request) {
@@ -97,6 +102,7 @@ public class CourierService {
         if (courierRepository.existsByVehicleRegistration(registration)) {
             throw ConflictException.forField("vehicleRegistration", "A courier with this vehicle registration already exists");
         }
+        requireActiveZones(request.serviceAreaIds());
 
         UUID userId = userApi.createUser(NewUser.withPassword(request.fullName(), email, request.phone(),
                 passwordEncoder.encode(request.password()), Role.COURIER, AccountStatus.ACTIVE).withVerifiedEmail()).id();
@@ -119,7 +125,8 @@ public class CourierService {
      *
      * @throws BadRequestException if nothing is given
      * @throws NotFoundException   if there is no such courier
-     * @throws ConflictException   if the registration belongs to another courier or a service area does not exist
+     * @throws BadRequestException also if a service area is unknown or inactive
+     * @throws ConflictException   if the registration belongs to another courier
      */
     @Transactional
     public CourierResponse update(UUID courierId, UpdateCourierRequest request) {
@@ -142,6 +149,7 @@ public class CourierService {
             }
         }
         if (request.serviceAreaIds() != null) {
+            requireActiveZones(request.serviceAreaIds());
             courier.getServiceAreaIds().clear();
             courier.getServiceAreaIds().addAll(request.serviceAreaIds());
         }
@@ -242,6 +250,18 @@ public class CourierService {
         } catch (DataIntegrityViolationException ex) {
             // A lost race on the registration, or a zone id that is not in delivery_zones.
             throw new ConflictException(NOT_SAVED);
+        }
+    }
+
+    /**
+     * Service areas must be active delivery zones (config module). The whole set is checked, so a
+     * zone deactivated since it was given to the courier must be left out when the set is replaced.
+     *
+     * @throws BadRequestException if one isn't
+     */
+    private void requireActiveZones(Collection<UUID> serviceAreaIds) {
+        if (serviceAreaIds != null && !serviceAreaIds.isEmpty() && !zoneApi.missingOrInactive(serviceAreaIds).isEmpty()) {
+            throw new BadRequestException(UNKNOWN_SERVICE_AREA);
         }
     }
 

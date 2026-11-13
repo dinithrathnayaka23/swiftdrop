@@ -13,6 +13,7 @@ import com.swiftdrop.common.exception.BadRequestException;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
@@ -65,6 +66,7 @@ class CourierServiceTest {
     @Mock private DeliveryAssignmentRepository assignmentRepository;
     @Mock private UserApi userApi;
     @Mock private PasswordEncoder passwordEncoder;
+    @Mock private ZoneApi zoneApi;
     @InjectMocks private CourierService service;
 
     // ---- Helpers -----------------------------------------------------------------------------
@@ -241,12 +243,34 @@ class CourierServiceTest {
     }
 
     @Test
-    void updateReportsAConflictForAnUnknownServiceArea() {
+    void updateRefusesAnUnknownOrInactiveServiceArea() {
         courierExists();
-        when(courierRepository.saveAndFlush(any(Courier.class))).thenThrow(new DataIntegrityViolationException("fk"));
+        when(zoneApi.missingOrInactive(Set.of(ZONE_B))).thenReturn(Set.of(ZONE_B));
 
         assertThatThrownBy(() -> service.update(COURIER_ID, new UpdateCourierRequest(null, null, Set.of(ZONE_B))))
-                .isInstanceOf(ConflictException.class);
+                .isInstanceOf(BadRequestException.class).hasMessage(CourierService.UNKNOWN_SERVICE_AREA);
+        verify(courierRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void createRefusesAnUnknownOrInactiveServiceArea() {
+        when(userApi.emailExists("ramesh@example.com")).thenReturn(false);
+        when(zoneApi.missingOrInactive(Set.of(ZONE_A))).thenReturn(Set.of(ZONE_A));
+
+        assertThatThrownBy(() -> service.create(createRequest(Set.of(ZONE_A))))
+                .isInstanceOf(BadRequestException.class).hasMessage(CourierService.UNKNOWN_SERVICE_AREA);
+        verify(userApi, never()).createUser(any());
+    }
+
+    @Test
+    void anEmptySetOfServiceAreasNeedsNoCheck() {
+        courierExists();
+        userExists(AccountStatus.ACTIVE);
+        when(courierRepository.saveAndFlush(any(Courier.class))).thenAnswer(call -> call.getArgument(0));
+
+        service.update(COURIER_ID, new UpdateCourierRequest(null, null, Set.of()));
+
+        verifyNoInteractions(zoneApi);
     }
 
     @Test
