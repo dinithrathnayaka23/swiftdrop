@@ -6,10 +6,34 @@ const stats = [
 ];
 
 const merchants = [
-  { business: 'CityMart Stores', owner: 'Nimal Silva', city: 'Colombo', applied: '2026-11-09', status: 'Pending' },
-  { business: 'Green Basket', owner: 'Ishara Dias', city: 'Kandy', applied: '2026-11-08', status: 'Approved' },
-  { business: 'Lanka Fresh', owner: 'Madhavi Jayasinghe', city: 'Galle', applied: '2026-11-07', status: 'Under review' },
-  { business: 'QuickCart', owner: 'Sajith Raman', city: 'Negombo', applied: '2026-11-05', status: 'Rejected' },
+  {
+    business: 'CityMart Stores',
+    owner: 'Nimal Silva',
+    city: 'Colombo',
+    applied: '2026-11-09',
+    status: 'Pending',
+  },
+  {
+    business: 'Green Basket',
+    owner: 'Ishara Dias',
+    city: 'Kandy',
+    applied: '2026-11-08',
+    status: 'Approved',
+  },
+  {
+    business: 'Lanka Fresh',
+    owner: 'Madhavi Jayasinghe',
+    city: 'Galle',
+    applied: '2026-11-07',
+    status: 'Under review',
+  },
+  {
+    business: 'QuickCart',
+    owner: 'Sajith Raman',
+    city: 'Negombo',
+    applied: '2026-11-05',
+    status: 'Rejected',
+  },
 ];
 
 const statusClasses: Record<string, string> = {
@@ -28,7 +52,8 @@ export default function MerchantManagementPage() {
             Merchant Management
           </h1>
           <p className="mt-1 text-slate-500">
-            Review applications, confirm compliance and keep approved merchants ready for live orders.
+            Review applications, confirm compliance and keep approved merchants ready for live
+            orders.
           </p>
         </div>
         <button className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50">
@@ -38,7 +63,10 @@ export default function MerchantManagementPage() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div
+            key={stat.label}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
             <p className="text-sm text-slate-500">{stat.label}</p>
             <div className="mt-3 flex items-end justify-between gap-3">
               <p className="text-3xl font-bold tracking-tight text-slate-900">{stat.value}</p>
@@ -54,7 +82,9 @@ export default function MerchantManagementPage() {
         <div className="flex flex-col gap-4 border-b border-slate-200 p-5 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Merchant approvals</h2>
-            <p className="text-sm text-slate-500">Latest business applications and their current status.</p>
+            <p className="text-sm text-slate-500">
+              Latest business applications and their current status.
+            </p>
           </div>
           <button className="rounded-xl bg-slate-900 px-3 py-2 text-sm font-medium text-white hover:bg-slate-800">
             Review queue
@@ -70,7 +100,7 @@ export default function MerchantManagementPage() {
                 <th className="px-5 py-3 font-medium">City</th>
                 <th className="px-5 py-3 font-medium">Applied</th>
                 <th className="px-5 py-3 font-medium">Status</th>
-                <th className="px-5 py-3 font-medium text-right">Action</th>
+                <th className="px-5 py-3 text-right font-medium">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 text-slate-700">

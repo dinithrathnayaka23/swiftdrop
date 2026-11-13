@@ -34,10 +34,15 @@ public class MerchantAccessService {
                     log.warn("User {} has no merchant account", userId);
                     return new ForbiddenException("No merchant account is linked to this user");
                 });
+        checkApproved(merchant);
+        return merchant.getId();
+    }
+
+    /** Shared with API key authentication, so both entry points block the same statuses. */
+    void checkApproved(Merchant merchant) {
         if (merchant.getApprovalStatus() != MerchantApprovalStatus.APPROVED) {
             log.info("Merchant {} blocked: status {}", merchant.getId(), merchant.getApprovalStatus());
             throw MerchantNotApprovedException.forStatus(merchant.getApprovalStatus());
         }
-        return merchant.getId();
     }
 }

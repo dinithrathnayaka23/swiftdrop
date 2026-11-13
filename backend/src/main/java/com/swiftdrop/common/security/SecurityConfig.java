@@ -3,7 +3,10 @@ package com.swiftdrop.common.security;
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.jwt.JwtAuthenticationFilter;
 import com.swiftdrop.common.security.jwt.JwtService;
+import com.swiftdrop.merchant.security.ApiKeyAuthenticationFilter;
+import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -38,6 +41,7 @@ public class SecurityConfig {
             ApiPaths.AUTH + "/**",
             ApiPaths.PUBLIC_TRACKING + "/**",
             ApiPaths.PUBLIC_SETTINGS,
+            ApiPaths.OAUTH_TOKEN,
             ApiPaths.HEALTH,
             "/actuator/health",
             "/actuator/health/**",
@@ -53,6 +57,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtService jwtService,
+                                                   ObjectProvider<MerchantApiKeyService> merchantApiKeyServiceProvider,
                                                    SecurityErrorHandler errorHandler,
                                                    @Value("${swiftdrop.security.public-api-docs:false}")
                                                    boolean publicApiDocs) throws Exception {
@@ -75,6 +80,12 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
+        MerchantApiKeyService merchantApiKeyService = merchantApiKeyServiceProvider.getIfAvailable();
+        if (merchantApiKeyService != null) {
+            http.addFilterBefore(
+                    new ApiKeyAuthenticationFilter(merchantApiKeyService, jwtService, errorHandler),
+                    JwtAuthenticationFilter.class);
+        }
         return http.build();
     }
 

@@ -38,7 +38,10 @@ export default function OperationalReportsPage() {
 
       <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
-          <div key={stat.label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div
+            key={stat.label}
+            className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+          >
             <p className="text-sm text-slate-500">{stat.label}</p>
             <div className="mt-3 flex items-end justify-between gap-3">
               <p className="text-3xl font-bold tracking-tight text-slate-900">{stat.value}</p>
@@ -55,7 +58,9 @@ export default function OperationalReportsPage() {
           <div className="flex items-center justify-between border-b border-slate-200 p-5">
             <div>
               <h2 className="text-lg font-semibold text-slate-900">Performance by day</h2>
-              <p className="text-sm text-slate-500">Completed orders and delivery quality over the last 5 days.</p>
+              <p className="text-sm text-slate-500">
+                Completed orders and delivery quality over the last 5 days.
+              </p>
             </div>
             <div className="flex gap-2">
               {['Overview', 'Dispatch', 'Merchants', 'Customers'].map((tab, index) => (
@@ -105,7 +110,10 @@ export default function OperationalReportsPage() {
 
           <ul className="mt-5 space-y-3">
             {alerts.map((alert) => (
-              <li key={alert} className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              <li
+                key={alert}
+                className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+              >
                 {alert}
               </li>
             ))}

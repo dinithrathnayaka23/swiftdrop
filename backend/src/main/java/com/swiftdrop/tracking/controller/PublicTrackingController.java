@@ -27,7 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class PublicTrackingController {
 
-    static final String RATE_LIMIT_KEY_PREFIX = "tracking:lookup:";
+    public static final String RATE_LIMIT_KEY_PREFIX = "tracking:lookup:";
 
     private final PublicTrackingService trackingService;
     private final RateLimiter rateLimiter;

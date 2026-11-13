@@ -1,6 +1,7 @@
 package com.swiftdrop.merchant.mapper;
 
 import com.swiftdrop.merchant.api.MerchantSummary;
+import com.swiftdrop.merchant.dto.response.MerchantProfileResponse;
 import com.swiftdrop.merchant.dto.response.MerchantResponse;
 import com.swiftdrop.merchant.model.Merchant;
 
@@ -19,5 +20,11 @@ public final class MerchantMapper {
     public static MerchantSummary toSummary(Merchant merchant) {
         return new MerchantSummary(merchant.getId(), merchant.getBusinessName(), merchant.getContactEmail(),
                 merchant.getContactPhone(), merchant.getApprovalStatus(), merchant.getRegisteredByUserId());
+    }
+
+    public static MerchantProfileResponse toProfileResponse(Merchant merchant) {
+        return new MerchantProfileResponse(merchant.getId(), merchant.getBusinessName(), merchant.getRegistrationNo(),
+                merchant.getContactEmail(), merchant.getContactPhone(), merchant.getBusinessAddress(),
+                merchant.getApprovalStatus(), merchant.getReviewedAt(), merchant.getUpdatedAt());
     }
 }
