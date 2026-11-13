@@ -9,6 +9,7 @@ import Button from '../../../components/ui/Button';
 import Checkbox from '../../../components/ui/Checkbox';
 import Switch from '../../../components/ui/Switch';
 import TextField from '../../../components/ui/TextField';
+import DeliveryLogTable from '../components/DeliveryLogTable';
 import { merchantWebhooksApi, type WebhookSettings } from '../api';
 
 const STATUS_EVENT = 'parcel.status.changed';
@@ -30,6 +31,7 @@ export default function DeliveryUpdatesPage() {
   const [copied, setCopied] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [deliveryRefreshKey, setDeliveryRefreshKey] = useState(0);
 
   const applySettings = useCallback((settings: WebhookSettings) => {
     setEndpointUrl(settings.endpointUrl);
@@ -81,6 +83,7 @@ export default function DeliveryUpdatesPage() {
       applySettings(settings);
       setLoad({ status: 'ready', settings });
       setNotice('Webhook settings saved.');
+      setDeliveryRefreshKey((key) => key + 1);
     } catch (error) {
       setActionError(getErrorMessage(error));
     } finally {
@@ -210,6 +213,7 @@ export default function DeliveryUpdatesPage() {
         onConfirm={rotateSecret}
         onCancel={() => setConfirmRotate(false)}
       />
+      <DeliveryLogTable refreshKey={deliveryRefreshKey} />
     </section>
   );
 }
