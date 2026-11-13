@@ -32,7 +32,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The courier app's read endpoints end to end: own deliveries only, in assignment order. */
+/** The courier app end to end: own deliveries only, in assignment order, and status updates. */
 class CourierDeliveriesIT extends IntegrationTestBase {
 
     private static final String ADMIN_EMAIL = "admin@test.swiftdrop.local"; // application-test.yml
@@ -133,6 +133,71 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     }
 
     @Test
+    void updateStatusRecordsTheStepWithTheNoteAndReturnsTheNewState() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+
+        HttpResponse<String> response = post(DELIVERIES + "/" + parcel.id() + "/status", """
+                {"status":"PICKED_UP","note":"Collected from the front desk"}""", courier.token());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.get("currentStatus").asString()).isEqualTo("PICKED_UP");
+        assertThat(body.get("allowedActions").get(0).asString()).isEqualTo("IN_TRANSIT");
+        JsonNode last = body.get("timeline").get(body.get("timeline").size() - 1);
+        assertThat(last.get("status").asString()).isEqualTo("PICKED_UP");
+        assertThat(last.get("note").asString()).isEqualTo("Collected from the front desk");
+
+        UUID changedBy = db.queryForObject("""
+                SELECT changed_by_user_id FROM parcel_status_history
+                WHERE parcel_id = ? AND status_code = 'PICKED_UP'""", UUID.class, parcel.id());
+        assertThat(changedBy).isEqualTo(courier.userId());
+    }
+
+    @Test
+    void theSameStepTwiceIsAConflict() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+        String body = """
+                {"status":"PICKED_UP"}""";
+
+        assertThat(post(DELIVERIES + "/" + parcel.id() + "/status", body, courier.token()).statusCode())
+                .isEqualTo(200);
+        assertThat(post(DELIVERIES + "/" + parcel.id() + "/status", body, courier.token()).statusCode())
+                .isEqualTo(409);
+        // Skipping a step is refused by the parcel module's rules too.
+        assertThat(post(DELIVERIES + "/" + parcel.id() + "/status", """
+                {"status":"OUT_FOR_DELIVERY"}""", courier.token()).statusCode()).isEqualTo(409);
+        assertThat(parcelStatusService.getHistory(parcel.id())).hasSize(2);
+    }
+
+    @Test
+    void updateStatusOnlyForTheCouriersOwnParcelAndOnlyForPlainSteps() throws Exception {
+        Courier owner = newCourier();
+        Courier other = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, owner, Instant.now());
+        String path = DELIVERIES + "/" + parcel.id() + "/status";
+
+        assertThat(post(path, """
+                {"status":"PICKED_UP"}""", other.token()).statusCode()).isEqualTo(404);
+        assertThat(post(path, """
+                {"status":"DELIVERED"}""", owner.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, """
+                {"status":"FAILED"}""", owner.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, "{}", owner.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, """
+                {"status":"LOST"}""", owner.token()).statusCode()).isEqualTo(400);
+        assertThat(post(path, """
+                {"status":"PICKED_UP","note":"%s"}""".formatted("x".repeat(501)), owner.token()).statusCode())
+                .isEqualTo(400);
+
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
+    }
+
+    @Test
     void onlyCouriersMayUseTheCourierApp() throws Exception {
         assertThat(get(DELIVERIES + "/today").statusCode()).isEqualTo(401);
         assertThat(get(DELIVERIES + "/today", adminToken()).statusCode()).isEqualTo(403);
@@ -178,8 +243,8 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     }
 
     /**
-     * Assigning parcels isn't built yet (dispatch, Member 6), so the test writes the open assignment
-     * the way {@code CourierManagementIT} does.
+     * Writes the open assignment directly (as {@code CourierManagementIT} does), so a test can set
+     * {@code assigned_at} and needn't put the courier online first as the admin Assign API requires.
      */
     private void assign(ParcelDetails parcel, Courier courier, Instant assignedAt) {
         UUID adminId = db.queryForObject("SELECT user_id FROM users WHERE email = ?", UUID.class, ADMIN_EMAIL);
