@@ -8,7 +8,9 @@ import com.swiftdrop.parcel.dto.AddressDetails;
 import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.dto.StatusHistoryEntry;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
+import java.util.EnumSet;
 import java.util.List;
+import java.util.Set;
 
 /** Parcel module views to the courier app's responses, with only the fields a courier needs. */
 public final class CourierDeliveryMapper {
@@ -49,9 +51,14 @@ public final class CourierDeliveryMapper {
                 history.stream().map(CourierDeliveryMapper::toTimelineEntry).toList());
     }
 
-    /** The parcel module's transition rules, in lifecycle order (the set is an EnumSet). */
+    /** The statuses a courier may set; the retry (CREATED) and the close (FAILED) are the dispatcher's. */
+    static final Set<ParcelStatusCode> COURIER_STATUSES = EnumSet.of(ParcelStatusCode.PICKED_UP,
+            ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.OUT_FOR_DELIVERY, ParcelStatusCode.DELIVERED,
+            ParcelStatusCode.FAILED_ATTEMPT);
+
+    /** The parcel module's transition rules a courier may use, in lifecycle order (the set is an EnumSet). */
     public static List<ParcelStatusCode> allowedActions(ParcelStatusCode current) {
-        return List.copyOf(current.nextStatuses());
+        return current.nextStatuses().stream().filter(COURIER_STATUSES::contains).toList();
     }
 
     private static CourierAddressResponse toAddress(AddressDetails address) {
