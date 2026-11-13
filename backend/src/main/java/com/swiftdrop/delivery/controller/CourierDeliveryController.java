@@ -2,19 +2,26 @@ package com.swiftdrop.delivery.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.AuthenticatedUser;
+import com.swiftdrop.delivery.dto.request.UpdateDeliveryStatusRequest;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryDetailResponse;
 import com.swiftdrop.delivery.dto.response.TodaysDeliveriesResponse;
 import com.swiftdrop.delivery.service.CourierDeliveryService;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** The courier app: Today's Deliveries, Delivery Details and the scanner's look-up. Own deliveries only. */
+/**
+ * The courier app: Today's Deliveries, Delivery Details, the scanner's look-up and Update Status.
+ * Own deliveries only.
+ */
 @RestController
 @RequestMapping(CourierDeliveryController.PATH)
 @PreAuthorize("hasRole('COURIER')")
@@ -43,6 +50,18 @@ public class CourierDeliveryController {
     public CourierDeliveryDetailResponse getByTrackingNumber(@AuthenticationPrincipal AuthenticatedUser courier,
                                                              @PathVariable String trackingNumber) {
         return courierDeliveryService.getByTrackingNumber(trackingNumber, id(courier));
+    }
+
+    /**
+     * Picked up, in transit or out for delivery; returns the updated delivery. 400 for DELIVERED or
+     * FAILED (they have their own endpoints), 404 when it isn't the courier's, 409 when the parcel
+     * can't take that step now (for example the same tap sent twice).
+     */
+    @PostMapping("/{parcelId}/status")
+    public CourierDeliveryDetailResponse updateStatus(@AuthenticationPrincipal AuthenticatedUser courier,
+                                                      @PathVariable UUID parcelId,
+                                                      @Valid @RequestBody UpdateDeliveryStatusRequest request) {
+        return courierDeliveryService.updateStatus(parcelId, id(courier), request);
     }
 
     private static UUID id(AuthenticatedUser user) {

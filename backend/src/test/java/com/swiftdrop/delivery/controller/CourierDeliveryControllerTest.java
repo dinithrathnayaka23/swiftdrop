@@ -5,6 +5,7 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.security.AuthenticatedUser;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.delivery.dto.request.UpdateDeliveryStatusRequest;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryCounts;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryDetailResponse;
 import com.swiftdrop.delivery.dto.response.TodaysDeliveriesResponse;
@@ -56,5 +57,14 @@ class CourierDeliveryControllerTest {
         assertThat(controller.today(COURIER)).isSameAs(today);
         assertThat(controller.get(COURIER, parcelId).parcelId()).isEqualTo(parcelId);
         assertThat(controller.getByTrackingNumber(COURIER, "sd1").parcelId()).isEqualTo(parcelId);
+    }
+
+    @Test
+    void updatesTheStatusAsTheSignedInCourier() {
+        UUID parcelId = UUID.randomUUID();
+        UpdateDeliveryStatusRequest request = new UpdateDeliveryStatusRequest(ParcelStatusCode.PICKED_UP, null);
+        when(service.updateStatus(parcelId, COURIER_ID, request)).thenReturn(detail(parcelId));
+
+        assertThat(controller.updateStatus(COURIER, parcelId, request).parcelId()).isEqualTo(parcelId);
     }
 }
