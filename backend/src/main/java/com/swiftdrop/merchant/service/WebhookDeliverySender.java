@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.HexFormat;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Service;
@@ -24,6 +25,7 @@ public class WebhookDeliverySender {
     private final RestClient restClient;
     private final WebhookSecretService secretService;
 
+    @Autowired
     public WebhookDeliverySender(WebhookSecretService secretService) {
         this(secretService, createRestClient());
     }
