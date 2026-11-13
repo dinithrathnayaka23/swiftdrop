@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -20,6 +21,7 @@ import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
 import com.swiftdrop.dispatch.dto.response.CourierResponse;
 import com.swiftdrop.dispatch.dto.response.CourierSummaryResponse;
 import com.swiftdrop.dispatch.dto.response.CourierWorkload;
+import com.swiftdrop.dispatch.dto.response.ServiceAreaRef;
 import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.Courier;
 import com.swiftdrop.dispatch.model.CourierAvailability;
@@ -36,6 +38,7 @@ import com.swiftdrop.user.model.AccountStatus;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -401,7 +404,39 @@ class CourierServiceTest {
 
         assertThat(service.list(CourierFilter.none(), 0, 20).getContent()).isEmpty();
 
-        verifyNoInteractions(assignmentRepository);
+        verifyNoInteractions(assignmentRepository, zoneApi);
+    }
+
+    @Test
+    void theListNamesEveryCouriersServiceAreasWithOneZoneApiCall() {
+        Courier first = courier(); // covers ZONE_A
+        Courier second = courier();
+        second.setId(UUID.randomUUID());
+        second.getServiceAreaIds().clear();
+        second.getServiceAreaIds().addAll(Set.of(ZONE_A, ZONE_B));
+        when(courierRepository.findAll(ArgumentMatchers.<Specification<Courier>>any(), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(first, second)));
+        userExists(AccountStatus.ACTIVE);
+        when(zoneApi.zoneNames(Set.of(ZONE_A, ZONE_B))).thenReturn(Map.of(ZONE_A, "Kandy", ZONE_B, "Colombo 01"));
+
+        List<CourierResponse> rows = service.list(CourierFilter.none(), 0, 20).getContent();
+
+        assertThat(rows.get(0).serviceAreas()).containsExactly(new ServiceAreaRef(ZONE_A, "Kandy"));
+        assertThat(rows.get(1).serviceAreas()).containsExactly( // sorted by name
+                new ServiceAreaRef(ZONE_B, "Colombo 01"), new ServiceAreaRef(ZONE_A, "Kandy"));
+        assertThat(rows.get(1).serviceAreaIds()).containsExactlyInAnyOrder(ZONE_A, ZONE_B);
+        verify(zoneApi, times(1)).zoneNames(any());
+    }
+
+    @Test
+    void oneCourierWithoutServiceAreasNeedsNoNames() {
+        Courier courier = courier();
+        courier.getServiceAreaIds().clear();
+        when(courierRepository.findById(COURIER_ID)).thenReturn(Optional.of(courier));
+        userExists(AccountStatus.ACTIVE);
+
+        assertThat(service.get(COURIER_ID).serviceAreas()).isEmpty();
+        verifyNoInteractions(zoneApi);
     }
 
     @Test

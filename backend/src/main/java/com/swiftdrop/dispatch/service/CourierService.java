@@ -36,6 +36,7 @@ import java.time.ZoneId;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -117,7 +118,7 @@ public class CourierService {
         }
         Courier saved = save(courier);
         log.info("Courier {} added", saved.getId());
-        return CourierMapper.toResponse(saved, userOf(saved), CourierWorkload.EMPTY);
+        return CourierMapper.toResponse(saved, userOf(saved), CourierWorkload.EMPTY, zoneNamesOf(List.of(saved)));
     }
 
     /**
@@ -155,7 +156,7 @@ public class CourierService {
         }
         Courier saved = save(courier);
         return CourierMapper.toResponse(saved, userOf(saved), workloads(Set.of(courierId)).getOrDefault(courierId,
-                CourierWorkload.EMPTY));
+                CourierWorkload.EMPTY), zoneNamesOf(List.of(saved)));
     }
 
     /**
@@ -176,7 +177,8 @@ public class CourierService {
         }
         courier.setAvailabilityStatus(availability);
         return CourierMapper.toResponse(courier, user,
-                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY));
+                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY),
+                zoneNamesOf(List.of(courier)));
     }
 
     // ---- Read --------------------------------------------------------------------------------
@@ -207,8 +209,9 @@ public class CourierService {
 
         Page<Courier> found = courierRepository.findAll(spec, PageRequest.of(page, size, NEWEST_FIRST));
         Map<UUID, CourierWorkload> workloads = workloads(found.getContent().stream().map(Courier::getId).toList());
+        Map<UUID, String> zoneNames = zoneNamesOf(found.getContent());
         return found.map(courier -> CourierMapper.toResponse(courier, userOf(courier),
-                workloads.getOrDefault(courier.getId(), CourierWorkload.EMPTY)));
+                workloads.getOrDefault(courier.getId(), CourierWorkload.EMPTY), zoneNames));
     }
 
     /** @throws NotFoundException if there is no such courier */
@@ -216,7 +219,8 @@ public class CourierService {
     public CourierResponse get(UUID courierId) {
         Courier courier = find(courierId);
         return CourierMapper.toResponse(courier, userOf(courier),
-                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY));
+                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY),
+                zoneNamesOf(List.of(courier)));
     }
 
     /** Active couriers per availability, for the cards above the list. */
@@ -251,6 +255,13 @@ public class CourierService {
             // A lost race on the registration, or a zone id that is not in delivery_zones.
             throw new ConflictException(NOT_SAVED);
         }
+    }
+
+    /** The names of these couriers' service areas in one ZoneApi call; no call if none has any. */
+    private Map<UUID, String> zoneNamesOf(Collection<Courier> couriers) {
+        Set<UUID> zoneIds = couriers.stream().flatMap(courier -> courier.getServiceAreaIds().stream())
+                .collect(Collectors.toSet());
+        return zoneIds.isEmpty() ? Map.of() : zoneApi.zoneNames(zoneIds);
     }
 
     /**

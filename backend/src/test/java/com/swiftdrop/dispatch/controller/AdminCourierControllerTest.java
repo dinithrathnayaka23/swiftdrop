@@ -46,7 +46,7 @@ class AdminCourierControllerTest {
     private static CourierResponse response() {
         return new CourierResponse(COURIER_ID, UUID.randomUUID(), "Ramesh Perera", "ramesh@example.com",
                 "+94771234567", "Motorbike", "ABC 1234", CourierAvailability.OFFLINE, true, AccountStatus.ACTIVE,
-                Set.of(), CourierWorkload.EMPTY, Instant.now());
+                Set.of(), List.of(), CourierWorkload.EMPTY, Instant.now());
     }
 
     @Test
