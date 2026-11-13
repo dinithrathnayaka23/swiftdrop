@@ -25,11 +25,19 @@ public class WebhookDeliverySender {
     private final WebhookSecretService secretService;
 
     public WebhookDeliverySender(WebhookSecretService secretService) {
+        this(secretService, createRestClient());
+    }
+
+    WebhookDeliverySender(WebhookSecretService secretService, RestClient restClient) {
         this.secretService = secretService;
+        this.restClient = restClient;
+    }
+
+    private static RestClient createRestClient() {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(REQUEST_TIMEOUT);
         requestFactory.setReadTimeout(REQUEST_TIMEOUT);
-        this.restClient = RestClient.builder().requestFactory(requestFactory).build();
+        return RestClient.builder().requestFactory(requestFactory).build();
     }
 
     public AttemptResult send(MerchantWebhook webhook, String payload) {
