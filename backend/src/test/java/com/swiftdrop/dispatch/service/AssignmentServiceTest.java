@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.response.AssignmentResponse;
 import com.swiftdrop.dispatch.dto.response.BulkAssignResponse;
 import com.swiftdrop.dispatch.dto.response.CourierAssignmentResponse;
@@ -67,12 +68,13 @@ class AssignmentServiceTest {
     @Mock private CourierRepository courierRepository;
     @Mock private ParcelService parcelService;
     @Mock private UserApi userApi;
+    @Mock private ZoneApi zoneApi;
     @Mock private PlatformTransactionManager transactionManager;
     private AssignmentService service;
 
     @BeforeEach
     void setUp() {
-        service = new AssignmentService(assignmentRepository, courierRepository, parcelService, userApi,
+        service = new AssignmentService(assignmentRepository, courierRepository, parcelService, userApi, zoneApi,
                 transactionManager);
     }
 
@@ -300,6 +302,117 @@ class AssignmentServiceTest {
         assertThat(result.assigned()).extracting(AssignmentResponse::parcelId).containsExactly(second);
         assertThat(result.failed()).containsExactly(
                 new BulkAssignResponse.Failure(PARCEL_ID, "The parcel could not be assigned"));
+    }
+
+    // ---- Zone check --------------------------------------------------------------------------
+
+    private static final UUID KANDY_ZONE = UUID.randomUUID();
+    private static final UUID GALLE_ZONE = UUID.randomUUID();
+
+    /** A CREATED parcel picked up in Kandy; {@code pickupZoneId} is what booking stored (may be null). */
+    private static ParcelDetails parcelPickedUpInKandy(UUID id, UUID pickupZoneId) {
+        AddressDetails pickup = new AddressDetails(UUID.randomUUID(), "Kasun Perera", "+94771234567", "1 Temple Road",
+                null, "Kandy", "Kandy", "20000", pickupZoneId);
+        ParcelDetails base = parcel(id, ParcelStatusCode.CREATED);
+        return new ParcelDetails(id, base.trackingNumber(), base.customerUserId(), null, null, pickup,
+                base.dropoffAddress(), ParcelType.PARCEL, BigDecimal.ONE, null, null, null, null, null,
+                ParcelStatusCode.CREATED, null, BigDecimal.TEN, "LKR", Instant.now(), Instant.now());
+    }
+
+    /** The online, active courier covers these zones. */
+    private void courierCovers(UUID... zones) {
+        Courier courier = courier(COURIER_ID, CourierAvailability.ONLINE);
+        courier.getServiceAreaIds().addAll(List.of(zones));
+        when(courierRepository.findById(COURIER_ID)).thenReturn(Optional.of(courier));
+        when(userApi.findUser(USER_ID)).thenReturn(Optional.of(account(AccountStatus.ACTIVE)));
+    }
+
+    @Test
+    void aCourierWithoutServiceAreasMayTakeAnyParcel() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, null));
+        courierIs(CourierAvailability.ONLINE);
+        savesReturnTheRow();
+
+        service.assign(PARCEL_ID, COURIER_ID, ADMIN_ID);
+
+        verifyNoInteractions(zoneApi);
+    }
+
+    @Test
+    void aCourierCoveringThePickupZoneFoundFromTheAddressMayTakeIt() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, null));
+        when(zoneApi.findZoneId("Kandy", "Kandy", "20000")).thenReturn(Optional.of(KANDY_ZONE));
+        courierCovers(GALLE_ZONE, KANDY_ZONE);
+        savesReturnTheRow();
+
+        assertThat(service.assign(PARCEL_ID, COURIER_ID, ADMIN_ID).status()).isEqualTo(AssignmentStatus.ASSIGNED);
+    }
+
+    @Test
+    void aCourierWhoDoesNotCoverThePickupZoneIsRefusedNamingIt() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, null));
+        when(zoneApi.findZoneId("Kandy", "Kandy", "20000")).thenReturn(Optional.of(KANDY_ZONE));
+        when(zoneApi.zoneNames(List.of(KANDY_ZONE))).thenReturn(java.util.Map.of(KANDY_ZONE, "Kandy City"));
+        courierCovers(GALLE_ZONE);
+
+        assertThatThrownBy(() -> service.assign(PARCEL_ID, COURIER_ID, ADMIN_ID))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("This courier does not cover the pickup area (Kandy City)");
+        verify(assignmentRepository, never()).saveAndFlush(any());
+    }
+
+    @Test
+    void theZoneStoredOnThePickupAddressIsUsedWithoutALookup() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, KANDY_ZONE));
+        courierCovers(KANDY_ZONE);
+        savesReturnTheRow();
+
+        service.assign(PARCEL_ID, COURIER_ID, ADMIN_ID);
+
+        verify(zoneApi, never()).findZoneId(any(), any(), any());
+    }
+
+    @Test
+    void aPickupOutsideEveryZoneIsNotChecked() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, null));
+        when(zoneApi.findZoneId("Kandy", "Kandy", "20000")).thenReturn(Optional.empty());
+        courierCovers(GALLE_ZONE);
+        savesReturnTheRow();
+
+        assertThat(service.assign(PARCEL_ID, COURIER_ID, ADMIN_ID).status()).isEqualTo(AssignmentStatus.ASSIGNED);
+        verify(zoneApi, never()).zoneNames(any());
+    }
+
+    @Test
+    void bulkReportsAParcelOutsideTheCouriersAreasAndAssignsTheRest() {
+        UUID inGalle = UUID.randomUUID();
+        transactionsWork();
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, KANDY_ZONE));
+        when(parcelService.getParcel(inGalle)).thenReturn(parcelPickedUpInKandy(inGalle, GALLE_ZONE));
+        when(zoneApi.zoneNames(List.of(KANDY_ZONE))).thenReturn(java.util.Map.of(KANDY_ZONE, "Kandy City"));
+        courierCovers(GALLE_ZONE);
+        savesReturnTheRow();
+
+        BulkAssignResponse result = service.assignAll(List.of(PARCEL_ID, inGalle), COURIER_ID, ADMIN_ID);
+
+        assertThat(result.assigned()).extracting(AssignmentResponse::parcelId).containsExactly(inGalle);
+        assertThat(result.failed()).containsExactly(new BulkAssignResponse.Failure(PARCEL_ID,
+                "This courier does not cover the pickup area (Kandy City)"));
+    }
+
+    @Test
+    void reassignAppliesTheZoneCheckAndKeepsTheCurrentAssignment() {
+        when(parcelService.getParcel(PARCEL_ID)).thenReturn(parcelPickedUpInKandy(PARCEL_ID, KANDY_ZONE));
+        DeliveryAssignment current = openAssignment(OTHER_COURIER_ID, AssignmentStatus.ASSIGNED);
+        when(assignmentRepository.findOpenByParcelIdForUpdate(PARCEL_ID)).thenReturn(Optional.of(current));
+        when(zoneApi.zoneNames(List.of(KANDY_ZONE))).thenReturn(java.util.Map.of(KANDY_ZONE, "Kandy City"));
+        courierCovers(GALLE_ZONE);
+
+        assertThatThrownBy(() -> service.reassign(PARCEL_ID, COURIER_ID, "Closer courier", ADMIN_ID))
+                .isInstanceOf(ConflictException.class).hasMessageContaining("pickup area (Kandy City)");
+        assertThat(current.getAssignmentStatus()).isEqualTo(AssignmentStatus.ASSIGNED);
+        assertThat(current.getEndedAt()).isNull();
+        verify(assignmentRepository, never()).saveAndFlush(any());
     }
 
     // ---- Reassign ----------------------------------------------------------------------------
