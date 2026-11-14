@@ -5,6 +5,7 @@ import com.swiftdrop.booking.dto.request.BookingRequest;
 import com.swiftdrop.booking.dto.response.BookingConfirmationResponse;
 import com.swiftdrop.booking.dto.response.FeeEstimateResponse;
 import com.swiftdrop.common.exception.BadRequestException;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.parcel.dto.NewAddress;
 import com.swiftdrop.parcel.dto.NewParcel;
 import com.swiftdrop.parcel.dto.ParcelDetails;
@@ -30,6 +31,7 @@ public class BookingService {
     private final FeeApi feeApi;
     private final ParcelService parcelService;
     private final SystemSettingsService settings;
+    private final ZoneApi zoneApi;
 
     /** Shows the fee for a booking without saving anything. */
     public FeeEstimateResponse estimate(BookingRequest request) {
@@ -106,16 +108,21 @@ public class BookingService {
                 address.district().trim(), address.city().trim(), blankToNull(address.postalCode()));
     }
 
-    private static NewAddress toAddress(BookingAddressRequest address) {
+    /** Maps an address and looks up the zone that covers it (null when no active zone matches). */
+    private NewAddress toAddress(BookingAddressRequest address) {
+        String district = address.district().trim();
+        String city = address.city().trim();
+        String postalCode = blankToNull(address.postalCode());
+        UUID zoneId = zoneApi.findZoneId(district, city, postalCode).orElse(null);
         return new NewAddress(
                 address.contactName().trim(),
                 address.contactPhone().trim(),
                 address.addressLine1().trim(),
                 blankToNull(address.addressLine2()),
-                address.city().trim(),
-                address.district().trim(),
-                blankToNull(address.postalCode()),
-                null); // zone id is filled in when the zone module publishes its API
+                city,
+                district,
+                postalCode,
+                zoneId);
     }
 
     private static String blankToNull(String value) {
@@ -125,10 +132,3 @@ public class BookingService {
         return value.trim();
     }
 }
-
-/*estimate checks the limits and returns the fee breakdown. 
-book does the same checks, recalculates the fee,
- saves the parcel for the signed-in customer and
-  returns the tracking number. Text fields are 
-  trimmed, and empty optional fields become null. 
-  Logs contain ids only, never names, phones or addresses. */
