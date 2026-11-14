@@ -117,11 +117,57 @@ class AssignmentLifecycleServiceTest {
     }
 
     @Test
-    void theEndIsNeverBeforeTheAssignmentStarted() {
-        DeliveryAssignment assignment = openAssignment(AssignmentStatus.IN_PROGRESS);
+    void anEndingEventOlderThanTheOpenAssignmentIsIgnored() {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.ASSIGNED);
 
+        // e.g. the previous attempt's FAILED_ATTEMPT, delivered after a retry and a new assignment
+        service.apply(event(PARCEL_ID, "FAILED_ATTEMPT", ASSIGNED_AT.minusMillis(1)));
         service.apply(event(PARCEL_ID, "DELIVERED", ASSIGNED_AT.minusSeconds(30)));
 
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.ASSIGNED);
+        assertThat(assignment.getEndedAt()).isNull();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"})
+    void aPickupOrTransitEventOlderThanTheOpenAssignmentIsIgnored(String status) {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.ASSIGNED);
+
+        service.apply(event(PARCEL_ID, status, ASSIGNED_AT.minusMillis(1)));
+
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.ASSIGNED);
+    }
+
+    @Test
+    void aPickupAtTheSameMomentAsTheAssignmentStillStartsIt() {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.ASSIGNED);
+
+        service.apply(event(PARCEL_ID, "PICKED_UP", ASSIGNED_AT));
+
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.IN_PROGRESS);
+    }
+
+    @Test
+    void afterARetryAndANewAssignmentALatePickupFromTheOldAttemptLeavesItAssigned() {
+        // First attempt: picked up at 08:10, failed at 09:00. Retried and assigned again at 10:00 (ASSIGNED_AT
+        // shifted here); the 08:10 PICKED_UP event only arrives now.
+        Instant firstPickup = ASSIGNED_AT.minusSeconds(110 * 60);
+        DeliveryAssignment newAssignment = openAssignment(AssignmentStatus.ASSIGNED);
+
+        service.apply(event(PARCEL_ID, "PICKED_UP", firstPickup));
+        service.apply(event(PARCEL_ID, "FAILED_ATTEMPT", firstPickup.plusSeconds(50 * 60)));
+
+        assertThat(newAssignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.ASSIGNED);
+        assertThat(newAssignment.getEndedAt()).isNull();
+    }
+
+    @Test
+    void anEndingEventAtTheSameMomentStillEndsTheAssignment() {
+        DeliveryAssignment assignment = openAssignment(AssignmentStatus.IN_PROGRESS);
+
+        service.apply(event(PARCEL_ID, "FAILED_ATTEMPT", ASSIGNED_AT));
+
+        assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.FAILED);
         assertThat(assignment.getEndedAt()).isEqualTo(ASSIGNED_AT);
     }
 
