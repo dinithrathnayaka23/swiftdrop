@@ -36,7 +36,6 @@ import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.dto.UserAccount;
 import com.swiftdrop.user.model.AccountStatus;
 import java.time.Instant;
-import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -448,6 +447,6 @@ class CourierServiceTest {
     }
 
     private static Instant startOfTodayInSriLanka() {
-        return LocalDate.now(CourierService.SRI_LANKA).atStartOfDay(CourierService.SRI_LANKA).toInstant();
+        return SriLankaDay.startOfDay(Instant.now());
     }
 }

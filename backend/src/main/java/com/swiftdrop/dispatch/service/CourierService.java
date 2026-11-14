@@ -31,8 +31,6 @@ import com.swiftdrop.user.api.UserSummary;
 import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.model.AccountStatus;
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.ZoneId;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -64,9 +62,6 @@ import org.springframework.util.StringUtils;
 @Service
 @RequiredArgsConstructor
 public class CourierService {
-
-    /** "Completed today" and the other daily counts are whole days in Sri Lanka time. */
-    static final ZoneId SRI_LANKA = ZoneId.of("Asia/Colombo");
 
     /** Most accounts the name/email/phone search takes from the user module (UserApi can't be asked for "all"). */
     static final int MAX_SEARCH_MATCHES = 500;
@@ -290,7 +285,7 @@ public class CourierService {
         if (courierIds.isEmpty()) {
             return Map.of();
         }
-        Instant startOfDay = LocalDate.now(SRI_LANKA).atStartOfDay(SRI_LANKA).toInstant();
+        Instant startOfDay = SriLankaDay.startOfDay(Instant.now());
         Map<UUID, int[]> counts = new HashMap<>(); // per courier: assigned, in progress, completed today
         for (WorkloadCount row : assignmentRepository.countWorkload(courierIds, startOfDay)) {
             int[] count = counts.computeIfAbsent(row.courierId(), id -> new int[3]);
