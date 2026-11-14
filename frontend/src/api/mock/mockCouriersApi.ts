@@ -20,7 +20,7 @@ import { mockMissingOrInactiveZones, mockZoneIdByName, mockZoneName } from './mo
  * (409). Workloads are worked out from the sample assignments, like the backend does.
  */
 
-interface MockCourier {
+export interface MockCourier {
   id: string;
   userId: string;
   fullName: string;
@@ -35,7 +35,7 @@ interface MockCourier {
   createdAt: string;
 }
 
-interface MockAssignment extends CourierAssignmentRow {
+export interface MockAssignment extends CourierAssignmentRow {
   courierId: string;
 }
 
@@ -302,6 +302,40 @@ seed();
 /** Back to the sample data (tests). */
 export function resetMockCouriers(): void {
   seed();
+}
+
+// ---- Shared with the dispatch mock (assign, reassign, unassign) ---------------------------------
+
+/** The stored courier (no delay), or undefined. The dispatch mock reads it, never replaces it. */
+export function mockCourierById(courierId: string): MockCourier | undefined {
+  return couriers.find((c) => c.id === courierId);
+}
+
+/** The parcel's open assignment, if it has one. The dispatch mock ends it in place. */
+export function mockOpenAssignment(parcelId: string): MockAssignment | undefined {
+  return assignments.find((a) => a.parcelId === parcelId && a.endedAt === null);
+}
+
+export function mockAssignmentById(assignmentId: string): MockAssignment | undefined {
+  return assignments.find((a) => a.id === assignmentId);
+}
+
+/** Records a new open assignment, starting now. */
+export function mockAddAssignment(
+  input: Pick<
+    MockAssignment,
+    'courierId' | 'parcelId' | 'status' | 'trackingNumber' | 'parcelStatus' | 'destinationCity'
+  >,
+): MockAssignment {
+  const created: MockAssignment = {
+    ...input,
+    id: uuid('a5510000'),
+    assignedAt: new Date().toISOString(),
+    endedAt: null,
+    reason: null,
+  };
+  assignments.push(created);
+  return created;
 }
 
 // ---- Rules (as in the backend's CourierService and CourierRules) --------------------------------
