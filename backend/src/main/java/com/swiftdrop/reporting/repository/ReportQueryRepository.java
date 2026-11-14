@@ -36,7 +36,7 @@ public class ReportQueryRepository {
     private static final String DAILY_SQL = """
             WITH days AS (
                 SELECT CAST(d AS date) AS day
-                FROM generate_series(CAST(:from AS date), CAST(:to AS date), INTERVAL '1 day') AS d
+                FROM generate_series(CAST(:from AS timestamp), CAST(:to AS timestamp), INTERVAL '1 day') AS d
             ),
             created AS (
                 SELECT CAST(created_at AT TIME ZONE :zone AS date) AS day, COUNT(*) AS total
