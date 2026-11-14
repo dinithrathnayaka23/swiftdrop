@@ -20,6 +20,8 @@ import java.math.BigDecimal;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import java.util.function.Predicate;
 import org.junit.jupiter.api.AfterEach;
@@ -41,6 +43,8 @@ class FailedFlowIT extends IntegrationTestBase {
     private static final String DISPATCH = "/api/v1/admin/dispatch";
     private static final String COURIER_PASSWORD = "courier2026";
     private static final Duration LISTENER_WAIT = Duration.ofSeconds(10);
+    /** Extra waiting parcels that make the test's courier the busiest (other tests stay well below this). */
+    private static final int EXTRA_WAITING = 20;
 
     @Autowired private JsonMapper json;
     @Autowired private ParcelService parcelService;
@@ -94,14 +98,58 @@ class FailedFlowIT extends IntegrationTestBase {
         assertThat(assigned.statusCode()).as(assigned.body()).isEqualTo(201);
     }
 
-    /** The courier picks the parcel up and reports a failed attempt; waits until dispatch ended the assignment. */
-    private void failAttempt(ParcelDetails parcel, JsonNode courier, String reason, String admin) throws Exception {
+    /** The courier picks the parcel up; waits until dispatch has started the assignment (an active delivery). */
+    private JsonNode pickUp(ParcelDetails parcel, JsonNode courier, String admin) throws Exception {
         UUID courierUserId = UUID.fromString(courier.get("userId").asString());
         statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierUserId, null));
+        await("the pickup to start the assignment", () -> activeDeliveryRow(parcel, admin), row -> row != null);
+        return activeDeliveryRow(parcel, admin);
+    }
+
+    /** This parcel's row in /active-deliveries (newest assignment first, so it is on the first page), or null. */
+    private JsonNode activeDeliveryRow(ParcelDetails parcel, String admin) throws Exception {
+        HttpResponse<String> response = get(DISPATCH + "/active-deliveries?size=50", admin);
+        assertThat(response.statusCode()).isEqualTo(200);
+        for (JsonNode row : body(response).get("content")) {
+            if (row.get("parcelId").asString().equals(parcel.id().toString())) {
+                return row;
+            }
+        }
+        return null;
+    }
+
+    /** The courier reports a failed attempt (after pickUp); waits until dispatch ended the assignment. */
+    private void failAttempt(ParcelDetails parcel, JsonNode courier, String reason, String admin) throws Exception {
+        UUID courierUserId = UUID.fromString(courier.get("userId").asString());
         statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(courierUserId, reason, null));
-        await("the failed attempt to end the assignment",
-                () -> body(get(COURIERS + "/" + id(courier) + "/assignments?open=true", admin)).get("content"),
-                JsonNode::isEmpty);
+        await("the failed attempt to end the assignment", () -> openParcelIds(courier, admin),
+                ids -> !ids.toString().contains(parcel.id().toString()));
+    }
+
+    /** The parcel ids of the courier's open assignments (the courier has at most ~25 here). */
+    private JsonNode openParcelIds(JsonNode courier, String admin) throws Exception {
+        var ids = json.createArrayNode();
+        body(get(COURIERS + "/" + id(courier) + "/assignments?open=true&size=100", admin)).get("content")
+                .forEach(row -> ids.add(row.get("parcelId").asString()));
+        return ids;
+    }
+
+    /**
+     * Gives the courier this many extra waiting (ASSIGNED) parcels in one bulk call, so it is clearly the
+     * busiest courier today and shows in the overview's top-5 workload whatever other tests left behind.
+     */
+    private List<String> extraWaitingParcels(JsonNode courier, int count, String city, String admin)
+            throws Exception {
+        List<String> ids = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            ids.add(parcelTo(city).id().toString());
+        }
+        HttpResponse<String> bulk = post(DISPATCH + "/assignments/bulk", """
+                {"courierId":"%s","parcelIds":[%s]}""".formatted(id(courier),
+                String.join(",", ids.stream().map(parcelId -> "\"" + parcelId + "\"").toList())), admin);
+        assertThat(bulk.statusCode()).isEqualTo(200);
+        assertThat(body(bulk).get("assigned")).hasSize(count);
+        return ids;
     }
 
     /** The queue row of this parcel (it was booked last, so it is on the first page), or null. */
@@ -161,9 +209,31 @@ class FailedFlowIT extends IntegrationTestBase {
         JsonNode courier = addOnlineCourier(admin, "courier-" + UUID.randomUUID() + "@example.com");
         ParcelDetails parcel = parcelTo(city);
         assign(parcel, courier, admin);
+        // The overview shows only the five busiest couriers of the shared database: make this one the busiest.
+        List<String> extras = extraWaitingParcels(courier, EXTRA_WAITING, city, admin);
+
+        // Picked up: an active delivery, and the courier's workload in the overview (found by id).
+        JsonNode active = pickUp(parcel, courier, admin);
+        assertThat(active.get("trackingNumber").asString()).isEqualTo(parcel.trackingNumber());
+        assertThat(active.get("courierId").asString()).isEqualTo(id(courier));
+        assertThat(active.get("courierName").asString()).isEqualTo("Ramesh Perera");
+        assertThat(active.get("parcelStatus").asString()).isEqualTo("PICKED_UP");
+        JsonNode load = null;
+        for (JsonNode row : body(get(DISPATCH + "/overview", admin)).get("courierWorkload")) {
+            if (row.get("courierId").asString().equals(id(courier))) {
+                load = row;
+            }
+        }
+        assertThat(load).as("the courier in the overview's courierWorkload").isNotNull();
+        assertThat(load.get("name").asString()).isEqualTo("Ramesh Perera");
+        assertThat(load.get("inProgress").asInt()).isEqualTo(1);
+        assertThat(load.get("pending").asInt()).isEqualTo(EXTRA_WAITING);
+        assertThat(load.get("completed").asInt()).isZero();
+        assertThat(load.get("todaysTotal").asInt()).isEqualTo(EXTRA_WAITING + 1);
 
         // First failed attempt: the queue shows the reason, the courier and one attempt.
         failAttempt(parcel, courier, "Recipient not available", admin);
+        assertThat(activeDeliveryRow(parcel, admin)).isNull();
         JsonNode row = queueRow("ATTENTION", parcel, admin);
         assertThat(row).isNotNull();
         assertThat(row.get("parcelStatus").asString()).isEqualTo("FAILED_ATTEMPT");
@@ -187,6 +257,7 @@ class FailedFlowIT extends IntegrationTestBase {
 
         // Assign again, fail again: two attempts, the latest reason.
         assign(parcel, courier, admin);
+        pickUp(parcel, courier, admin);
         failAttempt(parcel, courier, "Shop closed", admin);
         row = queueRow("ATTENTION", parcel, admin);
         assertThat(row.get("attemptCount").asInt()).isEqualTo(2);
@@ -222,6 +293,11 @@ class FailedFlowIT extends IntegrationTestBase {
         assertThat(overview.get("defaultAction").asString()).isNotBlank();
         assertThat(body(get(DISPATCH + "/failed-deliveries/default-action", admin)).get("action").asString())
                 .isEqualTo(overview.get("defaultAction").asString());
+
+        // Tidy up: take the extra waiting parcels back so later tests don't see a busy courier.
+        for (String extra : extras) {
+            assertThat(post(DISPATCH + "/parcels/" + extra + "/unassign", "{}", admin).statusCode()).isEqualTo(200);
+        }
     }
 
     @Test
