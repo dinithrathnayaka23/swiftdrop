@@ -17,12 +17,15 @@ const LABELS: Record<ParcelStatusCode, string> = {
   IN_TRANSIT: 'Mark In Transit',
   OUT_FOR_DELIVERY: 'Mark Out for Delivery',
   DELIVERED: 'Confirm Delivery',
-  FAILED: 'Report Failed Delivery',
+  FAILED_ATTEMPT: 'Report Failed Delivery',
+  // Not a courier action (the dispatcher closes a failed attempt); kept for completeness.
+  FAILED: 'Failed',
 };
 
 /**
  * The buttons for a delivery, from the API's {@code allowedActions}: DELIVERED opens Proof of
- * Delivery, FAILED opens the Failed Delivery form, the other steps open Update Status.
+ * Delivery, FAILED_ATTEMPT opens the Failed Delivery form (a failed attempt, which the dispatcher
+ * then retries or closes), the other steps open Update Status.
  */
 export function courierActions(
   parcelId: string,
@@ -37,7 +40,7 @@ export function courierActions(
         variant: 'primary',
       };
     }
-    if (status === 'FAILED') {
+    if (status === 'FAILED_ATTEMPT') {
       return {
         status,
         label: LABELS[status],

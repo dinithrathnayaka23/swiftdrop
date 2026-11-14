@@ -279,7 +279,8 @@ class ParcelServiceTest {
         assertThat(counts).containsExactly(
                 entry(ParcelStatusCode.CREATED, 4L), entry(ParcelStatusCode.PICKED_UP, 0L),
                 entry(ParcelStatusCode.IN_TRANSIT, 0L), entry(ParcelStatusCode.OUT_FOR_DELIVERY, 0L),
-                entry(ParcelStatusCode.DELIVERED, 7L), entry(ParcelStatusCode.FAILED, 0L));
+                entry(ParcelStatusCode.DELIVERED, 7L), entry(ParcelStatusCode.FAILED_ATTEMPT, 0L),
+                entry(ParcelStatusCode.FAILED, 0L));
     }
 
     @Test

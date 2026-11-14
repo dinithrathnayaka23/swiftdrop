@@ -44,7 +44,8 @@ const CARDS: Card[] = [
   {
     label: 'Failed',
     icon: CircleAlert,
-    statuses: ['FAILED'],
+    // Failed attempts (waiting for the dispatcher) and failed deliveries, like the Parcels Failed tab.
+    statuses: ['FAILED_ATTEMPT', 'FAILED'],
     tile: 'bg-red-50 text-red-600',
     chip: 'bg-red-50 text-red-700',
   },

@@ -1,6 +1,7 @@
 package com.swiftdrop.common.security;
 
 import com.swiftdrop.common.exception.ErrorCode;
+import com.swiftdrop.common.exception.ApiException;
 import com.swiftdrop.common.exception.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -38,10 +39,22 @@ public class SecurityErrorHandler implements AuthenticationEntryPoint, AccessDen
         write(response, request, HttpStatus.FORBIDDEN, ErrorCode.FORBIDDEN, "Access denied");
     }
 
+    /** Writes a standard response when a security filter rejects an authenticated account. */
+    public void handle(HttpServletRequest request, HttpServletResponse response, ApiException ex)
+            throws IOException {
+        write(response, request, ex.getStatus(), ex.getCode(), ex.getMessage(), ex.getFieldErrors());
+    }
+
     private void write(HttpServletResponse response, HttpServletRequest request, HttpStatus status,
                        ErrorCode code, String message) throws IOException {
+        write(response, request, status, code, message, List.of());
+    }
+
+    private void write(HttpServletResponse response, HttpServletRequest request, HttpStatus status,
+                       ErrorCode code, String message, List<ErrorResponse.FieldError> fieldErrors)
+            throws IOException {
         var body = new ErrorResponse(Instant.now(), status.value(), status.getReasonPhrase(), code.name(),
-                message, request.getRequestURI(), List.of());
+                message, request.getRequestURI(), fieldErrors);
         response.setStatus(status.value());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         jsonMapper.writeValue(response.getOutputStream(), body);

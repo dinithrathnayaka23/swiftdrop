@@ -255,19 +255,74 @@ class AssignmentFlowIT extends IntegrationTestBase {
         assertThat(history.get(0).get("destinationCity").asString()).isEqualTo(city);
         assertThat(history.get(0).get("endedAt").isNull()).isFalse();
 
-        // Failed: the assignment ends as FAILED and does not count as completed.
+        // A failed attempt: the assignment ends as FAILED and does not count as completed.
         statusService.changeStatus(failed.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierUserId, null));
-        statusService.changeStatus(failed.id(), StatusChange.failed(courierUserId, "Recipient not available", null));
-        await("the failed delivery to end", () -> courierAssignments(courier, "true", admin), JsonNode::isEmpty);
+        statusService.changeStatus(failed.id(),
+                StatusChange.failedAttempt(courierUserId, "Recipient not available", null));
+        await("the failed attempt to end the assignment", () -> courierAssignments(courier, "true", admin),
+                JsonNode::isEmpty);
         JsonNode after = workload(courier, admin);
         assertThat(after.get("completedToday").asInt()).isEqualTo(1);
         assertThat(after.get("open").asInt()).isZero();
         assertThat(courierAssignments(courier, null, admin)).extracting(row -> row.get("status").asString())
                 .containsExactlyInAnyOrder("COMPLETED", "FAILED");
+        assertThat(parcelTab("FAILED", city, admin)).containsExactly(failed.id().toString());
+
+        // The dispatcher retries: the parcel is waiting for a courier again, with no open assignment.
+        statusService.changeStatus(failed.id(), StatusChange.to(ParcelStatusCode.CREATED, null, "Retry"));
+        assertThat(parcelTab("UNASSIGNED", city, admin)).containsExactly(failed.id().toString());
+        assertThat(assign(failed.id(), courier, admin).statusCode()).isEqualTo(201);
 
         // A delivered parcel can't be reassigned.
         JsonNode other = addCourier(admin, true);
         assertThat(post(DISPATCH + "/parcels/" + delivered.id() + "/reassign", """
                 {"courierId":"%s","reason":"Late"}""".formatted(id(other)), admin).statusCode()).isEqualTo(409);
+    }
+
+    /** Adds an active service area covering the whole of {@code city} (district "Western", see parcelTo). */
+    private String serviceArea(String admin, String name, String city) throws Exception {
+        HttpResponse<String> created = post("/api/v1/admin/service-areas", """
+                {"name":"%s","coverageAreas":[{"district":"Western","city":"%s"}]}""".formatted(name, city), admin);
+        assertThat(created.statusCode()).as(created.body()).isEqualTo(201);
+        return body(created).get("id").asString();
+    }
+
+    @Test
+    void aCourierWithServiceAreasOnlyTakesParcelsPickedUpInThem() throws Exception {
+        String admin = adminToken();
+        String city = "Town " + UUID.randomUUID();
+        String hereName = "Pickup " + UUID.randomUUID();
+        String here = serviceArea(admin, hereName, city);
+        String there = serviceArea(admin, "Elsewhere " + UUID.randomUUID(), "Town " + UUID.randomUUID());
+        JsonNode local = addCourier(admin, true);
+        JsonNode remote = addCourier(admin, true);
+        JsonNode anywhere = addCourier(admin, true); // no service areas: unrestricted
+        HttpResponse<String> covered = patch(COURIERS + "/" + id(local), "{\"serviceAreaIds\":[\"" + here + "\"]}",
+                admin);
+        assertThat(body(covered).get("serviceAreas").get(0).get("name").asString()).isEqualTo(hereName);
+        assertThat(patch(COURIERS + "/" + id(remote), "{\"serviceAreaIds\":[\"" + there + "\"]}", admin).statusCode())
+                .isEqualTo(200);
+        ParcelDetails parcel = parcelTo(city);
+
+        // Assign: the courier covering another area is refused, naming the pickup area.
+        HttpResponse<String> refused = assign(parcel.id(), remote, admin);
+        assertThat(refused.statusCode()).isEqualTo(409);
+        assertThat(body(refused).get("message").asString())
+                .isEqualTo("This courier does not cover the pickup area (" + hereName + ")");
+        assertThat(assign(parcel.id(), local, admin).statusCode()).isEqualTo(201);
+
+        // Reassign: same rule; a courier without areas may take it.
+        assertThat(post(DISPATCH + "/parcels/" + parcel.id() + "/reassign", """
+                {"courierId":"%s","reason":"Closer"}""".formatted(id(remote)), admin).statusCode()).isEqualTo(409);
+        assertThat(post(DISPATCH + "/parcels/" + parcel.id() + "/reassign", """
+                {"courierId":"%s","reason":"Closer"}""".formatted(id(anywhere)), admin).statusCode()).isEqualTo(200);
+
+        // Bulk: per-parcel failure. A pickup outside every area is not checked.
+        ParcelDetails inHere = parcelTo(city);
+        ParcelDetails unzoned = parcelTo("Town " + UUID.randomUUID());
+        JsonNode bulk = body(post(DISPATCH + "/assignments/bulk", """
+                {"courierId":"%s","parcelIds":["%s","%s"]}""".formatted(id(remote), inHere.id(), unzoned.id()), admin));
+        assertThat(bulk.get("assigned").get(0).get("parcelId").asString()).isEqualTo(unzoned.id().toString());
+        assertThat(bulk.get("failed").get(0).get("reason").asString()).contains(hereName);
     }
 }

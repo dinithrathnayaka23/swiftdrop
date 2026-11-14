@@ -45,8 +45,11 @@ public class DevTrackingController {
                 .body(new DevSampleParcelResponse(trackingNumber));
     }
 
-    @Operation(summary = "Move a parcel to its next normal status, or to FAILED with ?to=FAILED",
-            description = "409 when the parcel is DELIVERED or FAILED already. Returns the new public tracking.")
+    @Operation(summary = "Move a parcel to its next normal status, or fail it with ?to=FAILED_ATTEMPT / ?to=FAILED",
+            description = "Without `to`: the next normal status (a FAILED_ATTEMPT parcel is retried to CREATED). "
+                    + "?to=FAILED_ATTEMPT records a failed attempt; ?to=FAILED closes a FAILED_ATTEMPT parcel, or "
+                    + "records the attempt and then closes (two events) for a parcel still on the way. "
+                    + "409 when the parcel is DELIVERED or FAILED already. Returns the new public tracking.")
     @PostMapping("/{trackingNumber}/advance")
     public PublicTrackingResponse advance(@PathVariable String trackingNumber,
                                           @RequestParam(required = false) ParcelStatusCode to,

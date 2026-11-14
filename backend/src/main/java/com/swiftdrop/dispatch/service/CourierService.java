@@ -11,6 +11,7 @@ import com.swiftdrop.common.exception.BadRequestException;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
@@ -35,6 +36,7 @@ import java.time.ZoneId;
 import java.util.Collection;
 import java.util.EnumMap;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -71,13 +73,16 @@ public class CourierService {
 
     static final Sort NEWEST_FIRST = Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by("id"));
 
+    static final String UNKNOWN_SERVICE_AREA = "Unknown or inactive service area";
+
     private static final String NOT_SAVED =
-            "The courier could not be saved: the vehicle registration is already in use or a service area does not exist";
+            "The courier could not be saved: the vehicle registration is already in use";
 
     private final CourierRepository courierRepository;
     private final DeliveryAssignmentRepository assignmentRepository;
     private final UserApi userApi;
     private final PasswordEncoder passwordEncoder;
+    private final ZoneApi zoneApi;
 
     // ---- Add and change ----------------------------------------------------------------------
 
@@ -85,7 +90,8 @@ public class CourierService {
      * Creates the courier's account (active, email already verified, so they can sign in at once)
      * and profile in one transaction. The new courier starts OFFLINE.
      *
-     * @throws ConflictException if the email or the vehicle registration is already used, or a service area does not exist
+     * @throws ConflictException   if the email or the vehicle registration is already used
+     * @throws BadRequestException if a service area is unknown or inactive
      */
     @Transactional
     public CourierResponse create(CreateCourierRequest request) {
@@ -97,6 +103,7 @@ public class CourierService {
         if (courierRepository.existsByVehicleRegistration(registration)) {
             throw ConflictException.forField("vehicleRegistration", "A courier with this vehicle registration already exists");
         }
+        requireActiveZones(request.serviceAreaIds());
 
         UUID userId = userApi.createUser(NewUser.withPassword(request.fullName(), email, request.phone(),
                 passwordEncoder.encode(request.password()), Role.COURIER, AccountStatus.ACTIVE).withVerifiedEmail()).id();
@@ -111,7 +118,7 @@ public class CourierService {
         }
         Courier saved = save(courier);
         log.info("Courier {} added", saved.getId());
-        return CourierMapper.toResponse(saved, userOf(saved), CourierWorkload.EMPTY);
+        return CourierMapper.toResponse(saved, userOf(saved), CourierWorkload.EMPTY, zoneNamesOf(List.of(saved)));
     }
 
     /**
@@ -119,7 +126,8 @@ public class CourierService {
      *
      * @throws BadRequestException if nothing is given
      * @throws NotFoundException   if there is no such courier
-     * @throws ConflictException   if the registration belongs to another courier or a service area does not exist
+     * @throws BadRequestException also if a service area is unknown or inactive
+     * @throws ConflictException   if the registration belongs to another courier
      */
     @Transactional
     public CourierResponse update(UUID courierId, UpdateCourierRequest request) {
@@ -142,12 +150,13 @@ public class CourierService {
             }
         }
         if (request.serviceAreaIds() != null) {
+            requireActiveZones(request.serviceAreaIds());
             courier.getServiceAreaIds().clear();
             courier.getServiceAreaIds().addAll(request.serviceAreaIds());
         }
         Courier saved = save(courier);
         return CourierMapper.toResponse(saved, userOf(saved), workloads(Set.of(courierId)).getOrDefault(courierId,
-                CourierWorkload.EMPTY));
+                CourierWorkload.EMPTY), zoneNamesOf(List.of(saved)));
     }
 
     /**
@@ -168,7 +177,8 @@ public class CourierService {
         }
         courier.setAvailabilityStatus(availability);
         return CourierMapper.toResponse(courier, user,
-                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY));
+                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY),
+                zoneNamesOf(List.of(courier)));
     }
 
     // ---- Read --------------------------------------------------------------------------------
@@ -199,8 +209,9 @@ public class CourierService {
 
         Page<Courier> found = courierRepository.findAll(spec, PageRequest.of(page, size, NEWEST_FIRST));
         Map<UUID, CourierWorkload> workloads = workloads(found.getContent().stream().map(Courier::getId).toList());
+        Map<UUID, String> zoneNames = zoneNamesOf(found.getContent());
         return found.map(courier -> CourierMapper.toResponse(courier, userOf(courier),
-                workloads.getOrDefault(courier.getId(), CourierWorkload.EMPTY)));
+                workloads.getOrDefault(courier.getId(), CourierWorkload.EMPTY), zoneNames));
     }
 
     /** @throws NotFoundException if there is no such courier */
@@ -208,7 +219,8 @@ public class CourierService {
     public CourierResponse get(UUID courierId) {
         Courier courier = find(courierId);
         return CourierMapper.toResponse(courier, userOf(courier),
-                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY));
+                workloads(Set.of(courierId)).getOrDefault(courierId, CourierWorkload.EMPTY),
+                zoneNamesOf(List.of(courier)));
     }
 
     /** Active couriers per availability, for the cards above the list. */
@@ -242,6 +254,25 @@ public class CourierService {
         } catch (DataIntegrityViolationException ex) {
             // A lost race on the registration, or a zone id that is not in delivery_zones.
             throw new ConflictException(NOT_SAVED);
+        }
+    }
+
+    /** The names of these couriers' service areas in one ZoneApi call; no call if none has any. */
+    private Map<UUID, String> zoneNamesOf(Collection<Courier> couriers) {
+        Set<UUID> zoneIds = couriers.stream().flatMap(courier -> courier.getServiceAreaIds().stream())
+                .collect(Collectors.toSet());
+        return zoneIds.isEmpty() ? Map.of() : zoneApi.zoneNames(zoneIds);
+    }
+
+    /**
+     * Service areas must be active delivery zones (config module). The whole set is checked, so a
+     * zone deactivated since it was given to the courier must be left out when the set is replaced.
+     *
+     * @throws BadRequestException if one isn't
+     */
+    private void requireActiveZones(Collection<UUID> serviceAreaIds) {
+        if (serviceAreaIds != null && !serviceAreaIds.isEmpty() && !zoneApi.missingOrInactive(serviceAreaIds).isEmpty()) {
+            throw new BadRequestException(UNKNOWN_SERVICE_AREA);
         }
     }
 

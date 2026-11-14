@@ -15,6 +15,7 @@ final class StatusLabels {
             case IN_TRANSIT -> "In transit";
             case OUT_FOR_DELIVERY -> "Out for delivery";
             case DELIVERED -> "Delivered";
+            case FAILED_ATTEMPT -> "Delivery attempt failed";
             case FAILED -> "Delivery failed";
         };
     }
@@ -26,6 +27,8 @@ final class StatusLabels {
             case IN_TRANSIT -> "The parcel is on its way to the drop-off city.";
             case OUT_FOR_DELIVERY -> "The parcel is with a courier for delivery today.";
             case DELIVERED -> "The parcel has been delivered.";
+            case FAILED_ATTEMPT ->
+                    "A delivery attempt didn't succeed. We will try again or contact you about the next step.";
             case FAILED -> "The delivery didn't succeed. Please contact us for help.";
         };
     }

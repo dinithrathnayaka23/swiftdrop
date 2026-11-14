@@ -17,6 +17,9 @@ swiftdrop:
     api-keys:
       # Test-only value, never used outside automated tests.
       pepper: test-only-api-key-pepper-at-least-32-bytes-long
+    webhooks:
+      secret-key: test-only-webhook-secret-key-at-least-32-bytes-long
+      allow-private-hosts: true
   cors:
     allowed-origins: http://localhost:5173
   frontend:

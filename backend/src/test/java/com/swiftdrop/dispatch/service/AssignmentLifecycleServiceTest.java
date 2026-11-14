@@ -86,14 +86,25 @@ class AssignmentLifecycleServiceTest {
         assertThat(assignment.getEndedAt()).isEqualTo(deliveredAt);
     }
 
-    @Test
-    void failedEndsTheAssignmentAsFailedNotCompleted() {
+    @ParameterizedTest
+    @ValueSource(strings = {"FAILED_ATTEMPT", "FAILED"})
+    void aFailedAttemptEndsTheAssignmentAsFailedNotCompleted(String status) {
         DeliveryAssignment assignment = openAssignment(AssignmentStatus.IN_PROGRESS);
 
-        service.apply(event("FAILED"));
+        service.apply(event(status));
 
         assertThat(assignment.getAssignmentStatus()).isEqualTo(AssignmentStatus.FAILED);
         assertThat(assignment.getEndedAt()).isNotNull();
+    }
+
+    @Test
+    void closingAfterTheAttemptFindsNothingOpenAndChangesNothing() {
+        when(assignmentRepository.findOpenByParcelIdForUpdate(PARCEL_ID)).thenReturn(Optional.empty());
+
+        service.apply(event("FAILED")); // the FAILED_ATTEMPT event already ended the assignment
+
+        verify(assignmentRepository).findOpenByParcelIdForUpdate(PARCEL_ID);
+        verifyNoMoreInteractions(assignmentRepository);
     }
 
     @Test
@@ -135,7 +146,7 @@ class AssignmentLifecycleServiceTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"CREATED", "FAILED_ATTEMPT", "delivered", ""})
+    @ValueSource(strings = {"CREATED", "RETURNED", "delivered", ""}) // CREATED: a retry after a failed attempt
     void otherAndUnknownStatusesAreIgnored(String status) {
         service.apply(event(status));
 

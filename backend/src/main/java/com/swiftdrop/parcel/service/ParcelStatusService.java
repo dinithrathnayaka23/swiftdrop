@@ -49,7 +49,7 @@ public class ParcelStatusService {
      * @return the new history entry
      * @throws NotFoundException   if the parcel does not exist
      * @throws ConflictException   if the parcel's current status cannot change to the new one
-     * @throws BadRequestException if a FAILED change has no reason, a DELIVERED change has no proof,
+     * @throws BadRequestException if a FAILED_ATTEMPT or FAILED change has no reason, a DELIVERED change has no proof,
      *                             or delivery or failure details are sent with another status
      */
     @Transactional
@@ -107,11 +107,12 @@ public class ParcelStatusService {
 
     private static void checkDetails(ParcelStatusCode next, String failureReason, String recipientName,
                                      String proofFileUrl) {
-        if (next == ParcelStatusCode.FAILED && failureReason == null) {
+        boolean failure = next == ParcelStatusCode.FAILED_ATTEMPT || next == ParcelStatusCode.FAILED;
+        if (failure && failureReason == null) {
             throw new BadRequestException("A failure reason is required");
         }
-        if (next != ParcelStatusCode.FAILED && failureReason != null) {
-            throw new BadRequestException("A failure reason is only allowed for a failed delivery");
+        if (!failure && failureReason != null) {
+            throw new BadRequestException("A failure reason is only allowed for a failed delivery or attempt");
         }
         if (next == ParcelStatusCode.DELIVERED && recipientName == null && proofFileUrl == null) {
             throw new BadRequestException("Proof of delivery is required: the recipient's name or a photo");

@@ -24,6 +24,7 @@ const STATUS_ICONS: Record<ParcelStatusCode, LucideIcon> = {
   IN_TRANSIT: Truck,
   OUT_FOR_DELIVERY: Truck,
   DELIVERED: CircleCheck,
+  FAILED_ATTEMPT: CircleX,
   FAILED: CircleX,
 };
 

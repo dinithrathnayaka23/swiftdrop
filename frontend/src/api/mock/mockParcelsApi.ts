@@ -30,22 +30,31 @@ function hoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 3_600_000).toISOString();
 }
 
-/** CREATED ... status, one step every few hours from {@code bookedHoursAgo}. FAILED fails after going out. */
+/** The sample reason recorded with each failure event. */
+const FAILURE_REASONS: Partial<Record<ParcelStatusCode, string>> = {
+  FAILED_ATTEMPT: 'Recipient not available',
+  FAILED: 'Delivery closed after a failed attempt',
+};
+
+/**
+ * CREATED ... status, one step every few hours from {@code bookedHoursAgo}. A failed attempt comes
+ * after going out; FAILED is a failed attempt the dispatcher then closed.
+ */
 function historyUpTo(
   status: ParcelStatusCode,
   bookedHoursAgo: number,
   city: string,
 ): StatusHistoryItem[] {
-  const steps =
-    status === 'FAILED'
-      ? [...FLOW.slice(0, 4), 'FAILED' as const]
-      : FLOW.slice(0, FLOW.indexOf(status) + 1);
+  let steps: ParcelStatusCode[];
+  if (status === 'FAILED_ATTEMPT') steps = [...FLOW.slice(0, 4), 'FAILED_ATTEMPT'];
+  else if (status === 'FAILED') steps = [...FLOW.slice(0, 4), 'FAILED_ATTEMPT', 'FAILED'];
+  else steps = FLOW.slice(0, FLOW.indexOf(status) + 1);
   const gap = Math.max(1, Math.min(4, bookedHoursAgo / (steps.length + 1)));
   return steps.map((step, i) => ({
     status: step,
     changedAt: hoursAgo(bookedHoursAgo - i * gap),
     note: step === 'IN_TRANSIT' ? `Your parcel is now in transit to ${city}.` : null,
-    failureReason: step === 'FAILED' ? 'Recipient not available' : null,
+    failureReason: FAILURE_REASONS[step] ?? null,
   }));
 }
 
@@ -285,6 +294,7 @@ function countByStatus(statuses: ParcelStatusCode[]): StatusCounts {
     IN_TRANSIT: 0,
     OUT_FOR_DELIVERY: 0,
     DELIVERED: 0,
+    FAILED_ATTEMPT: 0,
     FAILED: 0,
   };
   for (const status of statuses) counts[status] += 1;
@@ -391,7 +401,7 @@ const ADMIN_DESIGN_ROWS: AdminSample[] = [
     destination: 'Kottawa',
     district: 'Colombo',
     weightKg: 1.4,
-    status: 'FAILED',
+    status: 'FAILED_ATTEMPT',
     createdHoursAgo: 4,
   },
   {
@@ -544,8 +554,10 @@ function inTab(parcel: AdminParcelDetail, tab: AdminParcelTab): boolean {
     case 'IN_TRANSIT':
       return ['PICKED_UP', 'IN_TRANSIT', 'OUT_FOR_DELIVERY'].includes(parcel.status);
     case 'DELIVERED':
-    case 'FAILED':
       return parcel.status === tab;
+    case 'FAILED':
+      // Failed attempts (waiting for the dispatcher) and failed deliveries, like the backend.
+      return parcel.status === 'FAILED_ATTEMPT' || parcel.status === 'FAILED';
   }
 }
 

@@ -92,7 +92,7 @@ class CourierDeliveryServiceTest {
         assertThat(items.get(0).allowedActions()).containsExactly(ParcelStatusCode.PICKED_UP);
         assertThat(items.get(0).pickup().city()).isEqualTo("Kandy");
         assertThat(items.get(1).allowedActions())
-                .containsExactly(ParcelStatusCode.DELIVERED, ParcelStatusCode.FAILED);
+                .containsExactly(ParcelStatusCode.DELIVERED, ParcelStatusCode.FAILED_ATTEMPT);
         assertThat(items.get(1).pickup()).isNull();
         assertThat(items.get(1).dropoff().contactName()).isEqualTo("Recipient");
     }
@@ -139,7 +139,8 @@ class CourierDeliveryServiceTest {
 
         assertThat(detail.trackingNumber()).isEqualTo("SD1");
         assertThat(detail.pickup().city()).isEqualTo("Kandy");
-        assertThat(detail.allowedActions()).containsExactly(ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.FAILED);
+        assertThat(detail.allowedActions())
+                .containsExactly(ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.FAILED_ATTEMPT);
         assertThat(detail.timeline()).extracting(t -> t.status())
                 .containsExactly(ParcelStatusCode.CREATED, ParcelStatusCode.PICKED_UP);
     }
@@ -201,12 +202,13 @@ class CourierDeliveryServiceTest {
         assertThat(change.getValue().recipientName()).isNull();
 
         assertThat(detail.currentStatus()).isEqualTo(ParcelStatusCode.PICKED_UP);
-        assertThat(detail.allowedActions()).containsExactly(ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.FAILED);
+        assertThat(detail.allowedActions())
+                .containsExactly(ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.FAILED_ATTEMPT);
         assertThat(detail.timeline()).hasSize(2);
     }
 
     @ParameterizedTest
-    @EnumSource(value = ParcelStatusCode.class, names = {"DELIVERED", "FAILED", "CREATED"})
+    @EnumSource(value = ParcelStatusCode.class, names = {"DELIVERED", "FAILED_ATTEMPT", "FAILED", "CREATED"})
     void updateStatusRefusesStatusesWithTheirOwnScreen(ParcelStatusCode status) {
         UUID parcelId = UUID.randomUUID();
 

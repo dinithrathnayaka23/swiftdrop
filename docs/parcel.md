@@ -9,14 +9,31 @@ or entities from another module.
 
 ## Statuses
 
-The six statuses from the final report (section 3.6), in `ParcelStatusCode`:
+Seven statuses, in `ParcelStatusCode`: the six from the final report (section 3.6) plus
+`FAILED_ATTEMPT` (`V6_003`, agreed by Members 4 and 6):
 
 ```
 CREATED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY -> DELIVERED
-           PICKED_UP / IN_TRANSIT / OUT_FOR_DELIVERY  -> FAILED
+           PICKED_UP / IN_TRANSIT / OUT_FOR_DELIVERY  -> FAILED_ATTEMPT
+FAILED_ATTEMPT -> CREATED      (retry)
+FAILED_ATTEMPT -> FAILED       (close)
 ```
 
-- A parcel moves forward one step at a time. `DELIVERED` and `FAILED` are end states.
+| Change | Who | Failure reason |
+| ------ | --- | -------------- |
+| `CREATED -> PICKED_UP -> IN_TRANSIT -> OUT_FOR_DELIVERY` | Courier (courier app) | Not allowed |
+| `OUT_FOR_DELIVERY -> DELIVERED` | Courier (proof of delivery) | Not allowed; needs the recipient's name or a photo |
+| `PICKED_UP / IN_TRANSIT / OUT_FOR_DELIVERY -> FAILED_ATTEMPT` | Courier (failed delivery form) | **Required** |
+| `FAILED_ATTEMPT -> CREATED` (retry) | Dispatcher | Not allowed |
+| `FAILED_ATTEMPT -> FAILED` (close) | Dispatcher | **Required** |
+
+- A parcel moves forward one step at a time. `DELIVERED` and `FAILED` are the only end states.
+  `FAILED_ATTEMPT` is not: the parcel waits for the dispatcher to retry or close it.
+- There is no direct change to `FAILED` any more: a failure always goes through `FAILED_ATTEMPT`.
+- A retried parcel goes back to `CREATED` and is unassigned again (dispatch ends the courier's
+  assignment on the failed attempt). Its history keeps every event; screens that show progress start
+  again from the latest `CREATED`.
+- The admin Parcels **Failed** tab and its count include `FAILED_ATTEMPT` and `FAILED`.
 - Courier assignment is not a status: it lives in the dispatch module (`delivery_assignments`).
 - Use `ParcelStatusCode.canChangeTo(next)`, `nextStatuses()` and `isTerminal()` instead of your own rules,
   for example to decide which buttons the courier app shows.
@@ -53,14 +70,19 @@ page must never show phone numbers, exact addresses or proof photos.
 ```java
 statusService.changeStatus(parcelId, StatusChange.to(ParcelStatusCode.PICKED_UP, courierUserId, "Collected"));
 statusService.changeStatus(parcelId, StatusChange.delivered(courierUserId, "Kamala Silva", proofUrl, null));
-statusService.changeStatus(parcelId, StatusChange.failed(courierUserId, "Recipient not available", null));
+// courier: a failed attempt
+statusService.changeStatus(parcelId, StatusChange.failedAttempt(courierUserId, "Recipient not available", null));
+// dispatcher: retry, or close for good
+statusService.changeStatus(parcelId, StatusChange.to(ParcelStatusCode.CREATED, adminUserId, "Second attempt"));
+statusService.changeStatus(parcelId, StatusChange.failed(adminUserId, "Address does not exist", null));
 List<StatusHistoryEntry> timeline = statusService.getHistory(parcelId); // oldest first
 ```
 
 - **Check permission first.** The service does not know who may change a parcel: the courier app checks
   the courier is assigned to it (Member 7), dispatch checks the admin (Member 6).
-- `DELIVERED` needs `recipientName` or `proofFileUrl`; `FAILED` needs `failureReason`. They are refused
-  for any other status (`BadRequestException`, 400).
+- `DELIVERED` needs `recipientName` or `proofFileUrl`; `FAILED_ATTEMPT` and `FAILED` need
+  `failureReason`. They are refused for any other status (`BadRequestException`, 400), so a retry to
+  `CREATED` carries no reason.
 - A change the diagram doesn't allow throws `ConflictException` (409). Nothing is saved or published.
 - The parcel row is locked during the change, so two updates of one parcel can't overlap.
 
@@ -95,7 +117,7 @@ All under `/api/v1`. Lists use Spring's paged JSON: `{ "content": [...], "page":
 | `GET /customer/parcels?search&status&bookedFrom&bookedTo&page&size` | CUSTOMER | Own parcels only. `search` matches tracking number, delivery city or order reference. Dates are `yyyy-MM-dd`, whole days in Sri Lanka time. |
 | `GET /customer/parcels/by-tracking-number/{trackingNumber}` | CUSTOMER | Details and history. 404 if the parcel isn't the caller's. |
 | `GET /customer/parcels/{parcelId}/receipt` | CUSTOMER | PDF download. The first download records the receipt number in `delivery_receipts`. |
-| `GET /admin/parcels/counts` | DISPATCHER_ADMIN | Counts per tab: `ALL`, `UNASSIGNED`, `ASSIGNED`, `IN_TRANSIT`, `DELIVERED`, `FAILED` |
+| `GET /admin/parcels/counts` | DISPATCHER_ADMIN | Counts per tab: `ALL`, `UNASSIGNED`, `ASSIGNED`, `IN_TRANSIT`, `DELIVERED`, `FAILED` (`FAILED_ATTEMPT` + `FAILED`) |
 | `GET /admin/parcels?tab&search&status&area&createdFrom&createdTo&page&size` | DISPATCHER_ADMIN | `search` matches tracking number, recipient or merchant name; `area` is the delivery city. |
 | `GET /admin/parcels/{parcelId}` | DISPATCHER_ADMIN | Details and history |
 
@@ -110,6 +132,7 @@ The `addresses` table is written only through `createParcel`.
 | --------- | ------ |
 | `V4_001__parcel_statuses_report_flow.sql` | The six report statuses (replaces the nine from V1) |
 | `V4_002__parcels_parcel_type.sql` | `parcels.parcel_type` |
+| `V6_003__parcel_status_failed_attempt.sql` | The `FAILED_ATTEMPT` status (not terminal, display order 55), added by Member 6 with Member 4's agreement |
 
 ## For the dispatch module: `DispatchStateLookup`
 
