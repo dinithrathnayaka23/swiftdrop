@@ -17,7 +17,10 @@ import com.swiftdrop.user.service.UserService;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.PageRequest;
@@ -37,6 +40,23 @@ class BusiestCouriersQueryIT extends IntegrationTestBase {
     /** A fixed "midnight" between yesterday's and today's rows below. */
     private static final Instant START_OF_DAY = Instant.now().minusSeconds(3600);
 
+    /** Couriers made here; their hand-made assignments are deleted after each test. */
+    private final List<UUID> couriers = new ArrayList<>();
+
+    /**
+     * The rows inserted here (e.g. IN_PROGRESS on a parcel that is still CREATED) are not states the app
+     * produces; remove them so later tests sharing the database see consistent data.
+     */
+    @AfterEach
+    void removeTheHandMadeAssignments() {
+        for (UUID courier : couriers) {
+            jdbc.update("DELETE FROM delivery_assignments WHERE courier_id = ?", courier);
+            jdbc.update("UPDATE couriers SET is_active = FALSE, availability_status = 'OFFLINE' WHERE courier_id = ?",
+                    courier);
+        }
+        couriers.clear();
+    }
+
     private UUID newUser(Role role) {
         return userService.createUser(NewUser.withPassword("Ramesh Perera",
                 role.name().toLowerCase() + "-" + UUID.randomUUID() + "@test.swiftdrop.local", "+94771234567", "x",
@@ -51,6 +71,7 @@ class BusiestCouriersQueryIT extends IntegrationTestBase {
                                       is_active, created_at)
                 VALUES (?, ?, 'Motorbike', ?, 'ONLINE', TRUE, now())""",
                 courierId, userId, "IT-" + courierId.toString().substring(0, 8).toUpperCase());
+        couriers.add(courierId);
         return courierId;
     }
 
