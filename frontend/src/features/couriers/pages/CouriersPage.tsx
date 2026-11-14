@@ -18,7 +18,14 @@ import { useDebouncedValue } from '../../shared-dispatch/useDebouncedValue';
 import AddCourierModal from '../components/AddCourierModal';
 import CourierDrawer from '../components/CourierDrawer';
 import EditCourierModal from '../components/EditCourierModal';
-import { availabilityVisual, AVAILABILITY_OPTIONS, initials, VEHICLE_TYPES } from '../courierRules';
+import AssignParcelsToCourierDialog from '../../dispatch/components/AssignParcelsToCourierDialog';
+import {
+  availabilityVisual,
+  AVAILABILITY_OPTIONS,
+  canTakeParcels,
+  initials,
+  VEHICLE_TYPES,
+} from '../courierRules';
 
 const MAX_PAGE_SIZE = 100;
 
@@ -71,6 +78,7 @@ export default function CouriersPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<Courier | null>(null);
+  const [assignTo, setAssignTo] = useState<Courier | null>(null);
   const [notice, setNotice] = useState<{ tone: 'success' | 'error'; text: string }>();
 
   const filters: CourierFilters = {
@@ -296,7 +304,7 @@ export default function CouriersPage() {
                     const { completedToday, todaysTotal } = courier.workload;
                     const share =
                       todaysTotal === 0 ? 0 : Math.round((completedToday / todaysTotal) * 100);
-                    const canAssign = courier.availability === 'ONLINE' && courier.active;
+                    const canAssign = canTakeParcels(courier);
                     return (
                       <tr key={courier.id} className="hover:bg-slate-50/60">
                         <td className="px-4 py-3">
@@ -356,11 +364,9 @@ export default function CouriersPage() {
                             {canAssign ? (
                               <Button
                                 size="sm"
-                                className="w-20 bg-brand-800 hover:bg-brand-800 aria-disabled:cursor-not-allowed aria-disabled:opacity-70"
-                                aria-disabled="true"
-                                title="Assigning from this page comes next"
-                                aria-describedby="couriers-assign-later"
-                                onClick={(event) => event.preventDefault()}
+                                className="w-20 bg-brand-800 hover:bg-brand-900"
+                                onClick={() => setAssignTo(courier)}
+                                aria-label={`Assign parcels to ${courier.fullName}`}
                               >
                                 Assign
                               </Button>
@@ -401,9 +407,6 @@ export default function CouriersPage() {
                 </tbody>
               </table>
             </div>
-            <p id="couriers-assign-later" className="sr-only">
-              Assigning parcels from the Couriers page is not available yet.
-            </p>
             <div className="flex flex-wrap items-center justify-between gap-3 p-4">
               <p className="text-sm text-slate-500">
                 Showing {list.data.page.number * list.data.page.size + 1}–
@@ -427,6 +430,15 @@ export default function CouriersPage() {
           onClose={() => setOpenId(null)}
           onEdit={setEditing}
           onChanged={refresh}
+          onAssign={setAssignTo}
+        />
+      )}
+
+      {assignTo && (
+        <AssignParcelsToCourierDialog
+          courier={assignTo}
+          onClose={() => setAssignTo(null)}
+          onAssigned={refresh}
         />
       )}
 
