@@ -255,15 +255,23 @@ class AssignmentFlowIT extends IntegrationTestBase {
         assertThat(history.get(0).get("destinationCity").asString()).isEqualTo(city);
         assertThat(history.get(0).get("endedAt").isNull()).isFalse();
 
-        // Failed: the assignment ends as FAILED and does not count as completed.
+        // A failed attempt: the assignment ends as FAILED and does not count as completed.
         statusService.changeStatus(failed.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierUserId, null));
-        statusService.changeStatus(failed.id(), StatusChange.failed(courierUserId, "Recipient not available", null));
-        await("the failed delivery to end", () -> courierAssignments(courier, "true", admin), JsonNode::isEmpty);
+        statusService.changeStatus(failed.id(),
+                StatusChange.failedAttempt(courierUserId, "Recipient not available", null));
+        await("the failed attempt to end the assignment", () -> courierAssignments(courier, "true", admin),
+                JsonNode::isEmpty);
         JsonNode after = workload(courier, admin);
         assertThat(after.get("completedToday").asInt()).isEqualTo(1);
         assertThat(after.get("open").asInt()).isZero();
         assertThat(courierAssignments(courier, null, admin)).extracting(row -> row.get("status").asString())
                 .containsExactlyInAnyOrder("COMPLETED", "FAILED");
+        assertThat(parcelTab("FAILED", city, admin)).containsExactly(failed.id().toString());
+
+        // The dispatcher retries: the parcel is waiting for a courier again, with no open assignment.
+        statusService.changeStatus(failed.id(), StatusChange.to(ParcelStatusCode.CREATED, null, "Retry"));
+        assertThat(parcelTab("UNASSIGNED", city, admin)).containsExactly(failed.id().toString());
+        assertThat(assign(failed.id(), courier, admin).statusCode()).isEqualTo(201);
 
         // A delivered parcel can't be reassigned.
         JsonNode other = addCourier(admin, true);

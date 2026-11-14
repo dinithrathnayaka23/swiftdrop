@@ -71,9 +71,9 @@ class InfrastructureIT extends IntegrationTestBase {
                 // V6_001: the delivery zones a courier covers.
                 "courier_service_areas");
 
-        // The six report statuses (V4_001); ParcelServiceIT checks the codes and their order.
+        // The six report statuses (V4_001) plus FAILED_ATTEMPT (V6_003); ParcelServiceIT checks the codes and order.
         Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);
-        assertThat(statuses).isEqualTo(6);
+        assertThat(statuses).isEqualTo(7);
     }
 
     @Test

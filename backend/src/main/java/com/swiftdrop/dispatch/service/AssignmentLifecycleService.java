@@ -19,9 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
  * <pre>
  *   PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY   ASSIGNED -> IN_PROGRESS
  *   DELIVERED                                 -> COMPLETED, ended_at set
- *   FAILED                                    -> FAILED, ended_at set
- *   anything else                             ignored
+ *   FAILED_ATTEMPT                            -> FAILED, ended_at set
+ *   FAILED                                    -> FAILED, ended_at set (normally nothing is open by then)
+ *   anything else (CREATED after a retry, ...) ignored
  * </pre>
+ *
+ * <p>A failed attempt ends the courier's assignment: the dispatcher then retries the parcel (back to
+ * CREATED, so it shows in Unassigned again with no open assignment) or closes it as FAILED, whose
+ * event finds no open assignment and changes nothing.
  *
  * <p>Events arrive at least once and possibly out of order, so this only ever moves an open
  * assignment forward: no open assignment means nothing to do, and a repeated or older event finds
@@ -80,7 +85,7 @@ public class AssignmentLifecycleService {
         return switch (status) {
             case PICKED_UP, IN_TRANSIT, OUT_FOR_DELIVERY -> Optional.of(AssignmentStatus.IN_PROGRESS);
             case DELIVERED -> Optional.of(AssignmentStatus.COMPLETED);
-            case FAILED -> Optional.of(AssignmentStatus.FAILED);
+            case FAILED_ATTEMPT, FAILED -> Optional.of(AssignmentStatus.FAILED);
             default -> Optional.empty();
         };
     }
