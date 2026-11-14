@@ -8,7 +8,12 @@ import {
   Truck,
 } from 'lucide-react';
 import { toApiRequestError } from '../../api/errors';
-import type { AssignmentStatus, CourierAvailability, NewCourier } from '../../types/courier';
+import type {
+  AssignmentStatus,
+  Courier,
+  CourierAvailability,
+  NewCourier,
+} from '../../types/courier';
 import { toE164 } from '../../utils/phone';
 import type { Visual } from '../shared-parcels/components/statusVisuals';
 
@@ -53,6 +58,13 @@ const ASSIGNMENT_VISUALS: Record<AssignmentStatus, Visual> = {
 
 export function assignmentVisual(status: AssignmentStatus): Visual {
   return ASSIGNMENT_VISUALS[status];
+}
+
+/** Whether the backend lets this courier be given parcels now: active, online, account active. */
+export function canTakeParcels(
+  courier: Pick<Courier, 'active' | 'availability' | 'accountStatus'>,
+): boolean {
+  return courier.active && courier.availability === 'ONLINE' && courier.accountStatus === 'ACTIVE';
 }
 
 /** "RP" for Ramesh Perera. */

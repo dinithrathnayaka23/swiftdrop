@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router';
 import { resetMockCouriers } from '../../../api/mock/mockCouriersApi';
+import { resetMockDispatchStates } from '../../../api/mock/mockParcelsApi';
 import { resetMockServiceAreas } from '../../../api/mock/mockServiceAreasApi';
 import CouriersPage from './CouriersPage';
 
@@ -33,6 +34,7 @@ describe('CouriersPage (mock API)', () => {
   beforeEach(() => {
     resetMockServiceAreas();
     resetMockCouriers();
+    resetMockDispatchStates();
   });
 
   it('shows the summary cards and the workload of each courier', async () => {
@@ -46,16 +48,93 @@ describe('CouriersPage (mock API)', () => {
     expect(within(ramesh).getByText('Colombo 01, Colombo 02-07')).toBeInTheDocument();
   });
 
-  it('keeps Assign visible but disabled for online couriers and shows View for the others', async () => {
+  it('assigns parcels to an online courier from the row, and shows View for the others', async () => {
     renderPage();
-    const online = await rowOf('Ramesh Perera');
-    const assign = within(online).getByRole('button', { name: 'Assign' });
-    expect(assign).toHaveAttribute('aria-disabled', 'true');
-    expect(assign).toHaveAttribute('title', 'Assigning from this page comes next');
-
     const onBreak = await rowOf('Kasun Perera');
     expect(within(onBreak).getByRole('button', { name: 'View Kasun Perera' })).toBeInTheDocument();
-    expect(within(onBreak).queryByRole('button', { name: 'Assign' })).not.toBeInTheDocument();
+    expect(within(onBreak).queryByRole('button', { name: /^Assign/ })).not.toBeInTheDocument();
+
+    const ramesh = await rowOf('Ramesh Perera');
+    await userEvent.click(
+      within(ramesh).getByRole('button', { name: 'Assign parcels to Ramesh Perera' }),
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Assign Parcels to Ramesh Perera' });
+    expect(within(dialog).getByRole('button', { name: 'Assign 0 Parcels' })).toBeDisabled();
+    await userEvent.click(
+      await within(dialog).findByRole('checkbox', { name: 'Select #SD123456789' }),
+    );
+    await userEvent.click(within(dialog).getByRole('checkbox', { name: 'Select #SD667788990' }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Assign 2 Parcels' }));
+
+    expect(await within(dialog).findByText('2 assigned')).toBeInTheDocument();
+    // The list behind refreshes: Ramesh has two more deliveries today.
+    await waitFor(async () =>
+      expect(within(await rowOf('Ramesh Perera')).getByText('12 / 17')).toBeInTheDocument(),
+    );
+    // Both parcels left the waiting list.
+    await waitFor(() =>
+      expect(
+        within(dialog).queryByRole('checkbox', { name: 'Select #SD123456789' }),
+      ).not.toBeInTheDocument(),
+    );
+  });
+
+  it('opens the same dialog from the drawer’s Assign Deliveries', async () => {
+    renderPage();
+    const drawer = await openDrawer('Ramesh Perera');
+    await userEvent.click(await within(drawer).findByRole('button', { name: 'Assign Deliveries' }));
+    expect(
+      await screen.findByRole('dialog', { name: 'Assign Parcels to Ramesh Perera' }),
+    ).toBeInTheDocument();
+  });
+
+  it('reassigns a current delivery: a reason and a courier are required', async () => {
+    renderPage();
+    const drawer = await openDrawer('Ramesh Perera');
+    await userEvent.click(within(drawer).getByRole('tab', { name: 'Current Deliveries' }));
+    const [first] = await within(drawer).findAllByRole('button', { name: /^Reassign #SD/ });
+    await userEvent.click(first);
+    const dialog = await screen.findByRole('dialog', { name: /^Reassign #SD/ });
+
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reassign' }));
+    expect(within(dialog).getByText('Reason is required')).toBeInTheDocument();
+    expect(within(dialog).getByText('Choose a courier')).toBeInTheDocument();
+    // The parcel's own courier is not offered.
+    await within(dialog).findByRole('radio', { name: /Dilshan Silva/ });
+    expect(within(dialog).queryByRole('radio', { name: /Ramesh Perera/ })).not.toBeInTheDocument();
+
+    await userEvent.type(within(dialog).getByLabelText(/Reason/), 'Vehicle broke down');
+    await userEvent.click(within(dialog).getByRole('radio', { name: /Dilshan Silva/ }));
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Reassign' }));
+
+    expect(
+      await within(drawer).findByText(/was reassigned to Dilshan Silva\.$/),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(drawer).getAllByRole('link', { name: /^#SD/ })).toHaveLength(2),
+    );
+  });
+
+  it('unassigns a delivery that is still waiting for pickup', async () => {
+    renderPage();
+    const drawer = await openDrawer('Ramesh Perera');
+    await userEvent.click(within(drawer).getByRole('tab', { name: 'Current Deliveries' }));
+    // One waiting parcel (Unassign) and two picked up (Reassign only).
+    expect(await within(drawer).findAllByRole('button', { name: /^Reassign #SD/ })).toHaveLength(3);
+    const unassign = within(drawer).getAllByRole('button', { name: /^Unassign #SD/ });
+    expect(unassign).toHaveLength(1);
+
+    await userEvent.click(unassign[0]);
+    const dialog = await screen.findByRole('dialog', { name: /^Unassign #SD/ });
+    await userEvent.type(within(dialog).getByLabelText(/Reason/), 'Customer asked to wait');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Unassign' }));
+
+    expect(
+      await within(drawer).findByText(/was unassigned and is waiting for a courier again\.$/),
+    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(within(drawer).getAllByRole('link', { name: /^#SD/ })).toHaveLength(2),
+    );
   });
 
   it('filters by status and searches after a short pause', async () => {
