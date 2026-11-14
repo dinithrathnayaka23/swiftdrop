@@ -19,9 +19,12 @@ import {
   assignmentVisual,
   availabilityVisual,
   AVAILABILITY_OPTIONS,
+  canTakeParcels,
   initials,
 } from '../courierRules';
 import { useActiveZones } from '../activeZones';
+import ReassignDialog from './ReassignDialog';
+import UnassignDialog from './UnassignDialog';
 
 type Tab = 'overview' | 'current' | 'history';
 const TABS: { id: Tab; label: string }[] = [
@@ -208,7 +211,16 @@ function OverviewTab({
   );
 }
 
-function AssignmentList({ rows, empty }: { rows: CourierAssignmentRow[]; empty: string }) {
+function AssignmentList({
+  rows,
+  empty,
+  actions,
+}: {
+  rows: CourierAssignmentRow[];
+  empty: string;
+  /** Buttons for an open delivery (Reassign, Unassign). */
+  actions?: (row: CourierAssignmentRow) => ReactNode;
+}) {
   const { formatShortDateTime } = useDateFormat();
   if (rows.length === 0) return <p className="py-6 text-center text-sm text-slate-500">{empty}</p>;
   return (
@@ -239,34 +251,109 @@ function AssignmentList({ rows, empty }: { rows: CourierAssignmentRow[]; empty: 
             {row.endedAt && <> · Ended {formatShortDateTime(row.endedAt)}</>}
           </p>
           {row.reason && <p className="text-xs text-slate-500">Reason: {row.reason}</p>}
+          {actions && <div className="flex gap-2 pt-1">{actions(row)}</div>}
         </li>
       ))}
     </ul>
   );
 }
 
-function DeliveriesTab({ courierId, open }: { courierId: string; open: boolean }) {
+type DeliveryAction = { kind: 'reassign' | 'unassign'; row: CourierAssignmentRow };
+
+function DeliveriesTab({
+  courierId,
+  open,
+  refreshKey,
+  onChanged,
+}: {
+  courierId: string;
+  open: boolean;
+  /** Changes when something else changed the courier's work, to reload. */
+  refreshKey: string;
+  /** After a reassign or unassign made here. */
+  onChanged: () => void;
+}) {
   const [page, setPage] = useState(0);
+  const [action, setAction] = useState<DeliveryAction | null>(null);
+  const [notice, setNotice] = useState<string>();
   const size = open ? 50 : HISTORY_PAGE_SIZE;
-  const rows = useApiData(`${courierId}|${open}|${page}`, () =>
+  const rows = useApiData(`${courierId}|${open}|${page}#${refreshKey}`, () =>
     couriersApi.listAssignments(courierId, { open, page, size }),
   );
+
+  function done(text: string) {
+    setAction(null);
+    setNotice(text);
+    onChanged();
+  }
+
   if (rows.status === 'loading') return <LoadingState title="Loading deliveries…" message="" />;
   if (rows.status === 'error') {
     return (
       <ErrorState title="Couldn't load deliveries" message={rows.message} onAction={rows.retry} />
     );
   }
+  const label = (row: CourierAssignmentRow) =>
+    row.trackingNumber ? `#${row.trackingNumber}` : 'this parcel';
   return (
     <div className="space-y-4">
+      {notice && <Alert tone="success">{notice}</Alert>}
       <AssignmentList
         rows={rows.data.content}
         empty={open ? 'No deliveries in progress or waiting.' : 'No finished deliveries yet.'}
+        actions={
+          open
+            ? (row) => (
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAction({ kind: 'reassign', row })}
+                    aria-label={`Reassign ${label(row)}`}
+                  >
+                    Reassign
+                  </Button>
+                  {/* Only before pickup, as the backend allows. */}
+                  {row.parcelStatus === 'CREATED' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setAction({ kind: 'unassign', row })}
+                      aria-label={`Unassign ${label(row)}`}
+                    >
+                      Unassign
+                    </Button>
+                  )}
+                </>
+              )
+            : undefined
+        }
       />
       {rows.data.page.totalPages > 1 && (
         <div className="flex justify-center">
           <Pagination page={page} totalPages={rows.data.page.totalPages} onChange={setPage} />
         </div>
+      )}
+      {action?.kind === 'reassign' && (
+        <ReassignDialog
+          parcelId={action.row.parcelId}
+          trackingNumber={action.row.trackingNumber ?? action.row.parcelId}
+          currentCourierId={courierId}
+          onClose={() => setAction(null)}
+          onReassigned={(courier) =>
+            done(`${label(action.row)} was reassigned to ${courier.fullName}.`)
+          }
+        />
+      )}
+      {action?.kind === 'unassign' && (
+        <UnassignDialog
+          parcelId={action.row.parcelId}
+          trackingNumber={action.row.trackingNumber ?? action.row.parcelId}
+          onClose={() => setAction(null)}
+          onUnassigned={() =>
+            done(`${label(action.row)} was unassigned and is waiting for a courier again.`)
+          }
+        />
       )}
     </div>
   );
@@ -278,8 +365,10 @@ interface CourierDrawerProps {
   version: number;
   onClose: () => void;
   onEdit: (courier: Courier) => void;
-  /** After a change made here (availability), so the list can refresh. */
+  /** After a change made here (availability, reassign, unassign), so the list can refresh. */
   onChanged: () => void;
+  /** "Assign Deliveries": opens the parcel picker for this courier. */
+  onAssign: (courier: Courier) => void;
 }
 
 /** The courier's details beside the list: overview, current deliveries and history. */
@@ -289,6 +378,7 @@ export default function CourierDrawer({
   onClose,
   onEdit,
   onChanged,
+  onAssign,
 }: CourierDrawerProps) {
   const titleId = useId();
   const [tab, setTab] = useState<Tab>('overview');
@@ -325,6 +415,13 @@ export default function CourierDrawer({
     setReload((n) => n + 1);
     onChanged();
   }
+
+  function deliveriesChanged() {
+    setReload((n) => n + 1);
+    onChanged();
+  }
+
+  const assignable = courier.status === 'success' && canTakeParcels(courier.data);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-900/30" onClick={onClose}>
@@ -419,9 +516,43 @@ export default function CourierDrawer({
                 onAvailability={changeAvailability}
               />
             ))}
-          {tab === 'current' && <DeliveriesTab courierId={courierId} open />}
-          {tab === 'history' && <DeliveriesTab courierId={courierId} open={false} />}
+          {tab === 'current' && (
+            <DeliveriesTab
+              courierId={courierId}
+              open
+              refreshKey={`${version}#${reload}`}
+              onChanged={deliveriesChanged}
+            />
+          )}
+          {tab === 'history' && (
+            <DeliveriesTab
+              courierId={courierId}
+              open={false}
+              refreshKey={`${version}#${reload}`}
+              onChanged={deliveriesChanged}
+            />
+          )}
         </div>
+
+        {courier.status === 'success' && (
+          <div className="border-t border-slate-200 p-4">
+            <Button
+              fullWidth
+              className="bg-brand-800 hover:bg-brand-900"
+              disabled={!assignable}
+              aria-describedby={assignable ? undefined : 'drawer-assign-why'}
+              onClick={() => onAssign(courier.data)}
+            >
+              <Truck className="size-4" aria-hidden="true" />
+              Assign Deliveries
+            </Button>
+            {!assignable && (
+              <p id="drawer-assign-why" className="mt-2 text-center text-xs text-slate-500">
+                Only an active courier who is online can be given parcels.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

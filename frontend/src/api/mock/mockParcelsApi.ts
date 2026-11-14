@@ -540,8 +540,25 @@ function adminDetail(sample: AdminSample, index: number): AdminParcelDetail {
   };
 }
 
+/** Dispatch changes made through the mock dispatch API, by parcel id (CREATED parcels only). */
+const dispatchOverrides = new Map<string, DispatchState>();
+
+export function setMockDispatchState(parcelId: string, state: DispatchState): void {
+  dispatchOverrides.set(parcelId, state);
+}
+
+export function resetMockDispatchStates(): void {
+  dispatchOverrides.clear();
+}
+
 function adminParcels(): AdminParcelDetail[] {
-  return adminSamples().map(adminDetail);
+  return adminSamples()
+    .map(adminDetail)
+    .map((p) =>
+      p.status === 'CREATED' && dispatchOverrides.has(p.id)
+        ? { ...p, dispatchState: dispatchOverrides.get(p.id) }
+        : p,
+    );
 }
 
 function inTab(parcel: AdminParcelDetail, tab: AdminParcelTab): boolean {
