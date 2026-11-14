@@ -117,3 +117,33 @@ test('a failed load offers to try again', async () => {
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
   expect(await screen.findByText('95.00%')).toBeInTheDocument();
 });
+
+test('the tiles show placeholders while the totals load', async () => {
+  let finish: (summary: ReportSummary) => void = () => {};
+  api.summary.mockReturnValue(new Promise((resolve) => (finish = resolve)));
+  render(<OperationalReportsPage />);
+
+  expect(screen.getAllByTestId('tile-loading')).toHaveLength(4);
+  expect(screen.getByText('Loading totals...')).toBeInTheDocument();
+
+  finish(SUMMARY);
+  expect(await screen.findByText('95.00%')).toBeInTheDocument();
+  expect(screen.queryByTestId('tile-loading')).not.toBeInTheDocument();
+});
+
+test('a range without any deliveries says so instead of drawing flat lines', async () => {
+  api.deliveriesPerDay.mockResolvedValue(
+    DAYS.map((d) => ({ ...d, total: 0, delivered: 0, failed: 0 })),
+  );
+  render(<OperationalReportsPage />);
+
+  expect(await screen.findByText('No deliveries in this range')).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: /Deliveries per day/ })).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Show last 30 days' }));
+  await waitFor(() => expect(api.deliveriesPerDay).toHaveBeenLastCalledWith(lastDays(30)));
+  expect(screen.getByRole('button', { name: 'Last 30 days' })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});

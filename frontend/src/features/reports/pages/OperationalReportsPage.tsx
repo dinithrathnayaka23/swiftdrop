@@ -146,19 +146,32 @@ export default function OperationalReportsPage() {
           <ErrorState message={summary.message} onAction={summary.retry} actionLabel="Try again" />
         </div>
       ) : (
-        <div className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div
+          className="mt-4 grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          aria-busy={summary.status === 'loading'}
+        >
           {tiles.map((tile) => (
             <div
               key={tile.label}
               className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
             >
               <p className="text-sm text-slate-500">{tile.label}</p>
-              <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 tabular-nums">
-                {tile.value ?? '–'}
-              </p>
+              {tile.value === undefined ? (
+                // Placeholder while the numbers load, so the tiles don't read as "no data".
+                <span
+                  data-testid="tile-loading"
+                  className="mt-3 block h-9 w-24 animate-pulse rounded-lg bg-slate-100"
+                  aria-hidden="true"
+                />
+              ) : (
+                <p className="mt-3 text-3xl font-bold tracking-tight text-slate-900 tabular-nums">
+                  {tile.value}
+                </p>
+              )}
               {tile.note && <p className="mt-1 text-xs text-slate-500">{tile.note}</p>}
             </div>
           ))}
+          {summary.status === 'loading' && <span className="sr-only">Loading totals...</span>}
         </div>
       )}
       {data && (
@@ -182,6 +195,14 @@ export default function OperationalReportsPage() {
           <LoadingState title="Loading report..." />
         ) : daily.data.length === 0 ? (
           <EmptyState title="No days in this range" message="Choose another date range." />
+        ) : daily.data.every((d) => d.total === 0 && d.delivered === 0 && d.failed === 0) ? (
+          // A chart of flat zero lines looks like a broken chart; say what's going on instead.
+          <EmptyState
+            title="No deliveries in this range"
+            message="No parcels were created, delivered or failed on these days. Try a longer range."
+            actionLabel="Show last 30 days"
+            onAction={() => choosePreset('last30', lastDays(30))}
+          />
         ) : (
           <>
             <div className="p-5">
