@@ -89,6 +89,7 @@ services:
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env (min 32 chars)}
       JWT_EXPIRY: ${JWT_EXPIRY:-900}
       API_KEY_PEPPER: ${API_KEY_PEPPER:?set API_KEY_PEPPER in .env (min 32 chars)}
+      WEBHOOK_SECRET_KEY: ${WEBHOOK_SECRET_KEY:?set WEBHOOK_SECRET_KEY in .env (min 32 chars)}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}

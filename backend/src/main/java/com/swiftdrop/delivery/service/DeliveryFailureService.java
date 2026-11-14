@@ -26,9 +26,11 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Failed deliveries from the courier app: the reasons to choose from and reporting a failure.
  *
- * <p>Reporting moves the parcel to FAILED through {@link ParcelStatusService} (which checks the
- * parcel may fail now) and records the reason in {@code delivery_failures}, in one transaction.
- * Dispatch ends the courier's assignment when it hears the status event.
+ * <p>Reporting moves the parcel to FAILED_ATTEMPT through {@link ParcelStatusService} (which checks
+ * the parcel may fail now) and records the reason in {@code delivery_failures}, in one transaction.
+ * Dispatch ends the courier's assignment when it hears the status event; the dispatcher then retries
+ * the parcel (CREATED) or closes it (FAILED). A retried parcel can fail again, so a parcel can have
+ * several failure rows.
  */
 @Slf4j
 @Service
@@ -53,12 +55,12 @@ public class DeliveryFailureService {
     }
 
     /**
-     * Marks one of the courier's deliveries as failed.
+     * Reports a failed delivery attempt on one of the courier's deliveries (FAILED_ATTEMPT).
      *
      * @return the delivery as it is after the change
      * @throws BadRequestException if the reason is unknown or inactive, or it needs a note and has none
      * @throws NotFoundException   if the parcel isn't assigned to this courier (or doesn't exist)
-     * @throws ConflictException   if the parcel can't fail now (not picked up yet, or already ended)
+     * @throws ConflictException   if the parcel can't fail now (not picked up yet, or already reported)
      */
     @Transactional
     public CourierDeliveryDetailResponse reportFailure(UUID parcelId, UUID courierUserId,
@@ -75,7 +77,7 @@ public class DeliveryFailureService {
 
         // The note goes into the reason text only, so the timeline doesn't show it twice.
         StatusHistoryEntry entry = parcelStatusService.changeStatus(parcelId,
-                StatusChange.failed(courierUserId, failureText(reason, note), null));
+                StatusChange.failedAttempt(courierUserId, failureText(reason, note), null));
 
         DeliveryFailure failure = new DeliveryFailure();
         failure.setParcelId(parcelId);
@@ -85,7 +87,8 @@ public class DeliveryFailureService {
         failure.setNote(note);
         deliveryFailureRepository.save(failure);
 
-        log.info("Courier {} reported parcel {} as failed ({})", courierUserId, parcelId, reason.getCode());
+        log.info("Courier {} reported a failed attempt on parcel {} ({})", courierUserId, parcelId,
+                reason.getCode());
         return CourierDeliveryMapper.toDetail(parcelService.getParcel(parcelId),
                 parcelStatusService.getHistory(parcelId));
     }

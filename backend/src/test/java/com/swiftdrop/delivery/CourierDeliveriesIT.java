@@ -18,6 +18,7 @@ import com.swiftdrop.user.model.AccountStatus;
 import com.swiftdrop.user.service.UserService;
 import java.math.BigDecimal;
 import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -39,6 +40,8 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     private static final String ADMIN_PASSWORD = "test-admin-password-1";
     private static final String PASSWORD = "courier2026";
     private static final String DELIVERIES = "/api/v1/courier/deliveries";
+    /** How long to wait for dispatch's status listener (asynchronous). */
+    private static final Duration LISTENER_WAIT = Duration.ofSeconds(10);
 
     @Autowired private JsonMapper json;
     @Autowired private JdbcTemplate db;
@@ -215,7 +218,7 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     }
 
     @Test
-    void reportingAFailureWritesTheHistoryAndTheFailureRow() throws Exception {
+    void reportingAFailedAttemptWritesTheHistoryAndTheFailureRow() throws Exception {
         Courier courier = newCourier();
         ParcelDetails parcel = newParcel();
         assign(parcel, courier, Instant.now());
@@ -227,7 +230,8 @@ class CourierDeliveriesIT extends IntegrationTestBase {
 
         assertThat(response.statusCode()).isEqualTo(200);
         JsonNode body = json.readTree(response.body());
-        assertThat(body.get("currentStatus").asString()).isEqualTo("FAILED");
+        assertThat(body.get("currentStatus").asString()).isEqualTo("FAILED_ATTEMPT");
+        // Retrying or closing the attempt is the dispatcher's.
         assertThat(body.get("allowedActions").isEmpty()).isTrue();
         JsonNode last = body.get("timeline").get(body.get("timeline").size() - 1);
         assertThat(last.get("failureReason").asString()).isEqualTo("Other: Gate locked, no answer");
@@ -239,12 +243,43 @@ class CourierDeliveriesIT extends IntegrationTestBase {
         assertThat(row.get("courier_user_id")).isEqualTo(courier.userId());
         assertThat(row.get("reason_code")).isEqualTo("OTHER");
         assertThat(row.get("note")).isEqualTo("Gate locked, no answer");
-        assertThat(row.get("status_code")).isEqualTo("FAILED");
+        assertThat(row.get("status_code")).isEqualTo("FAILED_ATTEMPT");
 
-        // FAILED is an end state: a second report is refused and nothing more is written.
+        // Reporting it again is refused (409 now, 404 once dispatch has ended the assignment).
         assertThat(post(DELIVERIES + "/" + parcel.id() + "/fail", """
                 {"reasonCode":"REFUSED"}""", courier.token()).statusCode()).isIn(404, 409);
         assertThat(failureCount(parcel)).isEqualTo(1);
+
+        // Dispatch ends the assignment, so the delivery leaves the courier's list.
+        awaitNoOpenAssignment(parcel);
+        assertThat(get(DELIVERIES + "/" + parcel.id(), courier.token()).statusCode()).isEqualTo(404);
+    }
+
+    @Test
+    void aRetriedParcelCanFailAgainWithASecondFailureRow() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now().minus(1, ChronoUnit.HOURS));
+        parcelStatusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, courier.userId(), null));
+        String path = DELIVERIES + "/" + parcel.id() + "/fail";
+        assertThat(post(path, """
+                {"reasonCode":"RECIPIENT_UNAVAILABLE"}""", courier.token()).statusCode()).isEqualTo(200);
+        awaitNoOpenAssignment(parcel);
+
+        // The dispatcher retries the parcel and gives it back to the same courier.
+        parcelStatusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.CREATED, null, "Retry"));
+        assign(parcel, courier, Instant.now());
+        parcelStatusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, courier.userId(), null));
+
+        assertThat(post(path, """
+                {"reasonCode":"WRONG_ADDRESS"}""", courier.token()).statusCode()).isEqualTo(200);
+
+        assertThat(failureCount(parcel)).isEqualTo(2);
+        assertThat(db.queryForList(
+                "SELECT reason_code FROM delivery_failures WHERE parcel_id = ? ORDER BY recorded_at",
+                String.class, parcel.id())).containsExactly("RECIPIENT_UNAVAILABLE", "WRONG_ADDRESS");
     }
 
     @Test
@@ -277,7 +312,7 @@ class CourierDeliveriesIT extends IntegrationTestBase {
                 {"reasonCode":"RECIPIENT_UNAVAILABLE"}""";
 
         assertThat(post(path, body, other.token()).statusCode()).isEqualTo(404);
-        // Still CREATED: the parcel module doesn't allow CREATED -> FAILED.
+        // Still CREATED: a courier can only report a failed attempt after pickup.
         assertThat(post(path, body, owner.token()).statusCode()).isEqualTo(409);
 
         assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
@@ -291,6 +326,27 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     }
 
     // ---- Helpers -------------------------------------------------------------------------------
+
+    /**
+     * Waits until dispatch's status listener has ended the parcel's assignment (it runs
+     * asynchronously after the status event), as {@code AssignmentFlowIT} does.
+     */
+    private void awaitNoOpenAssignment(ParcelDetails parcel) throws InterruptedException {
+        Instant deadline = Instant.now().plus(LISTENER_WAIT);
+        while (openAssignments(parcel) > 0) {
+            if (Instant.now().isAfter(deadline)) {
+                throw new AssertionError("Timed out waiting for dispatch to end the assignment");
+            }
+            Thread.sleep(200);
+        }
+    }
+
+    private int openAssignments(ParcelDetails parcel) {
+        Integer count = db.queryForObject(
+                "SELECT count(*) FROM delivery_assignments WHERE parcel_id = ? AND ended_at IS NULL",
+                Integer.class, parcel.id());
+        return count == null ? 0 : count;
+    }
 
     private int failureCount(ParcelDetails parcel) {
         Integer count = db.queryForObject("SELECT count(*) FROM delivery_failures WHERE parcel_id = ?",

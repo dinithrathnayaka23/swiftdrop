@@ -43,7 +43,10 @@ public class CourierDeliveryService {
 
     static final String NOT_FOUND = "Delivery not found";
 
-    /** The steps the Update Status screen records; DELIVERED and FAILED have their own screens. */
+    /**
+     * The steps the Update Status screen records, which are also the "in progress" statuses.
+     * DELIVERED (proof of delivery) and FAILED_ATTEMPT (the failed delivery form) have their own screens.
+     */
     static final Set<ParcelStatusCode> STEPS =
             EnumSet.of(ParcelStatusCode.PICKED_UP, ParcelStatusCode.IN_TRANSIT, ParcelStatusCode.OUT_FOR_DELIVERY);
 
@@ -94,7 +97,7 @@ public class CourierDeliveryService {
      * the status event, so nothing here touches assignments.
      *
      * @return the delivery as it is after the change
-     * @throws BadRequestException if the status is DELIVERED, FAILED or CREATED
+     * @throws BadRequestException if the status is DELIVERED, FAILED_ATTEMPT, FAILED or CREATED
      * @throws NotFoundException   if the parcel isn't assigned to this courier (or doesn't exist)
      * @throws ConflictException   if the parcel can't move to that status now (e.g. a repeated tap)
      */
@@ -105,7 +108,7 @@ public class CourierDeliveryService {
         if (status == ParcelStatusCode.DELIVERED) {
             throw new BadRequestException("Use proof of delivery to mark a parcel as delivered");
         }
-        if (status == ParcelStatusCode.FAILED) {
+        if (status == ParcelStatusCode.FAILED_ATTEMPT || status == ParcelStatusCode.FAILED) {
             throw new BadRequestException("Use the failed delivery form to report a failed delivery");
         }
         if (!STEPS.contains(status)) {
@@ -129,8 +132,9 @@ public class CourierDeliveryService {
     }
 
     /**
-     * Not started = still CREATED; in progress = picked up but not yet delivered or failed. A parcel
-     * that already reached an end state but whose assignment is still open counts in the total only.
+     * Not started = still CREATED; in progress = picked up, in transit or out for delivery. A parcel
+     * that is already delivered or failed (attempt) but whose assignment dispatch hasn't ended yet
+     * counts in the total only.
      */
     private static CourierDeliveryCounts counts(List<ParcelDetails> parcels) {
         int assigned = 0;
@@ -139,7 +143,7 @@ public class CourierDeliveryService {
             ParcelStatusCode status = parcel.currentStatus();
             if (status == ParcelStatusCode.CREATED) {
                 assigned++;
-            } else if (!status.isTerminal()) {
+            } else if (STEPS.contains(status)) {
                 inProgress++;
             }
         }

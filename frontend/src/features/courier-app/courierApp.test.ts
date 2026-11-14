@@ -52,7 +52,7 @@ describe('mockCourierApi', () => {
     });
 
     expect(after.currentStatus).toBe('IN_TRANSIT');
-    expect(after.allowedActions).toEqual(['OUT_FOR_DELIVERY', 'FAILED']);
+    expect(after.allowedActions).toEqual(['OUT_FOR_DELIVERY', 'FAILED_ATTEMPT']);
     expect(after.timeline.at(-1)).toEqual(
       expect.objectContaining({ status: 'IN_TRANSIT', note: 'Left hub' }),
     );
@@ -88,7 +88,7 @@ describe('mockCourierApi', () => {
       note: ' Gate locked ',
     });
 
-    expect(after.currentStatus).toBe('FAILED');
+    expect(after.currentStatus).toBe('FAILED_ATTEMPT');
     expect(after.allowedActions).toEqual([]);
     expect(after.timeline.at(-1)?.failureReason).toBe('Other: Gate locked');
     expect((await mockCourierApi.getToday()).deliveries.map((d) => d.parcelId)).not.toContain(id);

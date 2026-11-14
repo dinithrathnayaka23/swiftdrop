@@ -54,7 +54,7 @@ public class CourierDeliveryController {
 
     /**
      * Picked up, in transit or out for delivery; returns the updated delivery. 400 for DELIVERED or
-     * FAILED (they have their own endpoints), 404 when it isn't the courier's, 409 when the parcel
+     * a failure (they have their own endpoints), 404 when it isn't the courier's, 409 when the parcel
      * can't take that step now (for example the same tap sent twice).
      */
     @PostMapping("/{parcelId}/status")

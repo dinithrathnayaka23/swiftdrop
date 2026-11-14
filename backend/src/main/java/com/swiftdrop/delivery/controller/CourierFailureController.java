@@ -37,8 +37,9 @@ public class CourierFailureController {
     }
 
     /**
-     * Marks the delivery as failed; returns the updated delivery. 400 for an unknown reason or a
-     * missing required note, 404 when it isn't the courier's, 409 when the parcel can't fail now.
+     * Reports a failed delivery attempt (FAILED_ATTEMPT); returns the updated delivery. 400 for an
+     * unknown reason or a missing required note, 404 when it isn't the courier's, 409 when the parcel
+     * can't fail now.
      */
     @PostMapping("/deliveries/{parcelId}/fail")
     public CourierDeliveryDetailResponse reportFailure(@AuthenticationPrincipal AuthenticatedUser courier,

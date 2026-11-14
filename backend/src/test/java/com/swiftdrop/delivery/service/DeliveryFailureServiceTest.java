@@ -65,13 +65,13 @@ class DeliveryFailureServiceTest {
         AddressDetails address = new AddressDetails(UUID.randomUUID(), "Recipient", "+94771234567", "12 Galle Road",
                 null, "Colombo", "Western", null, null);
         return new ParcelDetails(PARCEL, "SD1", UUID.randomUUID(), null, null, address, address, ParcelType.PARCEL,
-                BigDecimal.ONE, null, null, null, null, null, ParcelStatusCode.FAILED, null, BigDecimal.TEN, "LKR",
-                Instant.now(), Instant.now());
+                BigDecimal.ONE, null, null, null, null, null, ParcelStatusCode.FAILED_ATTEMPT, null, BigDecimal.TEN,
+                "LKR", Instant.now(), Instant.now());
     }
 
     private static StatusHistoryEntry failedEntry(UUID entryId) {
-        return new StatusHistoryEntry(entryId, PARCEL, ParcelStatusCode.OUT_FOR_DELIVERY, ParcelStatusCode.FAILED,
-                COURIER, null, "Recipient unavailable", null, null, Instant.now());
+        return new StatusHistoryEntry(entryId, PARCEL, ParcelStatusCode.OUT_FOR_DELIVERY,
+                ParcelStatusCode.FAILED_ATTEMPT, COURIER, null, "Recipient unavailable", null, null, Instant.now());
     }
 
     @Test
@@ -85,7 +85,7 @@ class DeliveryFailureServiceTest {
     }
 
     @Test
-    void reportingMovesTheParcelToFailedAndRecordsTheReason() {
+    void reportingMovesTheParcelToAFailedAttemptAndRecordsTheReason() {
         UUID entryId = UUID.randomUUID();
         when(failureReasonRepository.findByCodeAndActiveTrue("OTHER")).thenReturn(
                 Optional.of(reason("OTHER", "Other", true)));
@@ -99,7 +99,7 @@ class DeliveryFailureServiceTest {
 
         ArgumentCaptor<StatusChange> change = ArgumentCaptor.forClass(StatusChange.class);
         verify(parcelStatusService).changeStatus(eq(PARCEL), change.capture());
-        assertThat(change.getValue().newStatus()).isEqualTo(ParcelStatusCode.FAILED);
+        assertThat(change.getValue().newStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
         assertThat(change.getValue().changedByUserId()).isEqualTo(COURIER);
         assertThat(change.getValue().failureReason()).isEqualTo("Other: Gate locked, no answer");
         assertThat(change.getValue().note()).isNull();
@@ -112,7 +112,8 @@ class DeliveryFailureServiceTest {
         assertThat(saved.getValue().getReasonCode()).isEqualTo("OTHER");
         assertThat(saved.getValue().getNote()).isEqualTo("Gate locked, no answer");
 
-        assertThat(detail.currentStatus()).isEqualTo(ParcelStatusCode.FAILED);
+        assertThat(detail.currentStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        // The retry and the close are the dispatcher's: nothing left for the courier.
         assertThat(detail.allowedActions()).isEmpty();
     }
 
@@ -176,7 +177,7 @@ class DeliveryFailureServiceTest {
                 Optional.of(reason("REFUSED", "Refused by recipient", false)));
         when(dispatchApi.isAssignedTo(PARCEL, COURIER)).thenReturn(true);
         when(parcelStatusService.changeStatus(eq(PARCEL), any()))
-                .thenThrow(new ConflictException("A parcel that is CREATED cannot be changed to FAILED"));
+                .thenThrow(new ConflictException("A parcel that is CREATED cannot be changed to FAILED_ATTEMPT"));
         ReportFailureRequest request = new ReportFailureRequest("REFUSED", null);
 
         assertThatThrownBy(() -> service.reportFailure(PARCEL, COURIER, request))

@@ -202,8 +202,8 @@ const FAILURE_REASONS: FailureReason[] = [
 ];
 
 /**
- * The sample, while it is still the courier's. As in the backend, a delivered or failed parcel's
- * assignment ends, so it leaves Today's Deliveries and its details are no longer found.
+ * The sample, while it is still the courier's. As in the backend, a delivered parcel's or a failed
+ * attempt's assignment ends, so it leaves Today's Deliveries and its details are no longer found.
  */
 function openSample(parcelId: string): Sample | undefined {
   return samples.find((s) => s.parcelId === parcelId && NEXT[s.status].length > 0);
@@ -290,17 +290,20 @@ export const mockCourierApi: CourierApi = {
     }
     const sample = openSample(parcelId);
     if (!sample) throw notFound();
-    if (!NEXT[sample.status].includes('FAILED')) throw conflict(sample.status, 'FAILED');
+    if (!NEXT[sample.status].includes('FAILED_ATTEMPT')) {
+      throw conflict(sample.status, 'FAILED_ATTEMPT');
+    }
     sample.history = [
       ...timeline(sample),
       {
-        status: 'FAILED',
+        status: 'FAILED_ATTEMPT',
         changedAt: new Date().toISOString(),
         note: null,
         failureReason: trimmed ? `${reason.label}: ${trimmed}` : reason.label,
       },
     ];
-    sample.status = 'FAILED';
+    // The dispatcher retries or closes it; for the courier the delivery is over (it leaves the list).
+    sample.status = 'FAILED_ATTEMPT';
     return toDetail(sample);
   },
 };

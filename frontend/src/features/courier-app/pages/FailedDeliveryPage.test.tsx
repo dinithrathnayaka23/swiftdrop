@@ -37,16 +37,18 @@ describe('FailedDeliveryPage', () => {
 
     const dialog = screen.getByRole('alertdialog');
     expect(within(dialog).getByText(/SD2611120001: Recipient unavailable/)).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Mark as Failed' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Report Attempt' }));
 
     expect(
-      await screen.findByText('SD2611120001 was reported as failed (Recipient unavailable).'),
+      await screen.findByText(
+        'SD2611120001 was reported as a failed attempt (Recipient unavailable).',
+      ),
     ).toBeInTheDocument();
     expect(report).toHaveBeenCalledWith(OUT_FOR_DELIVERY, {
       reasonCode: 'RECIPIENT_UNAVAILABLE',
       note: '',
     });
-    // The failed parcel has left the list.
+    // The failed attempt has left the list.
     expect(await screen.findByText('SD2611120002')).toBeInTheDocument();
     expect(screen.queryByText('SD2611120001')).not.toBeInTheDocument();
   });
@@ -98,15 +100,18 @@ describe('FailedDeliveryPage', () => {
     jest.spyOn(mockCourierApi, 'reportFailure').mockImplementationOnce(async (parcelId) => {
       // Someone else already finished it: the delivery is no longer the courier's.
       await mockCourierApi.reportFailure(parcelId, { reasonCode: 'REFUSED' });
-      throw new ApiRequestError('A parcel that is FAILED cannot be changed to FAILED', {
-        status: 409,
-      });
+      throw new ApiRequestError(
+        'A parcel that is FAILED_ATTEMPT cannot be changed to FAILED_ATTEMPT',
+        {
+          status: 409,
+        },
+      );
     });
     renderAt(OUT_FOR_DELIVERY);
 
     await chooseReason('Wrong address');
     fireEvent.click(screen.getByRole('button', { name: 'Report Failed Delivery' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Report Attempt' }));
 
     expect(await screen.findByText('Delivery not found')).toBeInTheDocument();
   });
@@ -119,7 +124,7 @@ describe('FailedDeliveryPage', () => {
 
     await chooseReason('Access issue');
     fireEvent.click(screen.getByRole('button', { name: 'Report Failed Delivery' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Mark as Failed' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Report Attempt' }));
 
     expect(await screen.findByText('Unable to reach the server.')).toBeInTheDocument();
     expect(screen.getByRole('radio', { name: /Access issue/ })).toBeChecked();

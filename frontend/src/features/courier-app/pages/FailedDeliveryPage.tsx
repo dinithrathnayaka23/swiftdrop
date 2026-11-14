@@ -65,7 +65,7 @@ function FailureForm({ delivery, reasons, onStale }: FailureFormProps) {
     try {
       await courierApi.reportFailure(delivery.parcelId, { reasonCode: reason.code, note });
       const state: CourierNotice = {
-        notice: `${delivery.trackingNumber} was reported as failed (${reason.label}).`,
+        notice: `${delivery.trackingNumber} was reported as a failed attempt (${reason.label}).`,
       };
       navigate(PATHS.courierHome, { state });
     } catch (err) {
@@ -140,9 +140,9 @@ function FailureForm({ delivery, reasons, onStale }: FailureFormProps) {
 
       <ConfirmDialog
         open={confirming}
-        title="Mark this delivery as failed?"
-        message={`${delivery.trackingNumber}: ${reason?.label ?? ''}. This can't be undone.`}
-        confirmLabel="Mark as Failed"
+        title="Report a failed delivery attempt?"
+        message={`${delivery.trackingNumber}: ${reason?.label ?? ''}. You can't undo this. The dispatcher will retry or close the delivery.`}
+        confirmLabel="Report Attempt"
         cancelLabel="Go back"
         icon={CircleX}
         loading={saving}
@@ -183,7 +183,10 @@ function CannotFail({
   );
 }
 
-/** Reports one of the courier's deliveries as failed, with a reason and (for some reasons) a note. */
+/**
+ * Reports a failed delivery attempt (FAILED_ATTEMPT) with a reason and, for some reasons, a note.
+ * The dispatcher then retries or closes the delivery.
+ */
 export default function FailedDeliveryPage() {
   const { parcelId = '' } = useParams();
   const [conflict, setConflict] = useState(false);
@@ -235,7 +238,7 @@ export default function FailedDeliveryPage() {
           />
         )}
 
-        {delivery && delivery.allowedActions.includes('FAILED') && (
+        {delivery && delivery.allowedActions.includes('FAILED_ATTEMPT') && (
           <FailureForm
             delivery={delivery}
             reasons={reasons}
@@ -246,7 +249,7 @@ export default function FailedDeliveryPage() {
           />
         )}
 
-        {delivery && !delivery.allowedActions.includes('FAILED') && (
+        {delivery && !delivery.allowedActions.includes('FAILED_ATTEMPT') && (
           <CannotFail delivery={delivery} conflict={conflict} detailsPath={detailsPath} />
         )}
       </div>

@@ -112,9 +112,11 @@ class CourierDeliveryServiceTest {
         assertThat(empty.counts().total()).isZero();
     }
 
-    @Test
-    void anEndStateCountsInTheTotalOnlyAndHasNoActions() {
-        ParcelDetails delivered = parcel("SD1", ParcelStatusCode.DELIVERED);
+    @ParameterizedTest
+    @EnumSource(value = ParcelStatusCode.class, names = {"DELIVERED", "FAILED_ATTEMPT"})
+    void aFinishedDeliveryCountsInTheTotalOnlyAndHasNoActions(ParcelStatusCode finished) {
+        // Delivered or failed, but dispatch hasn't ended the assignment yet (it hears the event later).
+        ParcelDetails delivered = parcel("SD1", finished);
         when(dispatchApi.openParcelIds(COURIER)).thenReturn(List.of(delivered.id()));
         when(parcelService.findAllByIds(any())).thenReturn(List.of(delivered));
 

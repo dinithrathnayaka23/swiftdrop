@@ -14,9 +14,10 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
 /**
- * A failed delivery reported from the courier app: which reason the courier picked and their note.
- * The parcel's FAILED status itself is in the parcel module's history ({@code statusHistoryId}).
- * A parcel can have more than one (after a retry). Table {@code delivery_failures}.
+ * A failed delivery attempt reported from the courier app: which reason the courier picked and their
+ * note. The parcel's FAILED_ATTEMPT status itself is in the parcel module's history
+ * ({@code statusHistoryId}). A parcel can have more than one (after a retry). Table
+ * {@code delivery_failures}.
  */
 @Entity
 @Table(name = "delivery_failures")
@@ -34,7 +35,7 @@ public class DeliveryFailure {
     @Column(name = "parcel_id", nullable = false, updatable = false)
     private UUID parcelId;
 
-    /** The FAILED entry in {@code parcel_status_history} (parcel module). */
+    /** The FAILED_ATTEMPT entry in {@code parcel_status_history} (parcel module). */
     @Column(name = "status_history_id", nullable = false, updatable = false)
     private UUID statusHistoryId;
 
