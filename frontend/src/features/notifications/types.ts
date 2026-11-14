@@ -5,11 +5,7 @@ export type NotificationChannel = 'EMAIL' | 'SMS' | 'IN_APP';
 export type NotificationDeliveryStatus = 'PENDING' | 'SENT' | 'FAILED';
 
 export type DeliveryEventTrigger =
-  | 'PICKED_UP'
-  | 'IN_TRANSIT'
-  | 'OUT_FOR_DELIVERY'
-  | 'DELIVERED'
-  | 'FAILED_ATTEMPT';
+  'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED_ATTEMPT';
 
 export interface NotificationItem {
   id: string;

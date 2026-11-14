@@ -5,7 +5,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-1',
     category: 'DELIVERY',
     title: 'Parcel Out for Delivery',
-    message: 'Your parcel SD2508220098 is out for delivery with courier Kamal. Expected delivery today by 4:30 PM.',
+    message:
+      'Your parcel SD2508220098 is out for delivery with courier Kamal. Expected delivery today by 4:30 PM.',
     channel: 'IN_APP',
     deliveryStatus: 'SENT',
     isRead: false,
@@ -16,7 +17,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-2',
     category: 'DELIVERY',
     title: 'Parcel in Transit to Central Hub',
-    message: 'Your parcel SD2508240012 departed Kandy Sorting Center and is in transit to Colombo Hub.',
+    message:
+      'Your parcel SD2508240012 departed Kandy Sorting Center and is in transit to Colombo Hub.',
     channel: 'EMAIL',
     deliveryStatus: 'SENT',
     isRead: false,
@@ -27,7 +29,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-3',
     category: 'DELIVERY',
     title: 'Delivery Attempt Failed',
-    message: 'Delivery attempt for parcel SD2508150021 failed. Reason: Recipient not available. A re-attempt has been scheduled.',
+    message:
+      'Delivery attempt for parcel SD2508150021 failed. Reason: Recipient not available. A re-attempt has been scheduled.',
     channel: 'SMS',
     deliveryStatus: 'SENT',
     isRead: false,
@@ -38,7 +41,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-4',
     category: 'DELIVERY',
     title: 'Parcel Delivered Successfully',
-    message: 'Parcel SD2508200045 was successfully delivered. Proof of delivery and receipt are available for download.',
+    message:
+      'Parcel SD2508200045 was successfully delivered. Proof of delivery and receipt are available for download.',
     channel: 'EMAIL',
     deliveryStatus: 'SENT',
     isRead: true,
@@ -60,7 +64,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-6',
     category: 'SYSTEM',
     title: 'Scheduled System Maintenance',
-    message: 'SwiftDrop services will undergo scheduled infrastructure maintenance on Sunday from 01:00 AM to 03:00 AM IST. Tracking and booking may experience brief delays.',
+    message:
+      'SwiftDrop services will undergo scheduled infrastructure maintenance on Sunday from 01:00 AM to 03:00 AM IST. Tracking and booking may experience brief delays.',
     channel: 'IN_APP',
     deliveryStatus: 'SENT',
     isRead: true,
@@ -70,7 +75,8 @@ export const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     id: 'notif-7',
     category: 'ACCOUNT',
     title: 'Welcome to SwiftDrop!',
-    message: 'Your customer account has been verified. You can now book parcels, monitor live status updates, and configure automatic notification preferences.',
+    message:
+      'Your customer account has been verified. You can now book parcels, monitor live status updates, and configure automatic notification preferences.',
     channel: 'EMAIL',
     deliveryStatus: 'SENT',
     isRead: true,
@@ -92,4 +98,3 @@ export const DEFAULT_PREFERENCES: NotificationPreferences = {
   notificationEmail: 'customer@example.com',
   notificationPhone: '+94 77 123 4567',
 };
-

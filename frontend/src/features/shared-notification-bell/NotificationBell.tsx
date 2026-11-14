@@ -123,7 +123,7 @@ export default function NotificationBell() {
 
         {/* Unread Badge Counter */}
         {unreadCount > 0 && (
-          <span className="absolute top-1.5 right-1.5 flex size-4.5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white shadow-xs animate-in zoom-in-50">
+          <span className="animate-in zoom-in-50 absolute top-1.5 right-1.5 flex size-4.5 items-center justify-center rounded-full bg-brand-600 text-[10px] font-bold text-white shadow-xs">
             {unreadCount > 9 ? '9+' : unreadCount}
           </span>
         )}
@@ -134,7 +134,7 @@ export default function NotificationBell() {
         <div
           role="dialog"
           aria-label="Notification center"
-          className="absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 sm:w-96 animate-in fade-in-0 zoom-in-95"
+          className="animate-in fade-in-0 zoom-in-95 absolute right-0 z-50 mt-2 w-80 max-w-[calc(100vw-2rem)] origin-top-right rounded-2xl border border-slate-200 bg-white shadow-xl ring-1 ring-black/5 sm:w-96"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-5">
@@ -204,7 +204,7 @@ export default function NotificationBell() {
                         </time>
                       </div>
 
-                      <p className="mt-0.5 line-clamp-2 text-xs text-slate-500 leading-relaxed">
+                      <p className="mt-0.5 line-clamp-2 text-xs leading-relaxed text-slate-500">
                         {item.message}
                       </p>
 

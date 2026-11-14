@@ -154,7 +154,7 @@ export default function NotificationCard({
           </time>
         </div>
 
-        <p className="mt-1 text-sm text-slate-600 leading-relaxed">{notification.message}</p>
+        <p className="mt-1 text-sm leading-relaxed text-slate-600">{notification.message}</p>
 
         {/* Badges & Meta */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -221,4 +221,3 @@ export default function NotificationCard({
     </article>
   );
 }
-

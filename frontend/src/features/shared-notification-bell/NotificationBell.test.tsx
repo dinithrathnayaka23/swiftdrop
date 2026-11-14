@@ -58,4 +58,3 @@ describe('NotificationBell', () => {
     expect(screen.queryByText('3')).not.toBeInTheDocument();
   });
 });
-

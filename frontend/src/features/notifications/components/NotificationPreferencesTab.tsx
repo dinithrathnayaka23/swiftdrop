@@ -67,10 +67,10 @@ export default function NotificationPreferencesTab({
               </span>
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">Email Notifications</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs leading-relaxed text-slate-500">
                   Receive detailed tracking summaries, invoices, and delivery receipt PDFs.
                 </p>
-                <span className="mt-1 inline-block text-xs font-mono text-slate-400">
+                <span className="mt-1 inline-block font-mono text-xs text-slate-400">
                   {form.notificationEmail || 'Active account email'}
                 </span>
               </div>
@@ -92,10 +92,10 @@ export default function NotificationPreferencesTab({
               </span>
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">SMS / Text Alerts</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs leading-relaxed text-slate-500">
                   Real-time SMS when your courier is en route and when your package is dropped off.
                 </p>
-                <span className="mt-1 inline-block text-xs font-mono text-slate-400">
+                <span className="mt-1 inline-block font-mono text-xs text-slate-400">
                   {form.notificationPhone || 'Active mobile number'}
                 </span>
               </div>
@@ -117,7 +117,7 @@ export default function NotificationPreferencesTab({
               </span>
               <div>
                 <h3 className="text-sm font-semibold text-slate-900">In-App Live Alerts</h3>
-                <p className="text-xs text-slate-500 leading-relaxed">
+                <p className="text-xs leading-relaxed text-slate-500">
                   Instant live badge updates and popovers while logged in to the customer dashboard.
                 </p>
               </div>
@@ -258,4 +258,3 @@ export default function NotificationPreferencesTab({
     </form>
   );
 }
-

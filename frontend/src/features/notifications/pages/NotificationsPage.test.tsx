@@ -70,4 +70,3 @@ describe('NotificationsPage', () => {
     expect(screen.queryByLabelText('Unread')).not.toBeInTheDocument();
   });
 });
-

@@ -111,9 +111,7 @@ export const notificationsApi = {
   markAsRead: async (notificationId: string): Promise<void> => {
     if (isMockApiEnabled()) {
       const current = getNotifications();
-      saveNotifications(
-        current.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)),
-      );
+      saveNotifications(current.map((n) => (n.id === notificationId ? { ...n, isRead: true } : n)));
       return;
     }
     return request(() =>

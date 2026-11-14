@@ -1,12 +1,4 @@
-import {
-  Bell,
-  CheckCheck,
-  Search,
-  Settings,
-  SlidersHorizontal,
-  Trash2,
-  Truck,
-} from 'lucide-react';
+import { Bell, CheckCheck, Search, Settings, SlidersHorizontal, Trash2, Truck } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import ConfirmDialog from '../../../components/feedback/ConfirmDialog';
 import { EmptyState } from '../../../components/feedback/States';
@@ -136,7 +128,7 @@ export default function NotificationsPage() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4">
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium uppercase tracking-wider">Total</span>
+            <span className="text-xs font-medium tracking-wider uppercase">Total</span>
             <Bell className="size-4 text-slate-400" />
           </div>
           <p className="mt-2 text-2xl font-bold text-slate-900">{notifications.length}</p>
@@ -145,7 +137,7 @@ export default function NotificationsPage() {
 
         <div className="rounded-2xl border border-brand-200 bg-brand-50/30 p-4 shadow-xs">
           <div className="flex items-center justify-between text-brand-700">
-            <span className="text-xs font-medium uppercase tracking-wider">Unread</span>
+            <span className="text-xs font-medium tracking-wider uppercase">Unread</span>
             <span className="size-2 rounded-full bg-brand-600" />
           </div>
           <p className="mt-2 text-2xl font-bold text-brand-800">{unreadCount}</p>
@@ -154,7 +146,7 @@ export default function NotificationsPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium uppercase tracking-wider">Deliveries</span>
+            <span className="text-xs font-medium tracking-wider uppercase">Deliveries</span>
             <Truck className="size-4 text-blue-500" />
           </div>
           <p className="mt-2 text-2xl font-bold text-slate-900">{deliveryCount}</p>
@@ -163,7 +155,7 @@ export default function NotificationsPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-xs">
           <div className="flex items-center justify-between text-slate-500">
-            <span className="text-xs font-medium uppercase tracking-wider">Channels</span>
+            <span className="text-xs font-medium tracking-wider uppercase">Channels</span>
             <SlidersHorizontal className="size-4 text-slate-400" />
           </div>
           <p className="mt-2 text-base font-bold text-slate-800">

@@ -74,7 +74,7 @@ export function markAsRead(notificationId: string) {
   if (!isMockApiEnabled()) {
     void apiClient
       .patch(`/customer/notifications/${encodeURIComponent(notificationId)}/read`)
-      .catch(() => { });
+      .catch(() => {});
   }
 }
 
@@ -87,7 +87,7 @@ export function markAsUnread(notificationId: string) {
   if (!isMockApiEnabled()) {
     void apiClient
       .patch(`/customer/notifications/${encodeURIComponent(notificationId)}/unread`)
-      .catch(() => { });
+      .catch(() => {});
   }
 }
 
@@ -96,7 +96,7 @@ export function markAllAsRead() {
   const updated = current.map((item) => ({ ...item, isRead: true }));
   saveNotifications(updated);
   if (!isMockApiEnabled()) {
-    void apiClient.post('/customer/notifications/read-all').catch(() => { });
+    void apiClient.post('/customer/notifications/read-all').catch(() => {});
   }
 }
 
@@ -107,14 +107,14 @@ export function deleteNotification(notificationId: string) {
   if (!isMockApiEnabled()) {
     void apiClient
       .delete(`/customer/notifications/${encodeURIComponent(notificationId)}`)
-      .catch(() => { });
+      .catch(() => {});
   }
 }
 
 export function clearAllNotifications() {
   saveNotifications([]);
   if (!isMockApiEnabled()) {
-    void apiClient.delete('/customer/notifications').catch(() => { });
+    void apiClient.delete('/customer/notifications').catch(() => {});
   }
 }
 
@@ -149,7 +149,7 @@ export function useNotifications() {
             saveNotifications(res.data);
           }
         })
-        .catch(() => { });
+        .catch(() => {});
 
       void apiClient
         .get<NotificationPreferences>('/customer/notifications/preferences')
@@ -159,7 +159,7 @@ export function useNotifications() {
             notifySubscribers();
           }
         })
-        .catch(() => { });
+        .catch(() => {});
     }
 
     return () => {
