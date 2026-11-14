@@ -1,32 +1,24 @@
 import { useState } from 'react';
+import { generatePath, Link } from 'react-router';
 import LoadingState from '../../../components/feedback/LoadingState';
 import { EmptyState, ErrorState } from '../../../components/feedback/States';
 import Alert from '../../../components/ui/Alert';
 import Button from '../../../components/ui/Button';
+import { PATHS } from '../../../routes/paths';
 import { useApiData } from '../../shared-parcels/useApiData';
 import { adminMerchantsApi } from '../api';
 import ReviewMerchantDialog, { type ReviewDecision } from '../components/ReviewMerchantDialog';
+import { MERCHANT_STATUS_CLASSES, MERCHANT_STATUS_LABELS } from '../merchantStatus';
 import { MERCHANT_STATUSES, type Merchant, type MerchantStatus } from '../types';
 
-const STATUS_LABELS: Record<MerchantStatus, string> = {
-  PENDING: 'Pending review',
-  APPROVED: 'Approved',
-  REJECTED: 'Rejected',
-  SUSPENDED: 'Suspended',
-};
+const STATUS_LABELS = MERCHANT_STATUS_LABELS;
+const STATUS_CLASSES = MERCHANT_STATUS_CLASSES;
 
 const TAB_LABELS: Record<MerchantStatus, string> = {
   PENDING: 'Pending',
   APPROVED: 'Approved',
   REJECTED: 'Rejected',
   SUSPENDED: 'Suspended',
-};
-
-const STATUS_CLASSES: Record<MerchantStatus, string> = {
-  PENDING: 'bg-amber-50 text-amber-700 ring-amber-200',
-  APPROVED: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  REJECTED: 'bg-rose-50 text-rose-700 ring-rose-200',
-  SUSPENDED: 'bg-slate-100 text-slate-600 ring-slate-200',
 };
 
 const EMPTY_MESSAGES: Record<MerchantStatus, string> = {
@@ -182,7 +174,14 @@ export default function MerchantManagementPage() {
                 {rows.map((merchant) => (
                   <tr key={merchant.merchantId} className="align-top hover:bg-slate-50">
                     <td className="px-5 py-4">
-                      <div className="font-medium text-slate-900">{merchant.businessName}</div>
+                      <Link
+                        to={generatePath(PATHS.adminMerchantDetail, {
+                          merchantId: merchant.merchantId,
+                        })}
+                        className="font-medium text-slate-900 hover:text-sky-700 hover:underline"
+                      >
+                        {merchant.businessName}
+                      </Link>
                       <div className="text-xs text-slate-500">
                         Reg. no. {merchant.registrationNo ?? '–'}
                       </div>

@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router';
 import { ApiRequestError } from '../../../api/errors';
 import { adminMerchantsApi } from '../api';
 import type { Merchant, MerchantStatus } from '../types';
@@ -54,7 +55,7 @@ beforeEach(() => {
 const dialog = () => screen.getByRole('dialog');
 
 test('shows the pending queue first, with counts for every status', async () => {
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
 
   expect(await screen.findByText('BrightMart')).toBeInTheDocument();
   expect(screen.queryByText('Green Basket')).not.toBeInTheDocument();
@@ -64,7 +65,7 @@ test('shows the pending queue first, with counts for every status', async () => 
 });
 
 test('the other tabs list reviewed merchants without review buttons', async () => {
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
   await screen.findByText('BrightMart');
 
   await userEvent.click(screen.getByRole('tab', { name: /Rejected/ }));
@@ -76,7 +77,7 @@ test('the other tabs list reviewed merchants without review buttons', async () =
 
 test('approving asks first, then saves and reloads', async () => {
   api.approve.mockResolvedValue({ ...BRIGHTMART, approvalStatus: 'APPROVED' });
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
   await screen.findByText('BrightMart');
 
   await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
@@ -94,7 +95,7 @@ test('approving asks first, then saves and reloads', async () => {
 
 test('rejecting needs a reason, which is sent trimmed', async () => {
   api.reject.mockResolvedValue({ ...BRIGHTMART, approvalStatus: 'REJECTED' });
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
   await screen.findByText('BrightMart');
 
   await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
@@ -115,7 +116,7 @@ test('rejecting needs a reason, which is sent trimmed', async () => {
 });
 
 test('cancelling closes the dialog without saving', async () => {
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
   await screen.findByText('BrightMart');
 
   await userEvent.click(screen.getByRole('button', { name: 'Reject' }));
@@ -129,7 +130,7 @@ test('a refused review keeps the dialog open with the server message', async () 
   api.approve.mockRejectedValue(
     new ApiRequestError('Only pending merchants can be reviewed', { status: 409 }),
   );
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
   await screen.findByText('BrightMart');
 
   await userEvent.click(screen.getByRole('button', { name: 'Approve' }));
@@ -142,7 +143,7 @@ test('a refused review keeps the dialog open with the server message', async () 
 
 test('a failed load offers to try again', async () => {
   api.list.mockRejectedValueOnce(new ApiRequestError('Unable to reach the server.'));
-  render(<MerchantManagementPage />);
+  render(<MerchantManagementPage />, { wrapper: MemoryRouter });
 
   expect(await screen.findByText('Unable to reach the server.')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: 'Try again' }));
