@@ -242,7 +242,9 @@ function PanelBody({ parcel, onClose }: { parcel: AdminParcelDetail; onClose: ()
           className="bg-brand-800 hover:bg-brand-900"
           disabled={!canAssign}
           title={canAssign ? undefined : 'Only unassigned parcels can be assigned'}
-          onClick={() => navigate(PATHS.adminUnassigned)}
+          onClick={() =>
+            navigate(`${PATHS.adminUnassigned}?parcelId=${encodeURIComponent(parcel.id)}`)
+          }
         >
           <Truck className="size-5" aria-hidden="true" />
           Assign to Courier
