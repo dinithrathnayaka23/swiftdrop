@@ -111,6 +111,32 @@ describe('mockCourierApi', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
+  it('delivers a parcel that is out for delivery and drops it from today’s list', async () => {
+    const id = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e01'; // OUT_FOR_DELIVERY
+    const after = await mockCourierApi.deliver(id, {
+      recipientName: 'Kasun Perera',
+      note: ' At the door ',
+    });
+
+    expect(after.currentStatus).toBe('DELIVERED');
+    expect(after.allowedActions).toEqual([]);
+    expect(after.timeline.at(-1)).toEqual(
+      expect.objectContaining({ status: 'DELIVERED', note: 'At the door' }),
+    );
+    expect((await mockCourierApi.getToday()).deliveries.map((d) => d.parcelId)).not.toContain(id);
+  });
+
+  it('refuses a delivery without a name (400) or before out for delivery (409)', async () => {
+    const out = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e01';
+    const inTransit = '7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e02';
+    await expect(mockCourierApi.deliver(out, { recipientName: ' ' })).rejects.toMatchObject({
+      status: 400,
+    });
+    await expect(
+      mockCourierApi.deliver(inTransit, { recipientName: 'Nadeesha' }),
+    ).rejects.toMatchObject({ status: 409 });
+  });
+
   it('only includes the pickup stop in the list while the parcel waits for pickup', async () => {
     const { deliveries } = await mockCourierApi.getToday();
     expect(deliveries.filter((d) => d.pickup !== null).map((d) => d.currentStatus)).toEqual([

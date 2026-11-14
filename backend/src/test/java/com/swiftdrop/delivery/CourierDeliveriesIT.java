@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.swiftdrop.IntegrationTestBase;
 import com.swiftdrop.common.messaging.RabbitConfig;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.delivery.storage.LocalFileProofStorage;
 import com.swiftdrop.parcel.dto.NewAddress;
 import com.swiftdrop.parcel.dto.NewParcel;
 import com.swiftdrop.parcel.dto.ParcelDetails;
@@ -16,24 +17,41 @@ import com.swiftdrop.parcel.service.ParcelStatusService;
 import com.swiftdrop.user.dto.NewUser;
 import com.swiftdrop.user.model.AccountStatus;
 import com.swiftdrop.user.service.UserService;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.math.BigDecimal;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import java.util.stream.Stream;
+import javax.imageio.ImageIO;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** The courier app end to end: own deliveries only, in assignment order, status updates and failures. */
+/**
+ * The courier app end to end: own deliveries only, in assignment order, status updates, failures and
+ * proof of delivery.
+ */
 class CourierDeliveriesIT extends IntegrationTestBase {
 
     private static final String ADMIN_EMAIL = "admin@test.swiftdrop.local"; // application-test.yml
@@ -49,9 +67,20 @@ class CourierDeliveriesIT extends IntegrationTestBase {
     @Autowired private ParcelStatusService parcelStatusService;
     @Autowired private UserService userService;
     @Autowired private AmqpAdmin amqpAdmin;
+    @Autowired private PasswordEncoder passwordEncoder;
+    @Autowired private LocalFileProofStorage proofStorage;
+
+    @Value("${local.server.port}")
+    private int port;
+
+    private final HttpClient http = HttpClient.newHttpClient();
 
     /** A signed-in courier: their profile id, account id and access token. */
     private record Courier(UUID courierId, UUID userId, String token) {
+    }
+
+    /** A signed-in customer: their account id and access token. */
+    private record Customer(UUID userId, String token) {
     }
 
     /**
@@ -319,6 +348,110 @@ class CourierDeliveriesIT extends IntegrationTestBase {
         assertThat(failureCount(parcel)).isZero();
     }
 
+    // ---- Proof of delivery (Phase 4) -------------------------------------------------------------
+
+    @Test
+    void deliveringWithAPhotoWritesTheHistoryAndTheProofAndStoresACleanJpeg() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+        moveToOutForDelivery(parcel, courier);
+
+        HttpResponse<String> response = deliver(parcel, courier.token(), "Kasun Perera", "Left with the guard",
+                png(2400, 1200));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode body = json.readTree(response.body());
+        assertThat(body.get("currentStatus").asString()).isEqualTo("DELIVERED");
+        assertThat(body.get("allowedActions").isEmpty()).isTrue();
+
+        var proof = db.queryForMap("""
+                SELECT p.proof_id, p.courier_user_id, p.recipient_name, p.photo_storage_key, p.photo_content_type,
+                       p.photo_size_bytes, h.status_code, h.recipient_name AS history_name, h.proof_file_url, h.note
+                FROM delivery_proofs p JOIN parcel_status_history h USING (status_history_id)
+                WHERE p.parcel_id = ?""", parcel.id());
+        assertThat(proof.get("courier_user_id")).isEqualTo(courier.userId());
+        assertThat(proof.get("recipient_name")).isEqualTo("Kasun Perera");
+        assertThat(proof.get("status_code")).isEqualTo("DELIVERED");
+        assertThat(proof.get("history_name")).isEqualTo("Kasun Perera");
+        assertThat(proof.get("note")).isEqualTo("Left with the guard");
+        assertThat(proof.get("proof_file_url")).isEqualTo("/proofs/" + proof.get("proof_id") + "/photo");
+        assertThat(proof.get("photo_content_type")).isEqualTo("image/jpeg");
+
+        // The stored file is the re-encoded JPEG, scaled down to 1600 px.
+        byte[] stored = proofStorage.read((String) proof.get("photo_storage_key"));
+        assertThat(stored.length).isEqualTo(((Number) proof.get("photo_size_bytes")).intValue());
+        BufferedImage image = ImageIO.read(new ByteArrayInputStream(stored));
+        assertThat(image.getWidth()).isEqualTo(1600);
+        assertThat(image.getHeight()).isEqualTo(800);
+    }
+
+    @Test
+    void deliveringWithoutAPhotoNeedsOnlyTheRecipientsName() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, courier, Instant.now());
+        moveToOutForDelivery(parcel, courier);
+
+        assertThat(deliver(parcel, courier.token(), "", null, null).statusCode()).isEqualTo(400);
+        assertThat(deliver(parcel, courier.token(), "Kasun Perera", null, null).statusCode()).isEqualTo(200);
+
+        var proof = db.queryForMap("SELECT photo_storage_key FROM delivery_proofs WHERE parcel_id = ?", parcel.id());
+        assertThat(proof.get("photo_storage_key")).isNull();
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.DELIVERED);
+    }
+
+    @Test
+    void deliveringIsRefusedForAnotherCourierBeforeOutForDeliveryOrWithAFileThatIsNotAPhoto() throws Exception {
+        Courier owner = newCourier();
+        Courier other = newCourier();
+        ParcelDetails parcel = newParcel();
+        assign(parcel, owner, Instant.now());
+        parcelStatusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, owner.userId(), null));
+        long filesBefore = storedPhotoFiles();
+
+        assertThat(deliver(parcel, other.token(), "Kasun Perera", null, png(10, 10)).statusCode()).isEqualTo(404);
+        // Still PICKED_UP: the photo is stored first, then the status change fails and the file is removed.
+        assertThat(deliver(parcel, owner.token(), "Kasun Perera", null, png(10, 10)).statusCode()).isEqualTo(409);
+        assertThat(deliver(parcel, owner.token(), "Kasun Perera", null,
+                "<html>not a photo</html>".getBytes()).statusCode()).isEqualTo(400);
+
+        assertThat(proofCount(parcel)).isZero();
+        assertThat(storedPhotoFiles()).isEqualTo(filesBefore);
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.PICKED_UP);
+    }
+
+    @Test
+    void thePhotoIsVisibleToItsCourierTheOwningCustomerAndTheAdminOnly() throws Exception {
+        Courier courier = newCourier();
+        Courier otherCourier = newCourier();
+        Customer owner = newCustomer();
+        Customer stranger = newCustomer();
+        ParcelDetails parcel = newParcel(owner.userId());
+        assign(parcel, courier, Instant.now());
+        moveToOutForDelivery(parcel, courier);
+        assertThat(deliver(parcel, courier.token(), "Kasun Perera", null, png(30, 20)).statusCode()).isEqualTo(200);
+        UUID proofId = db.queryForObject("SELECT proof_id FROM delivery_proofs WHERE parcel_id = ?", UUID.class,
+                parcel.id());
+        String photo = "/api/v1/proofs/" + proofId + "/photo";
+
+        for (String token : List.of(courier.token(), owner.token(), adminToken())) {
+            HttpResponse<byte[]> response = getBytes(photo, token);
+            assertThat(response.statusCode()).isEqualTo(200);
+            assertThat(response.headers().firstValue("Content-Type")).hasValue("image/jpeg");
+            assertThat(response.headers().firstValue("Cache-Control")).hasValue("private, no-store");
+            assertThat(response.headers().firstValue("X-Content-Type-Options")).hasValue("nosniff");
+            assertThat(ImageIO.read(new ByteArrayInputStream(response.body())).getWidth()).isEqualTo(30);
+        }
+        for (String token : List.of(otherCourier.token(), stranger.token())) {
+            assertThat(getBytes(photo, token).statusCode()).isEqualTo(404);
+        }
+        assertThat(getBytes(photo, null).statusCode()).isEqualTo(401);
+        assertThat(getBytes("/api/v1/proofs/" + UUID.randomUUID() + "/photo", adminToken()).statusCode())
+                .isEqualTo(404);
+    }
+
     @Test
     void onlyCouriersMayUseTheCourierApp() throws Exception {
         assertThat(get(DELIVERIES + "/today").statusCode()).isEqualTo(401);
@@ -383,6 +516,101 @@ class CourierDeliveriesIT extends IntegrationTestBase {
         UUID customer = userService.createUser(NewUser.withPassword("Ayesha Khan",
                 "customer-" + UUID.randomUUID() + "@test.swiftdrop.local", "+94771234567", "x", Role.CUSTOMER,
                 AccountStatus.ACTIVE)).id();
+        return newParcel(customer);
+    }
+
+    /** A customer who can sign in (real password hash, confirmed email). */
+    private Customer newCustomer() throws Exception {
+        String email = "customer-" + UUID.randomUUID() + "@test.swiftdrop.local";
+        UUID id = userService.createUser(NewUser.withPassword("Ayesha Khan", email, "+94771234567",
+                passwordEncoder.encode(PASSWORD), Role.CUSTOMER, AccountStatus.ACTIVE)).id();
+        verifyEmail(email);
+        HttpResponse<String> login = post("/api/v1/auth/login", """
+                {"email":"%s","password":"%s"}""".formatted(email, PASSWORD));
+        assertThat(login.statusCode()).isEqualTo(200);
+        return new Customer(id, json.readTree(login.body()).get("token").asString());
+    }
+
+    private void moveToOutForDelivery(ParcelDetails parcel, Courier courier) {
+        for (ParcelStatusCode step : List.of(ParcelStatusCode.PICKED_UP, ParcelStatusCode.IN_TRANSIT,
+                ParcelStatusCode.OUT_FOR_DELIVERY)) {
+            parcelStatusService.changeStatus(parcel.id(), StatusChange.to(step, courier.userId(), null));
+        }
+    }
+
+    private static byte[] png(int width, int height) throws Exception {
+        ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+        ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB), "png", bytes);
+        return bytes.toByteArray();
+    }
+
+    /** POST /deliver as multipart/form-data, as the courier app sends it. */
+    private HttpResponse<String> deliver(ParcelDetails parcel, String token, String recipientName, String note,
+                                         byte[] photo) throws Exception {
+        String boundary = "----swiftdrop" + UUID.randomUUID();
+        ByteArrayOutputStream body = new ByteArrayOutputStream();
+        writeField(body, boundary, "recipientName", recipientName);
+        if (note != null) {
+            writeField(body, boundary, "note", note);
+        }
+        if (photo != null) {
+            body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"p.png\""
+                    + "\r\nContent-Type: image/png\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+            body.write(photo);
+            body.write("\r\n".getBytes(StandardCharsets.UTF_8));
+        }
+        body.write(("--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        HttpRequest request = HttpRequest.newBuilder(uri(DELIVERIES + "/" + parcel.id() + "/deliver"))
+                .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+                .header("Authorization", "Bearer " + token)
+                .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray()))
+                .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private static void writeField(ByteArrayOutputStream body, String boundary, String name, String value)
+            throws Exception {
+        body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + name + "\"\r\n\r\n" + value
+                + "\r\n").getBytes(StandardCharsets.UTF_8));
+    }
+
+    private HttpResponse<byte[]> getBytes(String path, String token) throws Exception {
+        HttpRequest.Builder request = HttpRequest.newBuilder(uri(path)).GET();
+        if (token != null) {
+            request.header("Authorization", "Bearer " + token);
+        }
+        return http.send(request.build(), HttpResponse.BodyHandlers.ofByteArray());
+    }
+
+    private URI uri(String path) {
+        return URI.create("http://localhost:" + port + path);
+    }
+
+    private int proofCount(ParcelDetails parcel) {
+        Integer count = db.queryForObject("SELECT count(*) FROM delivery_proofs WHERE parcel_id = ?", Integer.class,
+                parcel.id());
+        return count == null ? 0 : count;
+    }
+
+    /** Photo files under the storage folder (the .gitignore excluded). */
+    private long storedPhotoFiles() throws Exception {
+        Path root = proofStorage.root();
+        if (!Files.exists(root)) {
+            return 0;
+        }
+        try (Stream<Path> files = Files.walk(root)) {
+            return files.filter(Files::isRegularFile).filter(path -> path.toString().endsWith(".jpg")).count();
+        }
+    }
+
+    /** Removes the photos this test class stored, so no test files are left in the storage folder. */
+    @AfterAll
+    static void removeStoredPhotos(@Autowired JdbcTemplate db, @Autowired LocalFileProofStorage storage) {
+        db.queryForList("SELECT photo_storage_key FROM delivery_proofs WHERE photo_storage_key IS NOT NULL",
+                String.class).forEach(storage::delete);
+    }
+
+    private ParcelDetails newParcel(UUID customer) {
         NewAddress pickup = new NewAddress("Nimal Silva", "+94771234568", "5 Temple Road", null, "Kandy", "Central",
                 null, null);
         NewAddress dropoff = new NewAddress("Kasun Perera", "+94771234567", "12 Galle Road", null, "Colombo",

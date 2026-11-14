@@ -306,4 +306,31 @@ export const mockCourierApi: CourierApi = {
     sample.status = 'FAILED_ATTEMPT';
     return toDetail(sample);
   },
+
+  async deliver(parcelId, { recipientName, note, photo }) {
+    await delay(photo ? 600 : 300);
+    const name = recipientName.trim();
+    if (!name) {
+      throw new ApiRequestError('Request validation failed', {
+        status: 400,
+        code: 'VALIDATION_FAILED',
+        fieldErrors: [{ field: 'recipientName', message: "Recipient's name is required" }],
+      });
+    }
+    const sample = openSample(parcelId);
+    if (!sample) throw notFound();
+    if (!NEXT[sample.status].includes('DELIVERED')) throw conflict(sample.status, 'DELIVERED');
+    sample.history = [
+      ...timeline(sample),
+      {
+        status: 'DELIVERED',
+        changedAt: new Date().toISOString(),
+        note: note?.trim() || null,
+        failureReason: null,
+      },
+    ];
+    // Delivered: the assignment ends, so the delivery leaves the courier's list.
+    sample.status = 'DELIVERED';
+    return toDetail(sample);
+  },
 };

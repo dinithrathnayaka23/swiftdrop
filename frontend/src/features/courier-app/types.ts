@@ -103,6 +103,20 @@ export interface ReportFailureRequest {
   note?: string;
 }
 
+/** Longest recipient's name the backend accepts on a proof of delivery. */
+export const MAX_RECIPIENT_NAME = 120;
+
+/** Longest note the backend accepts with a proof of delivery. */
+export const MAX_DELIVERY_NOTE = 500;
+
+/** POST /courier/deliveries/{parcelId}/deliver (multipart/form-data) */
+export interface DeliverRequest {
+  recipientName: string;
+  note?: string;
+  /** Already resized in the browser (JPEG, at most 1600 px). */
+  photo?: Blob;
+}
+
 /**
  * The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the
  * courier's. Changes reject with an ApiRequestError (404 not theirs, 409 the parcel can't take that
@@ -118,4 +132,6 @@ export interface CourierApi {
   getFailureReasons(): Promise<FailureReason[]>;
   /** Marks the delivery as failed (400 unknown reason or missing required note). */
   reportFailure(parcelId: string, request: ReportFailureRequest): Promise<CourierDeliveryDetail>;
+  /** Marks the delivery as delivered (400 bad name or photo, 409 not out for delivery, 413 too large). */
+  deliver(parcelId: string, request: DeliverRequest): Promise<CourierDeliveryDetail>;
 }
