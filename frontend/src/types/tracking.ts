@@ -1,6 +1,16 @@
-/** Rows of the parcel_statuses table (backend ParcelStatusCode; report section 3.6). */
+/**
+ * Rows of the parcel_statuses table (backend ParcelStatusCode; report section 3.6). FAILED_ATTEMPT is
+ * a failed delivery attempt waiting for the dispatcher (retry or close); only DELIVERED and FAILED
+ * are final.
+ */
 export type ParcelStatusCode =
-  'CREATED' | 'PICKED_UP' | 'IN_TRANSIT' | 'OUT_FOR_DELIVERY' | 'DELIVERED' | 'FAILED';
+  | 'CREATED'
+  | 'PICKED_UP'
+  | 'IN_TRANSIT'
+  | 'OUT_FOR_DELIVERY'
+  | 'DELIVERED'
+  | 'FAILED_ATTEMPT'
+  | 'FAILED';
 
 export interface TrackingEvent {
   statusCode: ParcelStatusCode;

@@ -46,7 +46,7 @@ ownership check and the workload counts all rely on it.
            assign                    PICKED_UP / IN_TRANSIT /
  (none) ──────────▶ ASSIGNED ──────── OUT_FOR_DELIVERY event ──────▶ IN_PROGRESS
                       │  │                                             │  │
-     unassign (admin) │  │ reassign (admin)          DELIVERED event   │  │ FAILED event
+     unassign (admin) │  │ reassign (admin)          DELIVERED event   │  │ FAILED_ATTEMPT event
                       ▼  ▼                                             ▼  ▼
                CANCELLED  REASSIGNED  (+ a new open assignment)  COMPLETED  FAILED
 ```
@@ -56,7 +56,12 @@ ownership check and the workload counts all rely on it.
 | Admin: unassign | Parcel still `CREATED` | `CANCELLED` | now |
 | Admin: reassign | Parcel not `DELIVERED` / `FAILED` | `REASSIGNED` (+ reason) | now |
 | Status listener | Parcel became `DELIVERED` | `COMPLETED` | the event's `occurredAt` |
-| Status listener | Parcel became `FAILED` | `FAILED` (V6_002; never counts as completed) | the event's `occurredAt` |
+| Status listener | Parcel became `FAILED_ATTEMPT` (courier's failed attempt) | `FAILED` (V6_002; never counts as completed) | the event's `occurredAt` |
+
+**After a failed attempt** (parcel `FAILED_ATTEMPT`, assignment already ended), the dispatcher either
+retries the parcel (back to `CREATED`: it shows in Unassigned again with no open assignment and is
+assigned like a new one) or closes it (`FAILED`, whose event finds no open assignment and changes
+nothing). The retry and close endpoints come in a later PR.
 
 - Assigning **does not change the parcel's status**: it stays `CREATED` until the courier picks it up.
 - A parcel reassigned after pickup (`PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY`) starts `IN_PROGRESS`
@@ -74,8 +79,9 @@ assignment, row-locked so it can't overlap a reassignment:
 | ------------- | --------------- |
 | `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY` | `ASSIGNED` → `IN_PROGRESS` (already `IN_PROGRESS`: unchanged) |
 | `DELIVERED` | → `COMPLETED`, `ended_at` set |
-| `FAILED` | → `FAILED`, `ended_at` set |
-| anything else (`CREATED`, unknown codes) | ignored (debug log) |
+| `FAILED_ATTEMPT` | → `FAILED`, `ended_at` set |
+| `FAILED` | → `FAILED`, `ended_at` set; normally nothing is open by then (the attempt ended it), so nothing changes |
+| anything else (`CREATED` after a retry, unknown codes) | ignored (debug log) |
 
 - **Idempotent:** delivery is at least once and out of order. The listener only moves an open
   assignment forward, and does nothing if the parcel has no open assignment, so duplicates and late
@@ -164,7 +170,8 @@ courier; a zone deactivated since keeps its name.
 
 ## Not done yet
 
-- Operations Overview data and the Failed Deliveries queue. **Retry needs a decision with Member 4:**
-  `FAILED` is an end state, so a retried parcel needs a `FAILED -> CREATED` transition.
+- Operations Overview data, and the Failed Deliveries queue with its **retry** (`FAILED_ATTEMPT ->
+  CREATED`) and **close** (`FAILED_ATTEMPT -> FAILED`) endpoints (next PR). The statuses exist now
+  (`V6_003`, agreed with Member 4).
 - Deactivating / reactivating a courier, and reacting when a courier's account is suspended (set them
   offline). Their open assignments are kept when they go offline or on break: the dispatcher reassigns them.

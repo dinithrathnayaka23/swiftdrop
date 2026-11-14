@@ -48,14 +48,40 @@ describe('buildTrackingTimeline', () => {
     expect(states(delivered)).toEqual(['complete', 'complete', 'complete', 'complete']);
   });
 
-  it('stops a failed delivery at the last step reached, with the failure time', () => {
+  it('stops a failed attempt at the last step reached, with the attempt time', () => {
     const steps = buildTrackingTimeline(
-      result('FAILED', ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'FAILED']),
+      result('FAILED_ATTEMPT', ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'FAILED_ATTEMPT']),
     );
 
     expect(steps.map((s) => s.state)).toEqual(['complete', 'failed', 'upcoming', 'upcoming']);
     expect(steps[1].reachedAt).toBe('2026-01-04T10:00:00Z');
     expect(steps[2].reachedAt).toBeUndefined();
+  });
+
+  it('stops a closed failure at the last step reached, with the close time', () => {
+    const steps = buildTrackingTimeline(
+      result('FAILED', ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'FAILED_ATTEMPT', 'FAILED']),
+    );
+
+    expect(steps.map((s) => s.state)).toEqual(['complete', 'failed', 'upcoming', 'upcoming']);
+    expect(steps[1].reachedAt).toBe('2026-01-05T10:00:00Z');
+  });
+
+  it('starts over for a retried parcel', () => {
+    const retried = ['CREATED', 'PICKED_UP', 'IN_TRANSIT', 'FAILED_ATTEMPT', 'CREATED'] as const;
+
+    expect(states(result('CREATED', [...retried]))).toEqual([
+      'upcoming',
+      'upcoming',
+      'upcoming',
+      'upcoming',
+    ]);
+    expect(states(result('PICKED_UP', [...retried, 'PICKED_UP']))).toEqual([
+      'current',
+      'upcoming',
+      'upcoming',
+      'upcoming',
+    ]);
   });
 
   it('still shows the failure when the history has no pickup', () => {

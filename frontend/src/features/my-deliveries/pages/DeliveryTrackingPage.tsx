@@ -36,6 +36,7 @@ import {
   formatDimensions,
   formatFee,
   formatRelative,
+  latestFailureReason,
   PARCEL_TYPE_LABELS,
 } from '../../shared-parcels/parcelDisplay';
 import { STATUS_META } from '../../../utils/parcelStatus';
@@ -96,10 +97,10 @@ function Details({ parcel }: { parcel: CustomerParcelDetail }) {
   const visual = statusVisual(parcel.status);
   const StatusIcon = visual.icon;
   const lastItem = parcel.history[parcel.history.length - 1];
-  const statusLine =
-    lastItem?.status === 'FAILED' && lastItem.failureReason
-      ? `Reason: ${lastItem.failureReason}`
-      : lastItem?.note || STATUS_META[parcel.status].description;
+  const failureReason = latestFailureReason(parcel.history);
+  const statusLine = failureReason
+    ? `Reason: ${failureReason}`
+    : lastItem?.note || STATUS_META[parcel.status].description;
 
   async function share() {
     try {

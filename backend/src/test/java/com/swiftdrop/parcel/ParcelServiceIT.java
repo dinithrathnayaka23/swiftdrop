@@ -62,7 +62,7 @@ class ParcelServiceIT extends IntegrationTestBase {
     }
 
     @Test
-    void statusTableHoldsTheSixReportStatusesInOrder() {
+    void statusTableHoldsTheSevenStatusesInOrder() {
         List<String> codes = jdbc.queryForList(
                 "SELECT status_code FROM parcel_statuses ORDER BY display_order", String.class);
         assertThat(codes).containsExactlyElementsOf(

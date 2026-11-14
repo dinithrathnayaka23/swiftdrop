@@ -12,7 +12,8 @@ import java.util.UUID;
  * @param note            optional free text
  * @param recipientName   who received the parcel; only for DELIVERED
  * @param proofFileUrl    stored proof photo; only for DELIVERED. DELIVERED needs this or {@code recipientName}
- * @param failureReason   why the delivery failed; required for FAILED and only allowed there
+ * @param failureReason   why the delivery failed; required for FAILED_ATTEMPT and FAILED, and only
+ *                        allowed there
  */
 public record StatusChange(
         ParcelStatusCode newStatus,
@@ -36,6 +37,12 @@ public record StatusChange(
         return new StatusChange(ParcelStatusCode.DELIVERED, changedByUserId, note, recipientName, proofFileUrl, null);
     }
 
+    /** The courier couldn't deliver this time (from PICKED_UP, IN_TRANSIT or OUT_FOR_DELIVERY). */
+    public static StatusChange failedAttempt(UUID changedByUserId, String failureReason, String note) {
+        return new StatusChange(ParcelStatusCode.FAILED_ATTEMPT, changedByUserId, note, null, null, failureReason);
+    }
+
+    /** The dispatcher closes a failed attempt for good (from FAILED_ATTEMPT only); an end state. */
     public static StatusChange failed(UUID changedByUserId, String failureReason, String note) {
         return new StatusChange(ParcelStatusCode.FAILED, changedByUserId, note, null, null, failureReason);
     }

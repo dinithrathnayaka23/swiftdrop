@@ -38,6 +38,7 @@ const COUNTS: LiveStatusCounts = {
   IN_TRANSIT: 2,
   OUT_FOR_DELIVERY: 1,
   DELIVERED: 6,
+  FAILED_ATTEMPT: 0,
   FAILED: 0,
 };
 
