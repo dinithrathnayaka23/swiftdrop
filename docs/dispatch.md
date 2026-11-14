@@ -87,11 +87,16 @@ assignment, row-locked so it can't overlap a reassignment:
 - **Idempotent:** delivery is at least once and out of order. The listener only moves an open
   assignment forward, and does nothing if the parcel has no open assignment, so duplicates and late
   events are harmless; no event-id store is needed.
-- **Events older than the open assignment:** an ending event (`DELIVERED`, `FAILED_ATTEMPT`, `FAILED`)
-  whose `occurredAt` is **strictly before** the open assignment's `assigned_at` belongs to an older
-  assignment and is ignored. Example: the parcel was retried and assigned again before the previous
-  attempt's `FAILED_ATTEMPT` event arrived. Both times are `@CreationTimestamp` values from the app clock,
-  so they compare safely; an event at exactly `assigned_at` still ends the assignment.
+- **Events older than the open assignment:** **any** event (`PICKED_UP`, `IN_TRANSIT`,
+  `OUT_FOR_DELIVERY`, `DELIVERED`, `FAILED_ATTEMPT`, `FAILED`) whose `occurredAt` is **strictly before**
+  the open assignment's `assigned_at` belongs to an older assignment and is ignored. Example: the parcel
+  was retried and assigned again before the previous attempt's `PICKED_UP` or `FAILED_ATTEMPT` event
+  arrived; the new assignment stays `ASSIGNED` and open. Both times are `@CreationTimestamp` values from
+  the app clock, so they compare safely; an event at exactly `assigned_at` still applies.
+- Known edge of that rule: if the old courier's pickup commits while a reassignment is reading the parcel
+  as `CREATED`, the new assignment starts `ASSIGNED` and the (older) `PICKED_UP` event is ignored. It
+  then stays `ASSIGNED` until the next status event at or after its `assigned_at` (the next transit step,
+  delivery or failed attempt) moves it on. The window is a few milliseconds.
 - **Incomplete events** (no `parcelId` or `newStatus`) are skipped with a warning.
 - **Errors:** database errors are thrown, so the message is retried by the shared listener settings in
   `application.yml` (`spring.rabbitmq.listener.simple`): `retry.max-attempts: 3`,
@@ -162,7 +167,7 @@ attemptCount, destinationCity`.
 **Why retry and assign are separate calls.** Retry ends any open assignment and moves the parcel to
 `CREATED` in one transaction, but it never assigns a courier. If it did, a `FAILED_ATTEMPT` event still on
 its way could end the brand-new assignment. The dispatcher assigns afterwards with
-`POST /assignments` like any other waiting parcel; the listener additionally ignores ending events older
+`POST /assignments` like any other waiting parcel; the listener additionally ignores any event older
 than the open assignment (see "The status listener").
 
 ## Operations API (`DISPATCHER_ADMIN` only)

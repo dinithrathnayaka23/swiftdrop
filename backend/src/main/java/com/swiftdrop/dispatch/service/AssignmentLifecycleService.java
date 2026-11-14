@@ -28,9 +28,9 @@ import org.springframework.transaction.annotation.Transactional;
  * CREATED, so it shows in Unassigned again with no open assignment) or closes it as FAILED, whose
  * event finds no open assignment and changes nothing.
  *
- * <p>An ending event (DELIVERED, FAILED_ATTEMPT, FAILED) that happened strictly before the open
- * assignment started is ignored: it belongs to an older assignment (a retried parcel that was assigned
- * again before the old event arrived).
+ * <p>Any event that happened strictly before the open assignment started is ignored, pickup and
+ * transit events included: it belongs to an older assignment (a retried parcel that was assigned again
+ * before the old event arrived).
  *
  * <p>Events arrive at least once and possibly out of order, so this only ever moves an open
  * assignment forward: no open assignment means nothing to do, and a repeated or older event finds
@@ -64,21 +64,22 @@ public class AssignmentLifecycleService {
             return;
         }
         DeliveryAssignment assignment = open.get();
+        // Any event that happened before this assignment started belongs to an older one: e.g. the
+        // previous attempt's PICKED_UP or FAILED_ATTEMPT still in the queue after the dispatcher retried
+        // and assigned again. Both times come from the app clock (@CreationTimestamp), so they compare
+        // safely; an event at exactly assigned_at still applies.
+        if (event.occurredAt() != null && assignment.getAssignedAt() != null
+                && event.occurredAt().isBefore(assignment.getAssignedAt())) {
+            log.info("Ignoring {} of parcel {}: it happened before assignment {} started", event.newStatus(),
+                    event.parcelId(), assignment.getId());
+            return;
+        }
         AssignmentStatus next = target.get();
         if (next == AssignmentStatus.IN_PROGRESS) {
             if (assignment.getAssignmentStatus() == AssignmentStatus.ASSIGNED) {
                 assignment.setAssignmentStatus(AssignmentStatus.IN_PROGRESS);
                 log.info("Assignment {} of parcel {} is in progress", assignment.getId(), event.parcelId());
             }
-            return;
-        }
-        // An ending event that happened before this assignment started belongs to an older one: e.g. a
-        // FAILED_ATTEMPT event still in the queue after the dispatcher retried and assigned again.
-        // Both times come from the app clock (@CreationTimestamp), so they compare safely.
-        if (event.occurredAt() != null && assignment.getAssignedAt() != null
-                && event.occurredAt().isBefore(assignment.getAssignedAt())) {
-            log.info("Ignoring {} of parcel {}: it happened before assignment {} started", event.newStatus(),
-                    event.parcelId(), assignment.getId());
             return;
         }
         Instant at = event.occurredAt() != null ? event.occurredAt() : Instant.now();
