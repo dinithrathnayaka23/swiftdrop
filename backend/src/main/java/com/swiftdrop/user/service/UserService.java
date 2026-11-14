@@ -82,6 +82,16 @@ public class UserService implements UserApi {
         return UserMapper.toProfile(load(userId));
     }
 
+    /** Updates the user's own name and phone number (already validated by the request). */
+    @Transactional
+    public UserProfileResponse updateProfile(UUID userId, String fullName, String phone) {
+        User user = load(userId);
+        user.setFullName(fullName.trim());
+        user.setPhone(phone.trim());
+        log.info("User {} updated their profile", userId);
+        return UserMapper.toProfile(userRepository.saveAndFlush(user));
+    }
+
     /** Creates an account. Callers check {@link #emailExists} first; the DB unique index is the final guard. */
     @Override
     @Transactional
