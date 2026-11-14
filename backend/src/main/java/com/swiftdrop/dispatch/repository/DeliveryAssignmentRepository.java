@@ -71,6 +71,9 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
     /**
      * Active couriers by today's workload (open + completed since {@code startOfDay}), busiest first;
      * ties by courier age (oldest first) so the cut-off is stable. Pass a page size for the limit.
+     *
+     * <p>Only today's rows are joined (open, or COMPLETED since {@code startOfDay}), so a courier's older
+     * history is never read; the left join keeps couriers with no work today (all counts 0).
      */
     @Query("""
             select new com.swiftdrop.dispatch.repository.CourierDayLoad(c.id, c.userId, c.availabilityStatus,
@@ -83,16 +86,16 @@ public interface DeliveryAssignmentRepository extends JpaRepository<DeliveryAssi
                 sum(case when a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.COMPLETED
                               and a.endedAt >= :startOfDay
                          then 1 else 0 end))
-            from Courier c left join DeliveryAssignment a on a.courier = c
+            from Courier c left join DeliveryAssignment a
+                on a.courier = c
+               and ((a.endedAt is null
+                     and a.assignmentStatus in (com.swiftdrop.dispatch.model.AssignmentStatus.ASSIGNED,
+                                                com.swiftdrop.dispatch.model.AssignmentStatus.IN_PROGRESS))
+                    or (a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.COMPLETED
+                        and a.endedAt >= :startOfDay))
             where c.active = true
             group by c.id, c.userId, c.availabilityStatus, c.createdAt
-            order by sum(case when (a.endedAt is null
-                                    and a.assignmentStatus in (com.swiftdrop.dispatch.model.AssignmentStatus.ASSIGNED,
-                                                               com.swiftdrop.dispatch.model.AssignmentStatus.IN_PROGRESS))
-                                   or (a.assignmentStatus = com.swiftdrop.dispatch.model.AssignmentStatus.COMPLETED
-                                       and a.endedAt >= :startOfDay)
-                              then 1 else 0 end) desc,
-                     c.createdAt asc, c.id asc
+            order by count(a.id) desc, c.createdAt asc, c.id asc
             """)
     List<CourierDayLoad> findBusiestActiveCouriers(@Param("startOfDay") Instant startOfDay, Pageable limit);
 
