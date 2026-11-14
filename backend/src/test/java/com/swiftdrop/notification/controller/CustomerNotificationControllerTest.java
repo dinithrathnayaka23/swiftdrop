@@ -6,7 +6,9 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.security.AuthenticatedUser;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.notification.dto.request.CreateNotificationLogRequest;
 import com.swiftdrop.notification.dto.request.UpdateNotificationPreferencesRequest;
+import com.swiftdrop.notification.dto.response.NotificationLogResponse;
 import com.swiftdrop.notification.dto.response.NotificationPreferencesResponse;
 import com.swiftdrop.notification.dto.response.NotificationResponse;
 import com.swiftdrop.notification.dto.response.NotificationUnreadCountResponse;
@@ -20,6 +22,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 
@@ -57,6 +60,47 @@ class CustomerNotificationControllerTest {
     }
 
     @Test
+    void listNotificationLogsReturnsFilteredDatabaseLogs() {
+        UUID userId = UUID.randomUUID();
+        UUID parcelId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId.toString(), Set.of(Role.CUSTOMER));
+
+        NotificationLogResponse logEntry = new NotificationLogResponse(
+                UUID.randomUUID(), userId, parcelId, null, "SD123456789",
+                "DELIVERY", "EMAIL", "Parcel Delivered", "Delivered safely",
+                "SENT", false, null, Instant.now(), Instant.now()
+        );
+        when(notificationService.getNotificationLogs(userId, "EMAIL", "SENT", parcelId))
+                .thenReturn(List.of(logEntry));
+
+        List<NotificationLogResponse> result = controller.listNotificationLogs(user, "EMAIL", "SENT", parcelId);
+
+        assertThat(result).containsExactly(logEntry);
+        verify(notificationService).getNotificationLogs(userId, "EMAIL", "SENT", parcelId);
+    }
+
+    @Test
+    void createNotificationLogPersistsAndReturnsCreated() {
+        UUID userId = UUID.randomUUID();
+        AuthenticatedUser user = new AuthenticatedUser(userId.toString(), Set.of(Role.CUSTOMER));
+
+        CreateNotificationLogRequest request = new CreateNotificationLogRequest(
+                "IN_APP", "Welcome", "Account created", null, null, null, "SENT"
+        );
+        NotificationLogResponse created = new NotificationLogResponse(
+                UUID.randomUUID(), userId, null, null, null,
+                "ACCOUNT", "IN_APP", "Welcome", "Account created",
+                "SENT", false, null, Instant.now(), Instant.now()
+        );
+        when(notificationService.createNotificationLog(userId, request)).thenReturn(created);
+
+        ResponseEntity<NotificationLogResponse> response = controller.createNotificationLog(user, request);
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(response.getBody()).isEqualTo(created);
+    }
+
+    @Test
     void getUnreadCountReturnsCountResponse() {
         UUID userId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId.toString(), Set.of(Role.CUSTOMER));
@@ -71,21 +115,30 @@ class CustomerNotificationControllerTest {
     }
 
     @Test
-    void markAsReadDelegatesToService() {
+    void markAsReadAndMarkAsUnreadDelegateToService() {
         UUID userId = UUID.randomUUID();
         UUID notifId = UUID.randomUUID();
         AuthenticatedUser user = new AuthenticatedUser(userId.toString(), Set.of(Role.CUSTOMER));
 
-        NotificationResponse response = new NotificationResponse(
+        NotificationResponse readResponse = new NotificationResponse(
                 notifId, "DELIVERY", "Delivered", "Delivered to reception",
                 "EMAIL", "SENT", true, Instant.now(), "SD123456789", UUID.randomUUID()
         );
-        when(notificationService.markAsRead(userId, notifId)).thenReturn(response);
+        when(notificationService.markAsRead(userId, notifId)).thenReturn(readResponse);
 
         NotificationResponse res = controller.markAsRead(user, notifId);
-
         assertThat(res.isRead()).isTrue();
         verify(notificationService).markAsRead(userId, notifId);
+
+        NotificationResponse unreadResponse = new NotificationResponse(
+                notifId, "DELIVERY", "Delivered", "Delivered to reception",
+                "EMAIL", "SENT", false, Instant.now(), "SD123456789", UUID.randomUUID()
+        );
+        when(notificationService.markAsUnread(userId, notifId)).thenReturn(unreadResponse);
+
+        NotificationResponse resUnread = controller.markAsUnread(user, notifId);
+        assertThat(resUnread.isRead()).isFalse();
+        verify(notificationService).markAsUnread(userId, notifId);
     }
 
     @Test
@@ -157,4 +210,3 @@ class CustomerNotificationControllerTest {
         assertThat(res.notifyOnInTransit()).isTrue();
     }
 }
-

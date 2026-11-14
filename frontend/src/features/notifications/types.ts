@@ -25,6 +25,33 @@ export interface NotificationItem {
   actionUrl?: string;
 }
 
+export interface NotificationLogItem {
+  id: string;
+  userId?: string;
+  parcelId?: string;
+  statusHistoryId?: string;
+  trackingNumber?: string;
+  category: NotificationCategory;
+  channel: NotificationChannel;
+  subject: string;
+  message: string;
+  deliveryStatus: NotificationDeliveryStatus;
+  isRead: boolean;
+  readAt?: string;
+  createdAt: string;
+  sentAt?: string;
+}
+
+export interface CreateNotificationLogPayload {
+  channel: NotificationChannel;
+  subject: string;
+  message: string;
+  parcelId?: string;
+  statusHistoryId?: string;
+  recipient?: string;
+  deliveryStatus?: NotificationDeliveryStatus;
+}
+
 export interface NotificationPreferences {
   // Communication channels
   emailEnabled: boolean;
@@ -48,4 +75,3 @@ export interface NotificationPreferences {
 }
 
 export type NotificationFilter = 'ALL' | 'UNREAD' | 'DELIVERY' | 'SYSTEM';
-

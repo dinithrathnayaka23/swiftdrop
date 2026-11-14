@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,7 +13,9 @@ import static org.mockito.Mockito.when;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.notification.dto.request.CreateNotificationLogRequest;
 import com.swiftdrop.notification.dto.request.UpdateNotificationPreferencesRequest;
+import com.swiftdrop.notification.dto.response.NotificationLogResponse;
 import com.swiftdrop.notification.dto.response.NotificationPreferencesResponse;
 import com.swiftdrop.notification.dto.response.NotificationResponse;
 import com.swiftdrop.notification.dto.response.NotificationUnreadCountResponse;
@@ -27,6 +30,7 @@ import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.model.ParcelType;
 import com.swiftdrop.parcel.service.ParcelService;
+import com.swiftdrop.settings.service.SystemSettingsService;
 import com.swiftdrop.user.dto.response.UserProfileResponse;
 import com.swiftdrop.user.model.AccountStatus;
 import com.swiftdrop.user.service.UserService;
@@ -44,8 +48,11 @@ class NotificationServiceTest {
     private final NotificationRepository notificationRepository = mock(NotificationRepository.class);
     private final NotificationPreferencesRepository preferencesRepository = mock(NotificationPreferencesRepository.class);
     private final EmailService emailService = mock(EmailService.class);
+    private final SmsService smsService = mock(SmsService.class);
+    private final NotificationTemplateService templateService = new NotificationTemplateService();
     private final UserService userService = mock(UserService.class);
     private final ParcelService parcelService = mock(ParcelService.class);
+    private final SystemSettingsService systemSettingsService = mock(SystemSettingsService.class);
 
     private NotificationService notificationService;
 
@@ -55,8 +62,11 @@ class NotificationServiceTest {
                 notificationRepository,
                 preferencesRepository,
                 emailService,
+                smsService,
+                templateService,
                 userService,
-                parcelService
+                parcelService,
+                systemSettingsService
         );
     }
 
@@ -89,6 +99,60 @@ class NotificationServiceTest {
     }
 
     @Test
+    void getNotificationLogsFiltersByChannelAndStatus() {
+        UUID userId = UUID.randomUUID();
+        UUID parcelId = UUID.randomUUID();
+
+        Notification emailSent = new Notification();
+        emailSent.setId(UUID.randomUUID());
+        emailSent.setUserId(userId);
+        emailSent.setParcelId(parcelId);
+        emailSent.setChannel(NotificationChannel.EMAIL);
+        emailSent.setDeliveryStatus(NotificationDeliveryStatus.SENT);
+        emailSent.setSubject("Parcel Picked Up");
+        emailSent.setMessage("Picked up");
+        emailSent.setCreatedAt(Instant.now());
+
+        when(notificationRepository.findByUserIdAndChannelOrderByCreatedAtDesc(userId, NotificationChannel.EMAIL))
+                .thenReturn(List.of(emailSent));
+
+        List<NotificationLogResponse> logs = notificationService.getNotificationLogs(userId, "EMAIL", "SENT", null);
+
+        assertThat(logs).hasSize(1);
+        assertThat(logs.get(0).channel()).isEqualTo("EMAIL");
+        assertThat(logs.get(0).deliveryStatus()).isEqualTo("SENT");
+    }
+
+    @Test
+    void createNotificationLogPersistsToDatabase() {
+        UUID userId = UUID.randomUUID();
+        UUID parcelId = UUID.randomUUID();
+        when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> {
+            Notification saved = inv.getArgument(0);
+            saved.setId(UUID.randomUUID());
+            saved.setCreatedAt(Instant.now());
+            return saved;
+        });
+
+        CreateNotificationLogRequest req = new CreateNotificationLogRequest(
+                "SMS",
+                "Parcel Out for Delivery (SD111)",
+                "SwiftDrop: Parcel SD111 is out for delivery",
+                parcelId,
+                null,
+                "+94771234567",
+                "SENT"
+        );
+
+        NotificationLogResponse response = notificationService.createNotificationLog(userId, req);
+
+        assertThat(response.channel()).isEqualTo("SMS");
+        assertThat(response.deliveryStatus()).isEqualTo("SENT");
+        assertThat(response.sentAt()).isNotNull();
+        verify(notificationRepository).save(any(Notification.class));
+    }
+
+    @Test
     void getUnreadCountCalculatesAccurately() {
         UUID userId = UUID.randomUUID();
         when(notificationRepository.countByUserIdAndIsReadFalse(userId)).thenReturn(3L);
@@ -103,7 +167,7 @@ class NotificationServiceTest {
     }
 
     @Test
-    void markAsReadUpdatesNotification() {
+    void markAsReadAndMarkAsUnreadUpdateNotification() {
         UUID userId = UUID.randomUUID();
         UUID notifId = UUID.randomUUID();
 
@@ -117,11 +181,13 @@ class NotificationServiceTest {
         when(notificationRepository.findByIdAndUserId(notifId, userId)).thenReturn(Optional.of(n));
         when(notificationRepository.save(any(Notification.class))).thenAnswer(inv -> inv.getArgument(0));
 
-        NotificationResponse response = notificationService.markAsRead(userId, notifId);
-
-        assertThat(response.isRead()).isTrue();
-        assertThat(n.isRead()).isTrue();
+        NotificationResponse readRes = notificationService.markAsRead(userId, notifId);
+        assertThat(readRes.isRead()).isTrue();
         assertThat(n.getReadAt()).isNotNull();
+
+        NotificationResponse unreadRes = notificationService.markAsUnread(userId, notifId);
+        assertThat(unreadRes.isRead()).isFalse();
+        assertThat(n.getReadAt()).isNull();
     }
 
     @Test
@@ -229,17 +295,72 @@ class NotificationServiceTest {
 
         notificationService.processParcelStatusChange(event);
 
-        // Verify In-App, Email and SMS notifications were saved
+        // Verify In-App, Email and SMS notifications were saved to database
         ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
         verify(notificationRepository, org.mockito.Mockito.atLeast(3)).save(captor.capture());
 
         List<Notification> savedList = captor.getAllValues();
-        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.IN_APP);
-        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.EMAIL);
-        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.SMS);
+        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.IN_APP
+                && n.getDeliveryStatus() == NotificationDeliveryStatus.SENT);
+        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.EMAIL
+                && n.getDeliveryStatus() == NotificationDeliveryStatus.SENT);
+        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.SMS
+                && n.getDeliveryStatus() == NotificationDeliveryStatus.SENT);
 
-        // Verify email was sent
-        verify(emailService).send(eq("kamal@example.com"), any(String.class), any(String.class));
+        // Verify HTML + plain-text email and mock SMS were dispatched
+        verify(emailService).send(eq("kamal@example.com"), any(String.class), any(String.class), any(String.class));
+        verify(smsService).send(eq("+94779876543"), any(String.class), eq(trackingNumber));
+    }
+
+    @Test
+    void processParcelStatusChangeRecordsFailedStatusWhenDeliveryThrows() {
+        UUID parcelId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        UUID statusHistoryId = UUID.randomUUID();
+        String trackingNumber = "SD2508220099";
+
+        ParcelStatusChangedEvent event = new ParcelStatusChangedEvent(
+                UUID.randomUUID(),
+                ParcelStatusChangedEvent.EVENT_TYPE,
+                ParcelStatusChangedEvent.SCHEMA_VERSION,
+                parcelId,
+                trackingNumber,
+                null,
+                "OUT_FOR_DELIVERY",
+                "DELIVERED",
+                5L,
+                statusHistoryId,
+                null,
+                Instant.now()
+        );
+
+        ParcelDetails parcel = createSampleParcel(parcelId, userId, trackingNumber);
+        when(parcelService.getParcel(parcelId)).thenReturn(parcel);
+
+        NotificationPreferences prefs = new NotificationPreferences(userId);
+        prefs.setEmailEnabled(true);
+        prefs.setSmsEnabled(true);
+        prefs.setInAppEnabled(false);
+        prefs.setNotifyOnDelivered(true);
+        when(preferencesRepository.findById(userId)).thenReturn(Optional.of(prefs));
+
+        UserProfileResponse profile = new UserProfileResponse(
+                userId, "Kamal Silva", "kamal@example.com", "invalid-phone",
+                Role.CUSTOMER, AccountStatus.ACTIVE, Instant.now()
+        );
+        when(userService.getProfile(userId)).thenReturn(profile);
+
+        doThrow(new IllegalArgumentException("Invalid phone")).when(smsService)
+                .send(eq("invalid-phone"), any(String.class), eq(trackingNumber));
+
+        notificationService.processParcelStatusChange(event);
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository, org.mockito.Mockito.atLeast(2)).save(captor.capture());
+
+        List<Notification> savedList = captor.getAllValues();
+        assertThat(savedList).anyMatch(n -> n.getChannel() == NotificationChannel.SMS
+                && n.getDeliveryStatus() == NotificationDeliveryStatus.FAILED);
     }
 
     @Test
@@ -276,7 +397,39 @@ class NotificationServiceTest {
         notificationService.processParcelStatusChange(event);
 
         verify(notificationRepository, never()).save(any(Notification.class));
-        verify(emailService, never()).send(any(), any(), any());
+        verify(emailService, never()).send(any(), any(), any(), any());
+    }
+
+    @Test
+    void recordDeadLetterFailurePersistsFailedAuditLog() {
+        UUID parcelId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
+        ParcelDetails parcel = createSampleParcel(parcelId, userId, "SD777777777");
+        when(parcelService.getParcel(parcelId)).thenReturn(parcel);
+
+        ParcelStatusChangedEvent deadEvent = new ParcelStatusChangedEvent(
+                UUID.randomUUID(),
+                ParcelStatusChangedEvent.EVENT_TYPE,
+                ParcelStatusChangedEvent.SCHEMA_VERSION,
+                parcelId,
+                "SD777777777",
+                null,
+                "IN_TRANSIT",
+                "FAILED",
+                4L,
+                UUID.randomUUID(),
+                null,
+                Instant.now()
+        );
+
+        notificationService.recordDeadLetterFailure(deadEvent);
+
+        ArgumentCaptor<Notification> captor = ArgumentCaptor.forClass(Notification.class);
+        verify(notificationRepository).save(captor.capture());
+        Notification saved = captor.getValue();
+        assertThat(saved.getDeliveryStatus()).isEqualTo(NotificationDeliveryStatus.FAILED);
+        assertThat(saved.getUserId()).isEqualTo(userId);
+        assertThat(saved.getParcelId()).isEqualTo(parcelId);
     }
 
     private ParcelDetails createSampleParcel(UUID parcelId, UUID userId, String trackingNumber) {

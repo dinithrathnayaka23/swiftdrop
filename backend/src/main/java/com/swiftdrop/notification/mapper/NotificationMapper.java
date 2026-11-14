@@ -1,6 +1,7 @@
 package com.swiftdrop.notification.mapper;
 
 import com.swiftdrop.notification.dto.request.UpdateNotificationPreferencesRequest;
+import com.swiftdrop.notification.dto.response.NotificationLogResponse;
 import com.swiftdrop.notification.dto.response.NotificationPreferencesResponse;
 import com.swiftdrop.notification.dto.response.NotificationResponse;
 import com.swiftdrop.notification.model.Notification;
@@ -13,13 +14,7 @@ public final class NotificationMapper {
     }
 
     public static NotificationResponse toResponse(Notification notification, String trackingNumber) {
-        String category = "SYSTEM";
-        if (notification.getParcelId() != null) {
-            category = "DELIVERY";
-        } else if (notification.getSubject() != null && notification.getSubject().toLowerCase().contains("welcome")) {
-            category = "ACCOUNT";
-        }
-
+        String category = resolveCategory(notification);
         String title = notification.getSubject() != null ? notification.getSubject() : "Delivery Update";
 
         return new NotificationResponse(
@@ -34,6 +29,38 @@ public final class NotificationMapper {
                 trackingNumber,
                 notification.getParcelId()
         );
+    }
+
+    public static NotificationLogResponse toLogResponse(Notification notification, String trackingNumber) {
+        String category = resolveCategory(notification);
+        String subject = notification.getSubject() != null ? notification.getSubject() : "Delivery Update";
+
+        return new NotificationLogResponse(
+                notification.getId(),
+                notification.getUserId(),
+                notification.getParcelId(),
+                notification.getStatusHistoryId(),
+                trackingNumber,
+                category,
+                notification.getChannel().name(),
+                subject,
+                notification.getMessage(),
+                notification.getDeliveryStatus().name(),
+                notification.isRead(),
+                notification.getReadAt(),
+                notification.getCreatedAt(),
+                notification.getSentAt()
+        );
+    }
+
+    private static String resolveCategory(Notification notification) {
+        if (notification.getParcelId() != null) {
+            return "DELIVERY";
+        }
+        if (notification.getSubject() != null && notification.getSubject().toLowerCase().contains("welcome")) {
+            return "ACCOUNT";
+        }
+        return "SYSTEM";
     }
 
     public static NotificationPreferencesResponse toPreferencesResponse(

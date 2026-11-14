@@ -2,7 +2,9 @@ package com.swiftdrop.notification.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.AuthenticatedUser;
+import com.swiftdrop.notification.dto.request.CreateNotificationLogRequest;
 import com.swiftdrop.notification.dto.request.UpdateNotificationPreferencesRequest;
+import com.swiftdrop.notification.dto.response.NotificationLogResponse;
 import com.swiftdrop.notification.dto.response.NotificationPreferencesResponse;
 import com.swiftdrop.notification.dto.response.NotificationResponse;
 import com.swiftdrop.notification.dto.response.NotificationUnreadCountResponse;
@@ -10,6 +12,7 @@ import com.swiftdrop.notification.service.NotificationService;
 import java.util.List;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -21,6 +24,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -38,6 +42,25 @@ public class CustomerNotificationController {
         return notificationService.getNotifications(userId);
     }
 
+    @GetMapping("/logs")
+    public List<NotificationLogResponse> listNotificationLogs(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @RequestParam(name = "channel", required = false) String channel,
+            @RequestParam(name = "status", required = false) String status,
+            @RequestParam(name = "parcelId", required = false) UUID parcelId) {
+        UUID userId = UUID.fromString(currentUser.userId());
+        return notificationService.getNotificationLogs(userId, channel, status, parcelId);
+    }
+
+    @PostMapping("/logs")
+    public ResponseEntity<NotificationLogResponse> createNotificationLog(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @RequestBody CreateNotificationLogRequest request) {
+        UUID userId = UUID.fromString(currentUser.userId());
+        NotificationLogResponse created = notificationService.createNotificationLog(userId, request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(created);
+    }
+
     @GetMapping("/unread-count")
     public NotificationUnreadCountResponse getUnreadCount(
             @AuthenticationPrincipal AuthenticatedUser currentUser) {
@@ -51,6 +74,14 @@ public class CustomerNotificationController {
             @PathVariable("id") UUID notificationId) {
         UUID userId = UUID.fromString(currentUser.userId());
         return notificationService.markAsRead(userId, notificationId);
+    }
+
+    @PatchMapping("/{id}/unread")
+    public NotificationResponse markAsUnread(
+            @AuthenticationPrincipal AuthenticatedUser currentUser,
+            @PathVariable("id") UUID notificationId) {
+        UUID userId = UUID.fromString(currentUser.userId());
+        return notificationService.markAsUnread(userId, notificationId);
     }
 
     @PostMapping("/read-all")
@@ -93,4 +124,3 @@ public class CustomerNotificationController {
         return notificationService.updatePreferences(userId, request);
     }
 }
-

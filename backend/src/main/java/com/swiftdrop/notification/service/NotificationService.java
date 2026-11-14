@@ -2,7 +2,9 @@ package com.swiftdrop.notification.service;
 
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.common.messaging.event.ParcelStatusChangedEvent;
+import com.swiftdrop.notification.dto.request.CreateNotificationLogRequest;
 import com.swiftdrop.notification.dto.request.UpdateNotificationPreferencesRequest;
+import com.swiftdrop.notification.dto.response.NotificationLogResponse;
 import com.swiftdrop.notification.dto.response.NotificationPreferencesResponse;
 import com.swiftdrop.notification.dto.response.NotificationResponse;
 import com.swiftdrop.notification.dto.response.NotificationUnreadCountResponse;
@@ -15,6 +17,8 @@ import com.swiftdrop.notification.repository.NotificationPreferencesRepository;
 import com.swiftdrop.notification.repository.NotificationRepository;
 import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.service.ParcelService;
+import com.swiftdrop.settings.dto.SystemSettingsView;
+import com.swiftdrop.settings.service.SystemSettingsService;
 import com.swiftdrop.user.dto.response.UserProfileResponse;
 import com.swiftdrop.user.service.UserService;
 import java.time.Instant;
@@ -22,37 +26,143 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
     private final NotificationPreferencesRepository preferencesRepository;
     private final EmailService emailService;
+    private final SmsService smsService;
+    private final NotificationTemplateService templateService;
     private final UserService userService;
     private final ParcelService parcelService;
+    private final SystemSettingsService systemSettingsService;
 
     // Cache of parcelId -> trackingNumber to minimize lookups during list queries
     private final Map<UUID, String> trackingNumberCache = new ConcurrentHashMap<>();
+
+    @Autowired
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            NotificationPreferencesRepository preferencesRepository,
+            EmailService emailService,
+            SmsService smsService,
+            NotificationTemplateService templateService,
+            UserService userService,
+            ParcelService parcelService,
+            SystemSettingsService systemSettingsService) {
+        this.notificationRepository = notificationRepository;
+        this.preferencesRepository = preferencesRepository;
+        this.emailService = emailService;
+        this.smsService = smsService;
+        this.templateService = templateService;
+        this.userService = userService;
+        this.parcelService = parcelService;
+        this.systemSettingsService = systemSettingsService;
+    }
+
+    public NotificationService(
+            NotificationRepository notificationRepository,
+            NotificationPreferencesRepository preferencesRepository,
+            EmailService emailService,
+            UserService userService,
+            ParcelService parcelService) {
+        this(
+                notificationRepository,
+                preferencesRepository,
+                emailService,
+                new SmsService(),
+                new NotificationTemplateService(),
+                userService,
+                parcelService,
+                null
+        );
+    }
 
     @Transactional(readOnly = true)
     public List<NotificationResponse> getNotifications(UUID userId) {
         List<Notification> items = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
         return items.stream()
                 .map(n -> {
-                    String trackingNumber = null;
-                    if (n.getParcelId() != null) {
-                        trackingNumber = resolveTrackingNumber(n.getParcelId());
-                    }
+                    String trackingNumber = n.getParcelId() != null ? resolveTrackingNumber(n.getParcelId()) : null;
                     return NotificationMapper.toResponse(n, trackingNumber);
                 })
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<NotificationLogResponse> getNotificationLogs(
+            UUID userId,
+            String channelFilter,
+            String statusFilter,
+            UUID parcelIdFilter) {
+        List<Notification> items;
+        if (parcelIdFilter != null) {
+            items = notificationRepository.findByParcelIdOrderByCreatedAtDesc(parcelIdFilter).stream()
+                    .filter(n -> userId.equals(n.getUserId()))
+                    .toList();
+        } else if (channelFilter != null && !channelFilter.isBlank()) {
+            NotificationChannel ch = parseChannel(channelFilter);
+            items = notificationRepository.findByUserIdAndChannelOrderByCreatedAtDesc(userId, ch);
+        } else if (statusFilter != null && !statusFilter.isBlank()) {
+            NotificationDeliveryStatus st = parseDeliveryStatus(statusFilter);
+            items = notificationRepository.findByUserIdAndDeliveryStatusOrderByCreatedAtDesc(userId, st);
+        } else {
+            items = notificationRepository.findByUserIdOrderByCreatedAtDesc(userId);
+        }
+
+        return items.stream()
+                .filter(n -> channelFilter == null || channelFilter.isBlank()
+                        || n.getChannel().name().equalsIgnoreCase(channelFilter.trim()))
+                .filter(n -> statusFilter == null || statusFilter.isBlank()
+                        || n.getDeliveryStatus().name().equalsIgnoreCase(statusFilter.trim()))
+                .filter(n -> parcelIdFilter == null || parcelIdFilter.equals(n.getParcelId()))
+                .map(n -> {
+                    String trackingNumber = n.getParcelId() != null ? resolveTrackingNumber(n.getParcelId()) : null;
+                    return NotificationMapper.toLogResponse(n, trackingNumber);
+                })
+                .toList();
+    }
+
+    @Transactional
+    public NotificationLogResponse createNotificationLog(UUID userId, CreateNotificationLogRequest request) {
+        if (request == null || request.message() == null || request.message().isBlank()) {
+            throw new IllegalArgumentException("Notification message is required");
+        }
+
+        NotificationChannel channel = parseChannel(request.channel());
+        NotificationDeliveryStatus status = parseDeliveryStatus(request.deliveryStatus());
+
+        Notification logEntry = new Notification();
+        logEntry.setUserId(userId);
+        logEntry.setParcelId(request.parcelId());
+        logEntry.setStatusHistoryId(request.statusHistoryId());
+        logEntry.setChannel(channel);
+        logEntry.setRecipient(
+                request.recipient() != null && !request.recipient().isBlank()
+                        ? request.recipient().trim()
+                        : "in-app:" + userId
+        );
+        logEntry.setSubject(
+                request.subject() != null && !request.subject().isBlank()
+                        ? request.subject().trim()
+                        : "System Notification"
+        );
+        logEntry.setMessage(request.message().trim());
+        logEntry.setDeliveryStatus(status);
+        if (status == NotificationDeliveryStatus.SENT) {
+            logEntry.setSentAt(Instant.now());
+        }
+
+        Notification saved = notificationRepository.save(logEntry);
+        String trackingNumber = saved.getParcelId() != null ? resolveTrackingNumber(saved.getParcelId()) : null;
+        return NotificationMapper.toLogResponse(saved, trackingNumber);
     }
 
     @Transactional(readOnly = true)
@@ -69,6 +179,19 @@ public class NotificationService {
 
         notification.setRead(true);
         notification.setReadAt(Instant.now());
+        Notification saved = notificationRepository.save(notification);
+
+        String trackingNumber = saved.getParcelId() != null ? resolveTrackingNumber(saved.getParcelId()) : null;
+        return NotificationMapper.toResponse(saved, trackingNumber);
+    }
+
+    @Transactional
+    public NotificationResponse markAsUnread(UUID userId, UUID notificationId) {
+        Notification notification = notificationRepository.findByIdAndUserId(notificationId, userId)
+                .orElseThrow(() -> new NotFoundException("Notification not found"));
+
+        notification.setRead(false);
+        notification.setReadAt(null);
         Notification saved = notificationRepository.save(notification);
 
         String trackingNumber = saved.getParcelId() != null ? resolveTrackingNumber(saved.getParcelId()) : null;
@@ -118,14 +241,13 @@ public class NotificationService {
     }
 
     /**
-     * Consumes an incoming ParcelStatusChangedEvent from RabbitMQ and creates in-app,
-     * email, and SMS notifications according to customer preferences.
+     * Consumes an incoming {@link ParcelStatusChangedEvent} from RabbitMQ, renders email and SMS
+     * templates, dispatches across enabled channels, and persists delivery audit logs to PostgreSQL.
      */
     @Transactional
     public void processParcelStatusChange(ParcelStatusChangedEvent event) {
-        if (event == null || event.parcelId() == null || event.newStatus() == null) {
-            log.warn("Invalid parcel status change event received");
-            return;
+        if (event == null || event.parcelId() == null || event.newStatus() == null || event.newStatus().isBlank()) {
+            throw new IllegalArgumentException("Invalid parcel status change event: missing parcelId or newStatus");
         }
 
         // Idempotency: skip if we already stored an in-app notification for this status history record
@@ -135,16 +257,15 @@ public class NotificationService {
             return;
         }
 
-        ParcelDetails parcel;
-        try {
-            parcel = parcelService.getParcel(event.parcelId());
-        } catch (Exception ex) {
-            log.error("Could not fetch parcel details for notification on parcelId: {}", event.parcelId(), ex);
-            return;
+        ParcelDetails parcel = parcelService.getParcel(event.parcelId());
+        if (parcel == null) {
+            throw new NotFoundException("Parcel not found for notification event: " + event.parcelId());
         }
 
-        if (event.trackingNumber() != null) {
+        if (event.trackingNumber() != null && !event.trackingNumber().isBlank()) {
             trackingNumberCache.put(event.parcelId(), event.trackingNumber());
+        } else if (parcel.trackingNumber() != null) {
+            trackingNumberCache.put(event.parcelId(), parcel.trackingNumber());
         }
 
         UUID customerUserId = parcel.customerUserId();
@@ -158,11 +279,24 @@ public class NotificationService {
             return;
         }
 
-        String tracking = event.trackingNumber() != null ? event.trackingNumber() : parcel.trackingNumber();
-        String subject = buildSubject(event.newStatus(), tracking);
-        String message = buildMessage(event.newStatus(), tracking);
+        SystemSettingsView settings = resolveSystemSettings();
+        String companyName = settings != null ? settings.companyName() : "SwiftDrop";
+        String supportEmail = settings != null ? settings.contactEmail() : "support@swiftdrop.lk";
+        String supportPhone = settings != null ? settings.contactPhone() : "+94 11 234 5678";
 
-        // 1. IN_APP notification
+        String tracking = (event.trackingNumber() != null && !event.trackingNumber().isBlank())
+                ? event.trackingNumber()
+                : parcel.trackingNumber();
+
+        NotificationTemplateService.RenderedNotification rendered = templateService.render(
+                event.newStatus(),
+                tracking,
+                companyName,
+                supportEmail,
+                supportPhone
+        );
+
+        // 1. IN_APP notification log & delivery
         if (customerUserId != null && preferences.isInAppEnabled()) {
             Notification inAppNotification = new Notification();
             inAppNotification.setUserId(customerUserId);
@@ -170,16 +304,16 @@ public class NotificationService {
             inAppNotification.setStatusHistoryId(event.statusHistoryId());
             inAppNotification.setChannel(NotificationChannel.IN_APP);
             inAppNotification.setRecipient("in-app:" + customerUserId);
-            inAppNotification.setSubject(subject);
-            inAppNotification.setMessage(message);
+            inAppNotification.setSubject(rendered.subject());
+            inAppNotification.setMessage(templateService.buildMessage(event.newStatus(), tracking));
             inAppNotification.setDeliveryStatus(NotificationDeliveryStatus.SENT);
             inAppNotification.setSentAt(Instant.now());
             notificationRepository.save(inAppNotification);
         }
 
-        // 2. EMAIL notification
+        // 2. EMAIL notification log & delivery
         if (preferences.isEmailEnabled()) {
-            String recipientEmail = resolveRecipientEmail(customerUserId, parcel);
+            String recipientEmail = resolveRecipientEmail(customerUserId);
             if (recipientEmail != null && !recipientEmail.isBlank()) {
                 Notification emailNotification = new Notification();
                 emailNotification.setUserId(customerUserId);
@@ -187,21 +321,23 @@ public class NotificationService {
                 emailNotification.setStatusHistoryId(event.statusHistoryId());
                 emailNotification.setChannel(NotificationChannel.EMAIL);
                 emailNotification.setRecipient(recipientEmail);
-                emailNotification.setSubject(subject);
-                emailNotification.setMessage(message);
-                emailNotification.setDeliveryStatus(NotificationDeliveryStatus.SENT);
-                emailNotification.setSentAt(Instant.now());
-                notificationRepository.save(emailNotification);
+                emailNotification.setSubject(rendered.subject());
+                emailNotification.setMessage(templateService.buildMessage(event.newStatus(), tracking));
+                emailNotification.setDeliveryStatus(NotificationDeliveryStatus.PENDING);
 
                 try {
-                    emailService.send(recipientEmail, subject, message);
+                    emailService.send(recipientEmail, rendered.subject(), rendered.plainText(), rendered.htmlBody());
+                    emailNotification.setDeliveryStatus(NotificationDeliveryStatus.SENT);
+                    emailNotification.setSentAt(Instant.now());
                 } catch (Exception ex) {
-                    log.error("Failed to queue email notification for parcel: {}", tracking, ex);
+                    log.error("Failed to dispatch email notification for parcel {}", tracking, ex);
+                    emailNotification.setDeliveryStatus(NotificationDeliveryStatus.FAILED);
                 }
+                notificationRepository.save(emailNotification);
             }
         }
 
-        // 3. SMS notification (Mock SMS)
+        // 3. SMS notification (Mock SMS) log & delivery
         if (preferences.isSmsEnabled()) {
             String recipientPhone = resolveRecipientPhone(customerUserId, parcel);
             if (recipientPhone != null && !recipientPhone.isBlank()) {
@@ -211,15 +347,55 @@ public class NotificationService {
                 smsNotification.setStatusHistoryId(event.statusHistoryId());
                 smsNotification.setChannel(NotificationChannel.SMS);
                 smsNotification.setRecipient(recipientPhone);
-                smsNotification.setSubject(subject);
-                smsNotification.setMessage(message);
-                smsNotification.setDeliveryStatus(NotificationDeliveryStatus.SENT);
-                smsNotification.setSentAt(Instant.now());
-                notificationRepository.save(smsNotification);
+                smsNotification.setSubject(rendered.subject());
+                smsNotification.setMessage(rendered.smsText());
+                smsNotification.setDeliveryStatus(NotificationDeliveryStatus.PENDING);
 
-                log.info("[Mock SMS] Dispatched SMS alert to recipient for parcel {}: '{}'", tracking, message);
+                try {
+                    smsService.send(recipientPhone, rendered.smsText(), tracking);
+                    smsNotification.setDeliveryStatus(NotificationDeliveryStatus.SENT);
+                    smsNotification.setSentAt(Instant.now());
+                } catch (Exception ex) {
+                    log.warn("Failed to dispatch mock SMS notification for parcel {}: {}", tracking, ex.getMessage());
+                    smsNotification.setDeliveryStatus(NotificationDeliveryStatus.FAILED);
+                }
+                notificationRepository.save(smsNotification);
             }
         }
+    }
+
+    /**
+     * Records a failed notification log entry in the database when a parcel status event
+     * lands in the Dead-Letter Queue (DLQ).
+     */
+    @Transactional
+    public void recordDeadLetterFailure(ParcelStatusChangedEvent deadEvent) {
+        if (deadEvent == null) {
+            return;
+        }
+        Notification failedLog = new Notification();
+        failedLog.setParcelId(deadEvent.parcelId());
+        failedLog.setStatusHistoryId(deadEvent.statusHistoryId());
+        failedLog.setChannel(NotificationChannel.IN_APP);
+        failedLog.setRecipient("dlq:" + (deadEvent.eventId() != null ? deadEvent.eventId() : "unknown"));
+        String tracking = deadEvent.trackingNumber() != null ? deadEvent.trackingNumber() : "UNKNOWN";
+        failedLog.setSubject("Dead-Lettered Notification (" + tracking + ")");
+        failedLog.setMessage("Notification event moved to dead-letter queue for status: "
+                + (deadEvent.newStatus() != null ? deadEvent.newStatus() : "UNKNOWN"));
+        failedLog.setDeliveryStatus(NotificationDeliveryStatus.FAILED);
+
+        if (deadEvent.parcelId() != null) {
+            try {
+                ParcelDetails parcel = parcelService.getParcel(deadEvent.parcelId());
+                if (parcel != null) {
+                    failedLog.setUserId(parcel.customerUserId());
+                }
+            } catch (Exception ex) {
+                log.debug("Could not resolve parcel owner for dead-lettered event {}", deadEvent.eventId());
+            }
+        }
+
+        notificationRepository.save(failedLog);
     }
 
     private NotificationPreferences getOrCreatePreferences(UUID userId) {
@@ -229,7 +405,7 @@ public class NotificationService {
 
     private boolean shouldNotifyForStatus(NotificationPreferences prefs, String status) {
         if (status == null) return false;
-        String normalized = status.toUpperCase();
+        String normalized = status.trim().toUpperCase();
         return switch (normalized) {
             case "PICKED_UP" -> prefs.isNotifyOnPickedUp();
             case "IN_TRANSIT" -> prefs.isNotifyOnInTransit();
@@ -240,34 +416,11 @@ public class NotificationService {
         };
     }
 
-    private String buildSubject(String status, String trackingNumber) {
-        String normalized = status != null ? status.toUpperCase() : "";
-        return switch (normalized) {
-            case "PICKED_UP" -> "Parcel Picked Up (" + trackingNumber + ")";
-            case "IN_TRANSIT" -> "Parcel in Transit (" + trackingNumber + ")";
-            case "OUT_FOR_DELIVERY" -> "Parcel Out for Delivery (" + trackingNumber + ")";
-            case "DELIVERED" -> "Parcel Delivered Successfully (" + trackingNumber + ")";
-            case "FAILED", "DELIVERY_ATTEMPTED" -> "Delivery Attempt Failed (" + trackingNumber + ")";
-            default -> "Parcel Status Update (" + trackingNumber + ")";
-        };
-    }
-
-    private String buildMessage(String status, String trackingNumber) {
-        String normalized = status != null ? status.toUpperCase() : "";
-        return switch (normalized) {
-            case "PICKED_UP" -> "Your parcel " + trackingNumber + " has been picked up from the sender and registered into our network.";
-            case "IN_TRANSIT" -> "Your parcel " + trackingNumber + " has departed the sorting center and is in transit.";
-            case "OUT_FOR_DELIVERY" -> "Your parcel " + trackingNumber + " is out for delivery with our courier. Please be available to receive it.";
-            case "DELIVERED" -> "Your parcel " + trackingNumber + " has been delivered successfully. Proof of delivery is available.";
-            case "FAILED", "DELIVERY_ATTEMPTED" -> "A delivery attempt for parcel " + trackingNumber + " was unsuccessful. A re-attempt or contact will follow.";
-            default -> "Your parcel " + trackingNumber + " status is now " + status + ".";
-        };
-    }
-
-    private String resolveRecipientEmail(UUID userId, ParcelDetails parcel) {
+    private String resolveRecipientEmail(UUID userId) {
         if (userId != null) {
             try {
-                return userService.getProfile(userId).email();
+                UserProfileResponse profile = userService.getProfile(userId);
+                return profile != null ? profile.email() : null;
             } catch (Exception e) {
                 log.debug("Could not resolve account email for userId: {}", userId);
             }
@@ -278,7 +431,10 @@ public class NotificationService {
     private String resolveRecipientPhone(UUID userId, ParcelDetails parcel) {
         if (userId != null) {
             try {
-                return userService.getProfile(userId).phone();
+                UserProfileResponse profile = userService.getProfile(userId);
+                if (profile != null && profile.phone() != null && !profile.phone().isBlank()) {
+                    return profile.phone();
+                }
             } catch (Exception e) {
                 log.debug("Could not resolve account phone for userId: {}", userId);
             }
@@ -302,5 +458,39 @@ public class NotificationService {
             log.debug("Could not resolve parcel tracking number for: {}", parcelId);
         }
         return null;
+    }
+
+    private SystemSettingsView resolveSystemSettings() {
+        if (systemSettingsService == null) {
+            return null;
+        }
+        try {
+            return systemSettingsService.current();
+        } catch (Exception e) {
+            log.debug("System settings unavailable during notification dispatch, using defaults");
+            return null;
+        }
+    }
+
+    private static NotificationChannel parseChannel(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return NotificationChannel.IN_APP;
+        }
+        try {
+            return NotificationChannel.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unsupported notification channel: " + raw);
+        }
+    }
+
+    private static NotificationDeliveryStatus parseDeliveryStatus(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return NotificationDeliveryStatus.SENT;
+        }
+        try {
+            return NotificationDeliveryStatus.valueOf(raw.trim().toUpperCase());
+        } catch (IllegalArgumentException ex) {
+            throw new IllegalArgumentException("Unsupported notification delivery status: " + raw);
+        }
     }
 }

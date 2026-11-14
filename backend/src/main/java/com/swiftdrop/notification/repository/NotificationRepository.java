@@ -2,6 +2,7 @@ package com.swiftdrop.notification.repository;
 
 import com.swiftdrop.notification.model.Notification;
 import com.swiftdrop.notification.model.NotificationChannel;
+import com.swiftdrop.notification.model.NotificationDeliveryStatus;
 import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
@@ -15,6 +16,15 @@ import org.springframework.data.repository.query.Param;
 public interface NotificationRepository extends JpaRepository<Notification, UUID> {
 
     List<Notification> findByUserIdOrderByCreatedAtDesc(UUID userId);
+
+    List<Notification> findByParcelIdOrderByCreatedAtDesc(UUID parcelId);
+
+    List<Notification> findByUserIdAndChannelOrderByCreatedAtDesc(UUID userId, NotificationChannel channel);
+
+    List<Notification> findByUserIdAndDeliveryStatusOrderByCreatedAtDesc(
+            UUID userId, NotificationDeliveryStatus deliveryStatus);
+
+    long countByUserId(UUID userId);
 
     long countByUserIdAndIsReadFalse(UUID userId);
 
@@ -30,4 +40,3 @@ public interface NotificationRepository extends JpaRepository<Notification, UUID
 
     boolean existsByStatusHistoryIdAndChannel(UUID statusHistoryId, NotificationChannel channel);
 }
-
