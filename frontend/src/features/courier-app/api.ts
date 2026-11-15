@@ -2,7 +2,9 @@ import { apiClient } from '../../api/client';
 import { ApiRequestError, request } from '../../api/errors';
 import { isMockApiEnabled } from '../../utils/env';
 import { mockCourierApi } from './mock/mockCourierApi';
+import type { Paged } from '../../types/parcel';
 import type {
+  CompletedDelivery,
   CourierApi,
   CourierDeliveryDetail,
   DeliverRequest,
@@ -76,7 +78,20 @@ const httpCourierApi: CourierApi = {
         { headers: { 'Content-Type': 'multipart/form-data' } },
       ),
     ),
+
+  getCompleted: ({ outcome, from, to, page, size = COMPLETED_PAGE_SIZE }) =>
+    request(() =>
+      apiClient.get<Paged<CompletedDelivery>>('/courier/deliveries/completed', {
+        params: { outcome, from, to, page, size },
+      }),
+    ),
+
+  // The URL is relative to /api/v1, like every other call; the photo comes back as a Blob.
+  getProofPhoto: (proofPhotoUrl) =>
+    request(() => apiClient.get<Blob>(proofPhotoUrl, { responseType: 'blob' })),
 };
+
+export const COMPLETED_PAGE_SIZE = 20;
 
 /** The multipart body of POST /deliver. */
 export function deliveryForm({ recipientName, note, photo }: DeliverRequest): FormData {

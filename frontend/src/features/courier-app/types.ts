@@ -1,4 +1,4 @@
-import type { ParcelType } from '../../types/parcel';
+import type { Paged, ParcelType } from '../../types/parcel';
 import type { ParcelStatusCode } from '../../types/tracking';
 
 /** A pickup or drop-off stop: who to meet, their phone and the address. */
@@ -34,6 +34,8 @@ export interface CourierDeliveryCounts {
   assigned: number;
   /** Picked up and on the way. */
   inProgress: number;
+  /** Delivered since midnight (admin's time zone); failed attempts don't count. */
+  completedToday: number;
 }
 
 export interface TodaysDeliveries {
@@ -117,6 +119,40 @@ export interface DeliverRequest {
   photo?: Blob;
 }
 
+/** How a finished delivery ended. */
+export type DeliveryOutcome = 'DELIVERED' | 'FAILED_ATTEMPT';
+
+/** A row of Completed Deliveries (GET /courier/deliveries/completed). */
+export interface CompletedDelivery {
+  parcelId: string;
+  trackingNumber: string;
+  outcome: DeliveryOutcome;
+  /** ISO timestamp. */
+  completedAt: string;
+  recipientName: string;
+  dropoffArea: string;
+  dropoffCity: string;
+  /** Delivered only: who took the parcel. */
+  receivedBy: string | null;
+  /** Failed attempt only. */
+  failureReason: string | null;
+  note: string | null;
+  /** Delivered with a photo only; load it with getProofPhoto (needs the sign-in token). */
+  proofPhotoUrl: string | null;
+}
+
+/** Filters for Completed Deliveries. Without dates, the server shows the last 7 days. */
+export interface CompletedFilter {
+  outcome?: DeliveryOutcome;
+  /** yyyy-MM-dd, inclusive. */
+  from?: string;
+  /** yyyy-MM-dd, inclusive. */
+  to?: string;
+  /** Zero-based. */
+  page: number;
+  size?: number;
+}
+
 /**
  * The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the
  * courier's. Changes reject with an ApiRequestError (404 not theirs, 409 the parcel can't take that
@@ -134,4 +170,8 @@ export interface CourierApi {
   reportFailure(parcelId: string, request: ReportFailureRequest): Promise<CourierDeliveryDetail>;
   /** Marks the delivery as delivered (400 bad name or photo, 409 not out for delivery, 413 too large). */
   deliver(parcelId: string, request: DeliverRequest): Promise<CourierDeliveryDetail>;
+  /** The courier's deliveries and failed attempts, newest first. */
+  getCompleted(filter: CompletedFilter): Promise<Paged<CompletedDelivery>>;
+  /** A proof photo (`proofPhotoUrl`), fetched with the sign-in token. */
+  getProofPhoto(proofPhotoUrl: string): Promise<Blob>;
 }

@@ -9,6 +9,7 @@ import com.swiftdrop.delivery.dto.response.CourierDeliveryDetailResponse;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryItemResponse;
 import com.swiftdrop.delivery.dto.response.TodaysDeliveriesResponse;
 import com.swiftdrop.delivery.mapper.CourierDeliveryMapper;
+import com.swiftdrop.delivery.repository.DeliveryProofRepository;
 import com.swiftdrop.dispatch.api.DispatchApi;
 import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.dto.StatusChange;
@@ -53,6 +54,8 @@ public class CourierDeliveryService {
     private final DispatchApi dispatchApi;
     private final ParcelService parcelService;
     private final ParcelStatusService parcelStatusService;
+    private final DeliveryProofRepository deliveryProofRepository;
+    private final CourierDay courierDay;
 
     /** The courier's open deliveries, oldest assignment first, with the counts for the cards above them. */
     public TodaysDeliveriesResponse today(UUID courierUserId) {
@@ -63,7 +66,9 @@ public class CourierDeliveryService {
         List<ParcelDetails> parcels = parcelIds.stream().map(byId::get).filter(Objects::nonNull).toList();
 
         List<CourierDeliveryItemResponse> deliveries = parcels.stream().map(CourierDeliveryMapper::toItem).toList();
-        return new TodaysDeliveriesResponse(counts(parcels), deliveries);
+        int completedToday = (int) deliveryProofRepository.countByCourierUserIdAndCapturedAtGreaterThanEqual(
+                courierUserId, courierDay.startOfToday());
+        return new TodaysDeliveriesResponse(counts(parcels, completedToday), deliveries);
     }
 
     /** @throws NotFoundException if the parcel isn't assigned to this courier (or doesn't exist) */
@@ -136,7 +141,7 @@ public class CourierDeliveryService {
      * that is already delivered or failed (attempt) but whose assignment dispatch hasn't ended yet
      * counts in the total only.
      */
-    private static CourierDeliveryCounts counts(List<ParcelDetails> parcels) {
+    private static CourierDeliveryCounts counts(List<ParcelDetails> parcels, int completedToday) {
         int assigned = 0;
         int inProgress = 0;
         for (ParcelDetails parcel : parcels) {
@@ -147,6 +152,6 @@ public class CourierDeliveryService {
                 inProgress++;
             }
         }
-        return new CourierDeliveryCounts(parcels.size(), assigned, inProgress);
+        return new CourierDeliveryCounts(parcels.size(), assigned, inProgress, completedToday);
     }
 }

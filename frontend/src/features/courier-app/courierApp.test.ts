@@ -137,6 +137,30 @@ describe('mockCourierApi', () => {
     ).rejects.toMatchObject({ status: 409 });
   });
 
+  it('adds deliveries and failed attempts to the completed list and counts today’s deliveries', async () => {
+    const before = await mockCourierApi.getToday();
+    await mockCourierApi.deliver('7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e01', {
+      recipientName: 'Kasun Perera',
+    });
+    await mockCourierApi.reportFailure('7b0c1a52-4d6e-4f1a-9c3b-1a2b3c4d5e02', {
+      reasonCode: 'REFUSED',
+    });
+
+    const page = await mockCourierApi.getCompleted({ page: 0 });
+    expect(page.content.slice(0, 2).map((c) => c.trackingNumber)).toEqual([
+      'SD2611120002',
+      'SD2611120001',
+    ]);
+    expect(page.content[0]).toEqual(
+      expect.objectContaining({ outcome: 'FAILED_ATTEMPT', failureReason: 'Refused by recipient' }),
+    );
+    expect((await mockCourierApi.getToday()).counts.completedToday).toBe(
+      before.counts.completedToday + 1,
+    );
+    const failedOnly = await mockCourierApi.getCompleted({ page: 0, outcome: 'FAILED_ATTEMPT' });
+    expect(failedOnly.content.every((c) => c.outcome === 'FAILED_ATTEMPT')).toBe(true);
+  });
+
   it('only includes the pickup stop in the list while the parcel waits for pickup', async () => {
     const { deliveries } = await mockCourierApi.getToday();
     expect(deliveries.filter((d) => d.pickup !== null).map((d) => d.currentStatus)).toEqual([

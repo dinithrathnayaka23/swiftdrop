@@ -452,6 +452,86 @@ class CourierDeliveriesIT extends IntegrationTestBase {
                 .isEqualTo(404);
     }
 
+    // ---- Completed Deliveries (Phase 5) ----------------------------------------------------------
+
+    @Test
+    void completedListsTheCouriersOwnDeliveriesAndFailedAttemptsNewestFirst() throws Exception {
+        Courier courier = newCourier();
+        Courier other = newCourier();
+        ParcelDetails delivered = newParcel();
+        ParcelDetails failed = newParcel();
+        ParcelDetails othersParcel = newParcel();
+        for (ParcelDetails parcel : List.of(delivered, failed)) {
+            assign(parcel, courier, Instant.now());
+        }
+        assign(othersParcel, other, Instant.now());
+        moveToOutForDelivery(delivered, courier);
+        moveToOutForDelivery(othersParcel, other);
+        parcelStatusService.changeStatus(failed.id(),
+                StatusChange.to(ParcelStatusCode.PICKED_UP, courier.userId(), null));
+
+        assertThat(deliver(delivered, courier.token(), "Nimali", null, png(20, 20)).statusCode()).isEqualTo(200);
+        assertThat(post(DELIVERIES + "/" + failed.id() + "/fail", """
+                {"reasonCode":"OTHER","note":"Gate locked"}""", courier.token()).statusCode()).isEqualTo(200);
+        assertThat(deliver(othersParcel, other.token(), "Someone", null, null).statusCode()).isEqualTo(200);
+
+        JsonNode page = json.readTree(get(DELIVERIES + "/completed", courier.token()).body());
+        JsonNode rows = page.get("content");
+        assertThat(rows).hasSize(2);
+        JsonNode newest = rows.get(0);
+        assertThat(newest.get("trackingNumber").asString()).isEqualTo(failed.trackingNumber());
+        assertThat(newest.get("outcome").asString()).isEqualTo("FAILED_ATTEMPT");
+        assertThat(newest.get("failureReason").asString()).isEqualTo("Other");
+        assertThat(newest.get("note").asString()).isEqualTo("Gate locked");
+        assertThat(newest.get("proofPhotoUrl").isNull()).isTrue();
+        JsonNode older = rows.get(1);
+        assertThat(older.get("trackingNumber").asString()).isEqualTo(delivered.trackingNumber());
+        assertThat(older.get("outcome").asString()).isEqualTo("DELIVERED");
+        assertThat(older.get("receivedBy").asString()).isEqualTo("Nimali");
+        assertThat(older.get("recipientName").asString()).isEqualTo("Kasun Perera");
+        assertThat(older.get("dropoffCity").asString()).isEqualTo("Colombo");
+        // The courier who took the photo can open it from the list.
+        assertThat(getBytes("/api/v1" + older.get("proofPhotoUrl").asString(), courier.token()).statusCode())
+                .isEqualTo(200);
+        assertThat(page.get("page").get("totalElements").asInt()).isEqualTo(2);
+
+        // Delivered today counts on Today's Deliveries; the failed attempt doesn't.
+        JsonNode today = json.readTree(get(DELIVERIES + "/today", courier.token()).body());
+        assertThat(today.get("counts").get("completedToday").asInt()).isEqualTo(1);
+    }
+
+    @Test
+    void completedFiltersByOutcomeAndDateAndPages() throws Exception {
+        Courier courier = newCourier();
+        ParcelDetails first = newParcel();
+        ParcelDetails second = newParcel();
+        for (ParcelDetails parcel : List.of(first, second)) {
+            assign(parcel, courier, Instant.now());
+            moveToOutForDelivery(parcel, courier);
+            assertThat(deliver(parcel, courier.token(), "Kasun Perera", null, null).statusCode()).isEqualTo(200);
+        }
+        String completed = DELIVERIES + "/completed";
+
+        JsonNode onePerPage = json.readTree(get(completed + "?size=1&page=1", courier.token()).body());
+        assertThat(onePerPage.get("content")).hasSize(1);
+        assertThat(onePerPage.get("content").get(0).get("trackingNumber").asString())
+                .isEqualTo(first.trackingNumber());
+        assertThat(onePerPage.get("page").get("totalPages").asInt()).isEqualTo(2);
+
+        assertThat(json.readTree(get(completed + "?outcome=FAILED_ATTEMPT", courier.token()).body())
+                .get("content")).isEmpty();
+        assertThat(json.readTree(get(completed + "?outcome=DELIVERED", courier.token()).body())
+                .get("content")).hasSize(2);
+        assertThat(json.readTree(get(completed + "?from=2020-01-01&to=2020-01-31", courier.token()).body())
+                .get("content")).isEmpty();
+
+        assertThat(get(completed + "?from=2026-11-10&to=2026-11-01", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(get(completed + "?from=yesterday", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(get(completed + "?outcome=LOST", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(get(completed + "?size=500", courier.token()).statusCode()).isEqualTo(400);
+        assertThat(get(completed, adminToken()).statusCode()).isEqualTo(403);
+    }
+
     @Test
     void onlyCouriersMayUseTheCourierApp() throws Exception {
         assertThat(get(DELIVERIES + "/today").statusCode()).isEqualTo(401);

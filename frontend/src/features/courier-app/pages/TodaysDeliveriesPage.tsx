@@ -20,10 +20,11 @@ function CountTile({ label, value }: { label: string; value: number }) {
 
 function Counts({ counts }: { counts: CourierDeliveryCounts }) {
   return (
-    <div className="grid grid-cols-3 gap-2" aria-label="Delivery counts">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Delivery counts">
       <CountTile label="To pick up" value={counts.assigned} />
       <CountTile label="In progress" value={counts.inProgress} />
-      <CountTile label="Total" value={counts.total} />
+      <CountTile label="Open" value={counts.total} />
+      <CountTile label="Delivered today" value={counts.completedToday} />
     </div>
   );
 }

@@ -71,7 +71,9 @@ class InfrastructureIT extends IntegrationTestBase {
                 // V6_001: the delivery zones a courier covers.
                 "courier_service_areas",
                 // V7_001: failure reasons and failed deliveries (courier app).
-                "failure_reasons", "delivery_failures");
+                "failure_reasons", "delivery_failures",
+                // V7_002: proof of delivery (courier app).
+                "delivery_proofs");
 
         // The six report statuses (V4_001) plus FAILED_ATTEMPT (V6_003); ParcelServiceIT checks the codes and order.
         Integer statuses = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM parcel_statuses", Integer.class);

@@ -3,6 +3,7 @@ import { delay } from '../../../api/mock/delay';
 import type { ParcelType } from '../../../types/parcel';
 import type { ParcelStatusCode } from '../../../types/tracking';
 import type {
+  CompletedDelivery,
   CourierApi,
   CourierDelivery,
   CourierDeliveryDetail,
@@ -140,12 +141,85 @@ function seed(): Sample[] {
   ];
 }
 
+/** Earlier finished deliveries for Completed Deliveries; delivering or failing here adds more. */
+function seedCompleted(): CompletedDelivery[] {
+  const row = (
+    hours: number,
+    trackingNumber: string,
+    recipientName: string,
+    city: string,
+    outcome: CompletedDelivery['outcome'],
+    extra: Partial<CompletedDelivery>,
+  ): CompletedDelivery => ({
+    parcelId: `9c1d2e3f-0000-4000-8000-${trackingNumber.slice(-12).padStart(12, '0')}`,
+    trackingNumber,
+    outcome,
+    completedAt: hoursAgo(hours),
+    recipientName,
+    dropoffArea: '10 Main Street',
+    dropoffCity: city,
+    receivedBy: null,
+    failureReason: null,
+    note: null,
+    proofPhotoUrl: null,
+    ...extra,
+  });
+  return [
+    row(0, 'SD2611140007', 'Dilan Rajapaksa', 'Colombo 05', 'DELIVERED', {
+      receivedBy: 'Dilan Rajapaksa',
+      proofPhotoUrl: '/proofs/mock-proof-1/photo',
+    }),
+    row(5, 'SD2611140006', 'Sanduni Herath', 'Maharagama', 'FAILED_ATTEMPT', {
+      failureReason: 'Recipient unavailable',
+      note: 'Called twice, no answer',
+    }),
+    row(27, 'SD2611130004', 'Tharindu Silva', 'Kotte', 'DELIVERED', {
+      receivedBy: 'Security guard',
+    }),
+  ];
+}
+
 let samples: Sample[] = seed();
+let completed: CompletedDelivery[] = seedCompleted();
 
 /** Puts the sample deliveries back as they were (for tests). */
 export function resetMockCourierData(): void {
   samples = seed();
+  completed = seedCompleted();
 }
+
+/** Records a finished delivery for Completed Deliveries (newest first). */
+function complete(
+  sample: Sample,
+  outcome: CompletedDelivery['outcome'],
+  extra: Partial<CompletedDelivery>,
+) {
+  completed.unshift({
+    parcelId: sample.parcelId,
+    trackingNumber: sample.trackingNumber,
+    outcome,
+    completedAt: new Date().toISOString(),
+    recipientName: sample.dropoff.contactName,
+    dropoffArea: sample.dropoff.addressLine1,
+    dropoffCity: sample.dropoff.city,
+    receivedBy: null,
+    failureReason: null,
+    note: null,
+    proofPhotoUrl: null,
+    ...extra,
+  });
+}
+
+/** yyyy-MM-dd of an ISO timestamp, in the browser's time zone (good enough for samples). */
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** A stand-in proof photo (the mock has no files). */
+const MOCK_PHOTO_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300"><rect width="400" height="300" fill="#e2e8f0"/><text x="200" y="155" font-family="sans-serif" font-size="22" text-anchor="middle" fill="#475569">Proof photo (sample)</text></svg>';
 
 function hoursAgo(hours: number): string {
   return new Date(Date.now() - hours * 3_600_000).toISOString();
@@ -231,6 +305,11 @@ export const mockCourierApi: CourierApi = {
         inProgress: deliveries.filter(
           (d) => d.currentStatus !== 'CREATED' && d.allowedActions.length > 0,
         ).length,
+        completedToday: completed.filter(
+          (c) =>
+            c.outcome === 'DELIVERED' &&
+            localDay(c.completedAt) === localDay(new Date().toISOString()),
+        ).length,
       },
       deliveries,
     };
@@ -304,6 +383,7 @@ export const mockCourierApi: CourierApi = {
     ];
     // The dispatcher retries or closes it; for the courier the delivery is over (it leaves the list).
     sample.status = 'FAILED_ATTEMPT';
+    complete(sample, 'FAILED_ATTEMPT', { failureReason: reason.label, note: trimmed });
     return toDetail(sample);
   },
 
@@ -331,6 +411,36 @@ export const mockCourierApi: CourierApi = {
     ];
     // Delivered: the assignment ends, so the delivery leaves the courier's list.
     sample.status = 'DELIVERED';
+    complete(sample, 'DELIVERED', {
+      receivedBy: name,
+      proofPhotoUrl: photo ? `/proofs/mock-${sample.parcelId}/photo` : null,
+    });
     return toDetail(sample);
+  },
+
+  async getCompleted({ outcome, from, to, page, size = 20 }) {
+    await delay(300);
+    const rows = completed
+      .filter((c) => !outcome || c.outcome === outcome)
+      .filter((c) => !from || localDay(c.completedAt) >= from)
+      .filter((c) => !to || localDay(c.completedAt) <= to)
+      .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+    return {
+      content: rows.slice(page * size, page * size + size),
+      page: {
+        size,
+        number: page,
+        totalElements: rows.length,
+        totalPages: Math.ceil(rows.length / size),
+      },
+    };
+  },
+
+  async getProofPhoto(proofPhotoUrl) {
+    await delay(300);
+    if (!completed.some((c) => c.proofPhotoUrl === proofPhotoUrl)) {
+      throw new ApiRequestError('Photo not found', { status: 404, code: 'NOT_FOUND' });
+    }
+    return new Blob([MOCK_PHOTO_SVG], { type: 'image/svg+xml' });
   },
 };
