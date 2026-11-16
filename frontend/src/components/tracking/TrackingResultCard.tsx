@@ -4,6 +4,7 @@ import type { ParcelStatusCode, TrackingResult } from '../../types/tracking';
 import { cn } from '../../utils/cn';
 import { useDateFormat } from '../../hooks/useDateFormat';
 import { useSettings } from '../../hooks/useSettings';
+import { isFailureStatus } from '../../utils/parcelStatus';
 import Alert from '../ui/Alert';
 import ParcelStatusBadge from './ParcelStatusBadge';
 import TrackingTimeline from './TrackingTimeline';
@@ -15,6 +16,7 @@ const STATUS_ICON: Record<ParcelStatusCode, { icon: LucideIcon; className: strin
   IN_TRANSIT: { icon: Truck, className: 'bg-blue-50 text-blue-600' },
   OUT_FOR_DELIVERY: { icon: Truck, className: 'bg-amber-50 text-amber-600' },
   DELIVERED: { icon: CircleCheck, className: 'bg-brand-50 text-brand-600' },
+  FAILED_ATTEMPT: { icon: CircleX, className: 'bg-red-50 text-red-600' },
   FAILED: { icon: CircleX, className: 'bg-red-50 text-red-600' },
 };
 
@@ -123,7 +125,7 @@ export default function TrackingResultCard({
             <p className="text-base font-semibold text-slate-900">{statusText.title}</p>
           </div>
           <p className="mt-3 text-sm leading-6 text-slate-500">{statusText.description}</p>
-          {result.currentStatus === 'FAILED' && <SupportContact />}
+          {isFailureStatus(result.currentStatus) && <SupportContact />}
         </InfoPanel>
       </div>
     </div>

@@ -10,5 +10,6 @@ public enum AdminParcelTab {
     /** PICKED_UP, IN_TRANSIT and OUT_FOR_DELIVERY. */
     IN_TRANSIT,
     DELIVERED,
+    /** FAILED_ATTEMPT (waiting for the dispatcher to retry or close) and FAILED. */
     FAILED
 }

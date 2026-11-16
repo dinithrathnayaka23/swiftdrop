@@ -15,10 +15,10 @@ Your **member number** (1-10) is used for:
 | `identity`     | Login/signup, JWT issuing, Google OAuth                     | TBD              | TBD      |
 | `user`         | Profiles, roles, merchant approval                          | TBD              | TBD      |
 | `parcel`       | Booking, fee estimate, tracking                             | TBD              | TBD      |
-| `dispatch`     | Courier assignment, status updates, proof of delivery/failure | 6 (couriers, assignment); 7 (status updates, proof) | TBD      |
+| `dispatch`     | Courier assignment, status updates, proof of delivery/failure | 6                | TBD      |
 | `merchant`     | Merchant API keys, order API, webhooks                      | TBD              | TBD      |
 | `notification` | Event consumers, email / mock SMS, live updates (WebSocket) | TBD              | TBD      |
-| `config`       | Zones, pricing rules                                        | TBD              | TBD      |
+| `config`       | Zones, pricing rules                                        | 6                | TBD      |
 | `reporting`    | Reports and dashboards data                                 | TBD              | TBD      |
 | `common`       | Shared: errors, security, messaging, logging                | Shared, changes need 2 approvals | |
 

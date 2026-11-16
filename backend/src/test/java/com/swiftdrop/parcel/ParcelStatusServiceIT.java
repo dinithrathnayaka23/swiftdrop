@@ -27,6 +27,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -42,13 +45,25 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
 
     private UUID customerId;
     private UUID courierId;
+    private String eventQueue;
 
-    /** No consumer reads these queues yet, so empty them to keep other tests' events out. */
+    /**
+     * The notification and webhook queues have consumers, so each test reads the published events from
+     * its own temporary queue bound to the same exchange.
+     */
     @BeforeEach
+    void bindEventQueue() {
+        eventQueue = "swiftdrop.test.parcel-status." + UUID.randomUUID();
+        Queue queue = new Queue(eventQueue, false, false, false);
+        amqpAdmin.declareQueue(queue);
+        amqpAdmin.declareBinding(BindingBuilder.bind(queue)
+                .to(new TopicExchange(RabbitConfig.PARCEL_EVENTS_EXCHANGE))
+                .with(RabbitConfig.PARCEL_STATUS_BINDING));
+    }
+
     @AfterEach
-    void emptyQueues() {
-        amqpAdmin.purgeQueue(RabbitConfig.NOTIFICATION_QUEUE);
-        amqpAdmin.purgeQueue(RabbitConfig.WEBHOOK_QUEUE);
+    void deleteEventQueue() {
+        amqpAdmin.deleteQueue(eventQueue);
     }
 
     @BeforeEach
@@ -70,10 +85,10 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
                 BigDecimal.ONE, null, null, null, null, null, null, new BigDecimal("450.00")));
     }
 
-    private ParcelStatusChangedEvent nextWebhookEvent() {
-        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(RabbitConfig.WEBHOOK_QUEUE, 5_000,
+    private ParcelStatusChangedEvent nextStatusEvent() {
+        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(eventQueue, 5_000,
                 new ParameterizedTypeReference<>() { });
-        assertThat(event).as("event on " + RabbitConfig.WEBHOOK_QUEUE).isNotNull();
+        assertThat(event).as("event on " + eventQueue).isNotNull();
         return event;
     }
 
@@ -96,8 +111,8 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
         assertThat(history.getLast().recipientName()).isEqualTo("Kamala Silva");
         assertThat(history.getLast().changedByUserId()).isEqualTo(courierId);
 
-        List<ParcelStatusChangedEvent> events = List.of(nextWebhookEvent(), nextWebhookEvent(), nextWebhookEvent(),
-                nextWebhookEvent());
+        List<ParcelStatusChangedEvent> events = List.of(nextStatusEvent(), nextStatusEvent(), nextStatusEvent(),
+                nextStatusEvent());
         assertThat(events).extracting(ParcelStatusChangedEvent::newStatus)
                 .containsExactly("PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY", "DELIVERED");
         assertThat(events).extracting(ParcelStatusChangedEvent::statusVersion).containsExactly(2L, 3L, 4L, 5L);
@@ -116,18 +131,53 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
 
         assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
         assertThat(statusService.getHistory(parcel.id())).hasSize(1);
-        assertThat(rabbitTemplate.receive(RabbitConfig.WEBHOOK_QUEUE, 500)).isNull();
+        assertThat(rabbitTemplate.receive(eventQueue, 500)).isNull();
     }
 
     @Test
-    void failedDeliveryIsAnEndState() {
+    void aFailedAttemptIsRetriedThenClosedAsAnEndState() {
         ParcelDetails parcel = newParcel();
         statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierId, null));
-        statusService.changeStatus(parcel.id(), StatusChange.failed(courierId, "Parcel damaged", null));
 
-        assertThat(statusService.getHistory(parcel.id()).getLast().failureReason()).isEqualTo("Parcel damaged");
+        // The old direct arrow is gone: nothing saved, nothing published.
         assertThatThrownBy(() -> statusService.changeStatus(parcel.id(),
-                StatusChange.to(ParcelStatusCode.IN_TRANSIT, courierId, null)))
+                StatusChange.failed(courierId, "Parcel damaged", null)))
+                .isInstanceOf(ConflictException.class);
+
+        // The courier reports a failed attempt (reason kept).
+        statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(courierId, "Recipient not at home", null));
+        assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(statusService.getHistory(parcel.id()).getLast().failureReason()).isEqualTo("Recipient not at home");
+
+        // The dispatcher retries: back to CREATED with a history row and an event.
+        StatusHistoryEntry retried = statusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.CREATED, courierId, "Second attempt tomorrow"));
+        assertThat(retried.previousStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(retried.failureReason()).isNull();
+
+        // Second attempt fails too and the dispatcher closes it.
+        statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, courierId, null));
+        statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(courierId, "Address not found", null));
+        statusService.changeStatus(parcel.id(), StatusChange.failed(courierId, "Address does not exist", null));
+
+        List<StatusHistoryEntry> history = statusService.getHistory(parcel.id());
+        assertThat(history).extracting(StatusHistoryEntry::status).containsExactly(ParcelStatusCode.CREATED,
+                ParcelStatusCode.PICKED_UP, ParcelStatusCode.FAILED_ATTEMPT, ParcelStatusCode.CREATED,
+                ParcelStatusCode.PICKED_UP, ParcelStatusCode.FAILED_ATTEMPT, ParcelStatusCode.FAILED);
+        assertThat(history.getLast().failureReason()).isEqualTo("Address does not exist");
+
+        List<ParcelStatusChangedEvent> events = List.of(nextStatusEvent(), nextStatusEvent(), nextStatusEvent(),
+                nextStatusEvent(), nextStatusEvent(), nextStatusEvent());
+        assertThat(events).extracting(ParcelStatusChangedEvent::newStatus).containsExactly("PICKED_UP",
+                "FAILED_ATTEMPT", "CREATED", "PICKED_UP", "FAILED_ATTEMPT", "FAILED");
+        assertThat(events.get(2).previousStatus()).isEqualTo("FAILED_ATTEMPT");
+        assertThat(events.get(2).statusHistoryId()).isEqualTo(retried.id());
+        assertThat(events).extracting(ParcelStatusChangedEvent::statusVersion)
+                .containsExactly(2L, 3L, 4L, 5L, 6L, 7L);
+
+        // FAILED is an end state.
+        assertThatThrownBy(() -> statusService.changeStatus(parcel.id(),
+                StatusChange.to(ParcelStatusCode.CREATED, courierId, null)))
                 .isInstanceOf(ConflictException.class);
     }
 }

@@ -198,9 +198,39 @@ class ParcelScreensIT extends IntegrationTestBase {
         assertThat(detail.get("notes")).isEmpty();
     }
 
+    /** Picks the parcel up and reports a failed attempt; closes it as FAILED too when {@code close}. */
+    private void failAttempt(ParcelDetails parcel, boolean close) {
+        statusService.changeStatus(parcel.id(), StatusChange.to(ParcelStatusCode.PICKED_UP, customerId, null));
+        statusService.changeStatus(parcel.id(), StatusChange.failedAttempt(customerId, "Recipient not at home", null));
+        if (close) {
+            statusService.changeStatus(parcel.id(), StatusChange.failed(customerId, "Address does not exist", null));
+        }
+    }
+
+    @Test
+    void theFailedTabAndCountIncludeFailedAttempts() throws Exception {
+        String city = "Matale " + UUID.randomUUID().toString().substring(0, 8);
+        long failedBefore = body(get("/api/v1/admin/parcels/counts", adminToken)).get("FAILED").asLong();
+        ParcelDetails attempted = customerParcel(customerId, city);
+        ParcelDetails closed = customerParcel(customerId, city);
+        customerParcel(customerId, city); // still CREATED
+        failAttempt(attempted, false);
+        failAttempt(closed, true);
+
+        JsonNode failed = body(get("/api/v1/admin/parcels?tab=FAILED&area=" + city.replace(" ", "%20"),
+                adminToken));
+        assertThat(field(failed.get("content"), "status")).containsExactlyInAnyOrder("FAILED_ATTEMPT", "FAILED");
+        JsonNode inTransit = body(get("/api/v1/admin/parcels?tab=IN_TRANSIT&area=" + city.replace(" ", "%20"),
+                adminToken));
+        assertThat(inTransit.get("content")).isEmpty();
+        assertThat(body(get("/api/v1/admin/parcels/counts", adminToken)).get("FAILED").asLong())
+                .isEqualTo(failedBefore + 2);
+    }
+
     @Test
     void adminCountsAddUpToAll() throws Exception {
         customerParcel(customerId, "Kandy");
+        failAttempt(customerParcel(customerId, "Kandy"), false);
 
         JsonNode counts = body(get("/api/v1/admin/parcels/counts", adminToken));
 

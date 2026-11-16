@@ -6,9 +6,11 @@ import com.swiftdrop.dispatch.dto.request.ChangeAvailabilityRequest;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
+import com.swiftdrop.dispatch.dto.response.CourierAssignmentResponse;
 import com.swiftdrop.dispatch.dto.response.CourierResponse;
 import com.swiftdrop.dispatch.dto.response.CourierSummaryResponse;
 import com.swiftdrop.dispatch.model.CourierAvailability;
+import com.swiftdrop.dispatch.service.AssignmentService;
 import com.swiftdrop.dispatch.service.CourierService;
 import jakarta.validation.Valid;
 import java.net.URI;
@@ -37,6 +39,7 @@ public class AdminCourierController {
     static final int MAX_PAGE_SIZE = 100;
 
     private final CourierService courierService;
+    private final AssignmentService assignmentService;
 
     /** Couriers, newest first, filtered by text, availability, service area, vehicle type and active. */
     @GetMapping
@@ -48,12 +51,7 @@ public class AdminCourierController {
             @RequestParam(required = false) Boolean active,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        if (page < 0) {
-            throw new BadRequestException("page must be 0 or more");
-        }
-        if (size < 1 || size > MAX_PAGE_SIZE) {
-            throw new BadRequestException("size must be between 1 and " + MAX_PAGE_SIZE);
-        }
+        checkPage(page, size);
         CourierFilter filter = new CourierFilter(search, availability, serviceAreaId, vehicleType, active);
         return new PagedModel<>(courierService.list(filter, page, size));
     }
@@ -82,10 +80,33 @@ public class AdminCourierController {
         return courierService.update(courierId, request);
     }
 
+    /**
+     * The courier's assignments for the drawer: {@code open=true} "Current Deliveries",
+     * {@code open=false} "History", left out for all. Newest first.
+     */
+    @GetMapping("/{courierId}/assignments")
+    public PagedModel<CourierAssignmentResponse> assignments(
+            @PathVariable UUID courierId,
+            @RequestParam(required = false) Boolean open,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        checkPage(page, size);
+        return new PagedModel<>(assignmentService.listForCourier(courierId, open, page, size));
+    }
+
     /** Online, on break or offline. */
     @PatchMapping("/{courierId}/availability")
     public CourierResponse changeAvailability(@PathVariable UUID courierId,
                                               @Valid @RequestBody ChangeAvailabilityRequest request) {
         return courierService.changeAvailability(courierId, request.availability());
+    }
+
+    private static void checkPage(int page, int size) {
+        if (page < 0) {
+            throw new BadRequestException("page must be 0 or more");
+        }
+        if (size < 1 || size > MAX_PAGE_SIZE) {
+            throw new BadRequestException("size must be between 1 and " + MAX_PAGE_SIZE);
+        }
     }
 }

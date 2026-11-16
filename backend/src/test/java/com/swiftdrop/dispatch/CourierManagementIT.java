@@ -112,7 +112,9 @@ class CourierManagementIT extends IntegrationTestBase {
 
         String withUnknownZone = courierJson(uniqueEmail(), uniqueRegistration()).replace("}",
                 ",\"serviceAreaIds\":[\"" + UUID.randomUUID() + "\"]}");
-        assertThat(post(COURIERS, withUnknownZone, admin).statusCode()).isEqualTo(409);
+        HttpResponse<String> unknownZone = post(COURIERS, withUnknownZone, admin);
+        assertThat(unknownZone.statusCode()).isEqualTo(400);
+        assertThat(body(unknownZone).get("message").asString()).isEqualTo("Unknown or inactive service area");
     }
 
     @Test

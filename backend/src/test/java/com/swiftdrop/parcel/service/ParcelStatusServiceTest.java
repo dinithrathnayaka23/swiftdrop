@@ -28,6 +28,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -123,17 +125,72 @@ class ParcelStatusServiceTest {
         assertThat(entry.failureReason()).isNull();
     }
 
-    @Test
-    void failedParcelKeepsTheReason() {
-        Parcel parcel = parcelWithStatus(ParcelStatusCode.OUT_FOR_DELIVERY);
-        stubSaving(ParcelStatusCode.FAILED, 5);
+    @ParameterizedTest
+    @EnumSource(value = ParcelStatusCode.class, names = {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"})
+    void aFailedAttemptKeepsTheReasonAndIsNotAnEndState(ParcelStatusCode from) {
+        Parcel parcel = parcelWithStatus(from);
+        stubSaving(ParcelStatusCode.FAILED_ATTEMPT, 5);
 
         StatusHistoryEntry entry = statusService.changeStatus(parcel.getId(),
-                StatusChange.failed(courierUserId, "Recipient not at home", "Called twice"));
+                StatusChange.failedAttempt(courierUserId, "Recipient not at home", "Called twice"));
 
-        assertThat(entry.status()).isEqualTo(ParcelStatusCode.FAILED);
+        assertThat(entry.status()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(entry.previousStatus()).isEqualTo(from);
         assertThat(entry.failureReason()).isEqualTo("Recipient not at home");
         assertThat(entry.note()).isEqualTo("Called twice");
+        assertThat(entry.status().isTerminal()).isFalse();
+    }
+
+    @Test
+    void theDispatcherRetriesAFailedAttemptWithoutAReason() {
+        Parcel parcel = parcelWithStatus(ParcelStatusCode.FAILED_ATTEMPT);
+        stubSaving(ParcelStatusCode.CREATED, 6);
+
+        StatusHistoryEntry entry = statusService.changeStatus(parcel.getId(),
+                StatusChange.to(ParcelStatusCode.CREATED, courierUserId, "Try again tomorrow"));
+
+        assertThat(parcel.getCurrentStatus().getStatusCode()).isEqualTo("CREATED");
+        assertThat(entry.previousStatus()).isEqualTo(ParcelStatusCode.FAILED_ATTEMPT);
+        assertThat(entry.failureReason()).isNull();
+        ArgumentCaptor<ParcelStatusChangedEvent> published = ArgumentCaptor.forClass(ParcelStatusChangedEvent.class);
+        verify(eventPublisher).publishEvent(published.capture());
+        assertThat(published.getValue().previousStatus()).isEqualTo("FAILED_ATTEMPT");
+        assertThat(published.getValue().newStatus()).isEqualTo("CREATED");
+    }
+
+    @Test
+    void aRetryCannotCarryAFailureReason() {
+        Parcel parcel = parcelWithStatus(ParcelStatusCode.FAILED_ATTEMPT);
+
+        assertThatThrownBy(() -> statusService.changeStatus(parcel.getId(), new StatusChange(
+                ParcelStatusCode.CREATED, courierUserId, null, null, null, "Recipient not at home")))
+                .isInstanceOf(BadRequestException.class);
+        assertNothingSaved(parcel, ParcelStatusCode.FAILED_ATTEMPT);
+    }
+
+    @Test
+    void theDispatcherClosesAFailedAttemptWithAReason() {
+        Parcel parcel = parcelWithStatus(ParcelStatusCode.FAILED_ATTEMPT);
+        stubSaving(ParcelStatusCode.FAILED, 6);
+
+        StatusHistoryEntry entry = statusService.changeStatus(parcel.getId(),
+                StatusChange.failed(courierUserId, "Address does not exist", null));
+
+        assertThat(entry.status()).isEqualTo(ParcelStatusCode.FAILED);
+        assertThat(entry.failureReason()).isEqualTo("Address does not exist");
+        assertThat(entry.status().isTerminal()).isTrue();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = ParcelStatusCode.class, names = {"PICKED_UP", "IN_TRANSIT", "OUT_FOR_DELIVERY"})
+    void aParcelOnTheWayCanNoLongerFailDirectly(ParcelStatusCode from) {
+        Parcel parcel = parcelWithStatus(from);
+
+        assertThatThrownBy(() -> statusService.changeStatus(parcel.getId(),
+                StatusChange.failed(courierUserId, "Recipient not at home", null)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessage("A parcel that is %s cannot be changed to FAILED".formatted(from));
+        assertNothingSaved(parcel, from);
     }
 
     @Test
@@ -158,14 +215,25 @@ class ParcelStatusServiceTest {
     }
 
     @Test
-    void failedNeedsAReason() {
+    void aFailedAttemptNeedsAReason() {
         Parcel parcel = parcelWithStatus(ParcelStatusCode.IN_TRANSIT);
 
         assertThatThrownBy(() -> statusService.changeStatus(parcel.getId(),
-                StatusChange.failed(courierUserId, "   ", null)))
+                StatusChange.failedAttempt(courierUserId, "   ", null)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("A failure reason is required");
         assertNothingSaved(parcel, ParcelStatusCode.IN_TRANSIT);
+    }
+
+    @Test
+    void closingAFailedAttemptNeedsAReason() {
+        Parcel parcel = parcelWithStatus(ParcelStatusCode.FAILED_ATTEMPT);
+
+        assertThatThrownBy(() -> statusService.changeStatus(parcel.getId(),
+                StatusChange.failed(courierUserId, null, "Closed")))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("A failure reason is required");
+        assertNothingSaved(parcel, ParcelStatusCode.FAILED_ATTEMPT);
     }
 
     @Test
@@ -203,7 +271,7 @@ class ParcelStatusServiceTest {
         Parcel parcel = parcelWithStatus(ParcelStatusCode.PICKED_UP);
 
         assertThatThrownBy(() -> statusService.changeStatus(parcel.getId(), new StatusChange(
-                ParcelStatusCode.FAILED, courierUserId, null, "Kamala Silva", null, "Damaged")))
+                ParcelStatusCode.FAILED_ATTEMPT, courierUserId, null, "Kamala Silva", null, "Damaged")))
                 .isInstanceOf(BadRequestException.class);
         assertNothingSaved(parcel, ParcelStatusCode.PICKED_UP);
     }

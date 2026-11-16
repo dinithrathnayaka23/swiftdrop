@@ -11,11 +11,15 @@ import com.swiftdrop.dispatch.dto.request.ChangeAvailabilityRequest;
 import com.swiftdrop.dispatch.dto.request.CourierFilter;
 import com.swiftdrop.dispatch.dto.request.CreateCourierRequest;
 import com.swiftdrop.dispatch.dto.request.UpdateCourierRequest;
+import com.swiftdrop.dispatch.dto.response.CourierAssignmentResponse;
 import com.swiftdrop.dispatch.dto.response.CourierResponse;
 import com.swiftdrop.dispatch.dto.response.CourierSummaryResponse;
 import com.swiftdrop.dispatch.dto.response.CourierWorkload;
+import com.swiftdrop.dispatch.model.AssignmentStatus;
 import com.swiftdrop.dispatch.model.CourierAvailability;
+import com.swiftdrop.dispatch.service.AssignmentService;
 import com.swiftdrop.dispatch.service.CourierService;
+import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.user.model.AccountStatus;
 import java.time.Instant;
 import java.util.List;
@@ -36,12 +40,13 @@ class AdminCourierControllerTest {
     private static final UUID COURIER_ID = UUID.randomUUID();
 
     @Mock private CourierService courierService;
+    @Mock private AssignmentService assignmentService;
     @InjectMocks private AdminCourierController controller;
 
     private static CourierResponse response() {
         return new CourierResponse(COURIER_ID, UUID.randomUUID(), "Ramesh Perera", "ramesh@example.com",
                 "+94771234567", "Motorbike", "ABC 1234", CourierAvailability.OFFLINE, true, AccountStatus.ACTIVE,
-                Set.of(), CourierWorkload.EMPTY, Instant.now());
+                Set.of(), List.of(), CourierWorkload.EMPTY, Instant.now());
     }
 
     @Test
@@ -106,5 +111,23 @@ class AdminCourierControllerTest {
 
         verify(courierService).update(COURIER_ID, update);
         verify(courierService).changeAvailability(COURIER_ID, CourierAvailability.ON_BREAK);
+    }
+
+    @Test
+    void listsTheCouriersAssignmentsForTheDrawerTabs() {
+        CourierAssignmentResponse row = new CourierAssignmentResponse(UUID.randomUUID(), UUID.randomUUID(),
+                AssignmentStatus.ASSIGNED, Instant.now(), null, null, "SD-12345678", ParcelStatusCode.CREATED, "Kandy");
+        when(assignmentService.listForCourier(COURIER_ID, true, 0, 20)).thenReturn(new PageImpl<>(List.of(row)));
+
+        assertThat(controller.assignments(COURIER_ID, true, 0, 20).getContent()).containsExactly(row);
+    }
+
+    @Test
+    void refusesAssignmentPagesThatDoNotExist() {
+        assertThatThrownBy(() -> controller.assignments(COURIER_ID, null, -1, 20))
+                .isInstanceOf(BadRequestException.class);
+        assertThatThrownBy(() -> controller.assignments(COURIER_ID, null, 0, 101))
+                .isInstanceOf(BadRequestException.class);
+        verifyNoInteractions(assignmentService);
     }
 }

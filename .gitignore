@@ -48,3 +48,19 @@ pnpm-debug.log*
 .DS_Store
 Thumbs.db
 DEV_PLAN.md
+CLAUDE.md
+
+# ---------- Claude Code ----------
+.claude/settings.local.json
+.claude/*.local.json
+CLAUDE.local.md
+
+# ---------- Local configuration ----------
+application-local.properties
+application-local.yml
+application-secret.properties
+application-secret.yml
+
+# ---------- Credentials ----------
+secrets/
+credentials/

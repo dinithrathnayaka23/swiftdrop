@@ -1,5 +1,10 @@
 import type { ParcelStatusCode, TrackingResult } from '../../types/tracking';
-import { STATUS_META, TIMELINE_STEPS } from '../../utils/parcelStatus';
+import {
+  isFailureStatus,
+  sinceLatestCreated,
+  STATUS_META,
+  TIMELINE_STEPS,
+} from '../../utils/parcelStatus';
 
 /**
  * Timeline and wording for the public tracking result. Separate from utils/parcelStatus (shared
@@ -22,18 +27,22 @@ export interface TrackingStep {
  * - CREATED: every step is upcoming; nothing has happened yet.
  * - In progress: reached steps are complete, the latest one is current.
  * - DELIVERED: every step is complete.
- * - FAILED: the timeline stops at the last step reached, which is marked failed; later steps
- *   stay upcoming.
+ * - FAILED_ATTEMPT or FAILED: the timeline stops at the last step reached, which is marked failed;
+ *   later steps stay upcoming.
+ *
+ * Only the current attempt counts (history since the latest CREATED): a retried parcel starts over.
  */
 export function buildTrackingTimeline(result: TrackingResult): TrackingStep[] {
   const reachedAt = new Map<ParcelStatusCode, string>();
-  for (const event of result.history) reachedAt.set(event.statusCode, event.changedAt);
+  for (const event of sinceLatestCreated(result.history, (e) => e.statusCode)) {
+    reachedAt.set(event.statusCode, event.changedAt);
+  }
 
   let lastReached = -1;
   TIMELINE_STEPS.forEach((code, i) => {
     if (reachedAt.has(code)) lastReached = i;
   });
-  const failed = result.currentStatus === 'FAILED';
+  const failed = isFailureStatus(result.currentStatus);
   // A parcel can only fail once picked up, but don't hide the failure if the history is short.
   if (failed && lastReached < 0) lastReached = 0;
 
@@ -48,7 +57,7 @@ export function buildTrackingTimeline(result: TrackingResult): TrackingStep[] {
     if (step.state !== 'upcoming') {
       step.reachedAt =
         step.state === 'failed'
-          ? (reachedAt.get('FAILED') ?? result.lastUpdatedAt)
+          ? (reachedAt.get(result.currentStatus) ?? result.lastUpdatedAt)
           : reachedAt.get(code);
     }
     return step;
@@ -80,6 +89,11 @@ export const TRACKING_STATUS_TEXT: Record<ParcelStatusCode, StatusText> = {
     description: STATUS_META.OUT_FOR_DELIVERY.description,
   },
   DELIVERED: { title: STATUS_META.DELIVERED.label, description: STATUS_META.DELIVERED.description },
+  FAILED_ATTEMPT: {
+    title: 'Delivery Attempt Failed',
+    description:
+      "We couldn't deliver the parcel this time. We will try again or contact you about the next step.",
+  },
   FAILED: {
     title: 'Delivery Unsuccessful',
     description:

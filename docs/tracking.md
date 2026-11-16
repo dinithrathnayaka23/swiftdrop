@@ -56,7 +56,7 @@ Dispatch and the courier app don't change statuses yet, so for demos the `dev` p
 | Endpoint | Does |
 | -------- | ---- |
 | `POST /api/v1/admin/dev/tracking/sample-parcel` | Creates a sample CREATED parcel (Colombo → Kandy, 1.8 kg) through `ParcelService.createParcel`, booked as the signed-in admin. 201 with `{ "trackingNumber": "SD…" }` and a `Location` header pointing at its public tracking. |
-| `POST /api/v1/admin/dev/tracking/{trackingNumber}/advance` | Moves the parcel one step along the normal flow (CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED) through `ParcelStatusService.changeStatus`. `?to=FAILED` fails it instead (not possible from CREATED). Returns the new public tracking. 409 for DELIVERED or FAILED parcels, 400 for any other `to`, 404 for an unknown number. |
+| `POST /api/v1/admin/dev/tracking/{trackingNumber}/advance` | Moves the parcel one step along the normal flow (CREATED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED) through `ParcelStatusService.changeStatus`; a FAILED_ATTEMPT parcel is retried (back to CREATED). `?to=FAILED_ATTEMPT` records a failed attempt (after pickup). `?to=FAILED` closes a FAILED_ATTEMPT parcel; from PICKED_UP, IN_TRANSIT or OUT_FOR_DELIVERY it **records the attempt and then closes (two changes, two events)**, so one call still ends the demo parcel. Not possible from CREATED. Returns the new public tracking. 409 for DELIVERED or FAILED parcels, 400 for any other `to`, 404 for an unknown number. Dev profile only. |
 
 Each change publishes the usual `ParcelStatusChangedEvent`, so live updates can be tested too.
 
@@ -64,7 +64,9 @@ Each change publishes the usual `ParcelStatusChangedEvent`, so live updates can 
 $h = @{ Authorization = "Bearer $token" }   # an admin access token
 $n = (Invoke-RestMethod -Method Post http://localhost:8080/api/v1/admin/dev/tracking/sample-parcel -Headers $h).trackingNumber
 Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance" -Headers $h
-Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance?to=FAILED" -Headers $h
+Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance?to=FAILED_ATTEMPT" -Headers $h
+Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance" -Headers $h   # retry: back to CREATED
+Invoke-RestMethod -Method Post "http://localhost:8080/api/v1/admin/dev/tracking/$n/advance?to=FAILED" -Headers $h  # from CREATED: 409
 Invoke-RestMethod "http://localhost:8080/api/v1/public/tracking/$n"
 ```
 
@@ -80,6 +82,7 @@ Invoke-RestMethod "http://localhost:8080/api/v1/public/tracking/$n"
 | Booked | `CREATED` | "Awaiting Pickup", a "Waiting for pickup" notice, no timeline progress |
 | In progress | `PICKED_UP`, `IN_TRANSIT`, `OUT_FOR_DELIVERY` | Reached steps ticked, the latest one current |
 | Delivered | `DELIVERED` | Every step ticked |
+| Failed attempt | `FAILED_ATTEMPT` | Timeline stops at the step where the attempt failed (red cross); "Delivery Attempt Failed: we will try again or contact you" and the support email/phone. A retried parcel's timeline starts again from its latest `CREATED` |
 | Failed | `FAILED` | Timeline stops at the step where it failed (red cross); "Delivery Unsuccessful" in general terms (the API sends no reason) and the support email/phone from System Settings |
 | Not found | 404 | "Parcel Not Found" with the number searched for, and Try Again |
 | Too many searches | 429 | "Please try again in N seconds" from `Retry-After`; the Try Again button counts down and is disabled until then |
@@ -109,7 +112,7 @@ tracking (it only switches the booking, pricing and parcel screens). To try it:
    $n = (Invoke-RestMethod -Method Post http://localhost:8080/api/v1/admin/dev/tracking/sample-parcel -Headers $h).trackingNumber
    ```
 
-3. Open `http://localhost:5173/track/$n` and call `.../advance` (or `?to=FAILED`): the page shows
+3. Open `http://localhost:5173/track/$n` and call `.../advance` (or `?to=FAILED_ATTEMPT` / `?to=FAILED`): the page shows
    each state as it happens, from the parcel's live stream (the **Live** badge), without a reload. More than `lookup-rate-limit` reloads in a minute shows the 429 state.
 
 ## Admin Deliveries Tracking

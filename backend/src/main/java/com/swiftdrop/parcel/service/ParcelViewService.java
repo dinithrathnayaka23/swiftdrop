@@ -129,7 +129,8 @@ public class ParcelViewService {
         counts.put(AdminParcelTab.IN_TRANSIT, byStatus.get(ParcelStatusCode.PICKED_UP)
                 + byStatus.get(ParcelStatusCode.IN_TRANSIT) + byStatus.get(ParcelStatusCode.OUT_FOR_DELIVERY));
         counts.put(AdminParcelTab.DELIVERED, byStatus.get(ParcelStatusCode.DELIVERED));
-        counts.put(AdminParcelTab.FAILED, byStatus.get(ParcelStatusCode.FAILED));
+        counts.put(AdminParcelTab.FAILED, byStatus.get(ParcelStatusCode.FAILED_ATTEMPT)
+                + byStatus.get(ParcelStatusCode.FAILED));
         return Collections.unmodifiableMap(counts);
     }
 
@@ -193,7 +194,7 @@ public class ParcelViewService {
             case ASSIGNED -> assigned == null ? none() : created.and(idIn(assigned));
             case IN_TRANSIT -> hasStatus(ON_THE_WAY);
             case DELIVERED -> hasStatus(List.of(ParcelStatusCode.DELIVERED.name()));
-            case FAILED -> hasStatus(List.of(ParcelStatusCode.FAILED.name()));
+            case FAILED -> hasStatus(List.of(ParcelStatusCode.FAILED_ATTEMPT.name(), ParcelStatusCode.FAILED.name()));
         };
     }
 

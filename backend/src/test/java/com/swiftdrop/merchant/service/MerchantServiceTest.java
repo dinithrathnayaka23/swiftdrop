@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.merchant.api.MerchantSummary;
 import com.swiftdrop.merchant.dto.NewMerchant;
 import com.swiftdrop.merchant.dto.response.MerchantResponse;
 import com.swiftdrop.merchant.model.Merchant;
@@ -145,5 +146,75 @@ class MerchantServiceTest {
 
         assertThat(merchantService.listByStatus(MerchantApprovalStatus.PENDING)).singleElement()
                 .extracting(MerchantResponse::businessName).isEqualTo("BrightMart");
+    }
+
+    // --- MerchantApi ---
+
+    @ParameterizedTest
+    @CsvSource({"APPROVED, true", "PENDING, false", "REJECTED, false", "SUSPENDED, false"})
+    void isApprovedOnlyForApprovedMerchants(MerchantApprovalStatus status, boolean expected) {
+        Merchant merchant = pendingMerchant();
+        merchant.setApprovalStatus(status);
+        when(merchantRepository.findById(merchant.getId())).thenReturn(Optional.of(merchant));
+
+        assertThat(merchantService.isApproved(merchant.getId())).isEqualTo(expected);
+    }
+
+    @Test
+    void unknownMerchantIsNotApproved() {
+        UUID id = UUID.randomUUID();
+        when(merchantRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThat(merchantService.isApproved(id)).isFalse();
+    }
+
+    @Test
+    void getMerchantReturnsTheSummary() {
+        Merchant merchant = pendingMerchant();
+        merchant.setContactPhone("+94771234567");
+        when(merchantRepository.findById(merchant.getId())).thenReturn(Optional.of(merchant));
+
+        MerchantSummary summary = merchantService.getMerchant(merchant.getId());
+
+        assertThat(summary.id()).isEqualTo(merchant.getId());
+        assertThat(summary.businessName()).isEqualTo("BrightMart");
+        assertThat(summary.contactEmail()).isEqualTo("sunil@brightmart.lk");
+        assertThat(summary.contactPhone()).isEqualTo("+94771234567");
+        assertThat(summary.approvalStatus()).isEqualTo(MerchantApprovalStatus.PENDING);
+        assertThat(summary.ownerUserId()).isEqualTo(merchant.getRegisteredByUserId());
+        assertThat(summary.approved()).isFalse();
+    }
+
+    @Test
+    void getMerchantThrowsForUnknownMerchant() {
+        UUID id = UUID.randomUUID();
+        when(merchantRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> merchantService.getMerchant(id)).isInstanceOf(NotFoundException.class);
+    }
+
+    // --- Admin detail ---
+
+    @Test
+    void getForAdminIncludesReviewDetails() {
+        Merchant merchant = pendingMerchant();
+        merchant.setApprovalStatus(MerchantApprovalStatus.REJECTED);
+        merchant.setRejectionReason("Unverified");
+        when(merchantRepository.findById(merchant.getId())).thenReturn(Optional.of(merchant));
+
+        MerchantResponse response = merchantService.getForAdmin(merchant.getId());
+
+        assertThat(response.merchantId()).isEqualTo(merchant.getId());
+        assertThat(response.registrationNo()).isEqualTo("PV00234567");
+        assertThat(response.approvalStatus()).isEqualTo(MerchantApprovalStatus.REJECTED);
+        assertThat(response.rejectionReason()).isEqualTo("Unverified");
+    }
+
+    @Test
+    void getForAdminThrowsForUnknownMerchant() {
+        UUID id = UUID.randomUUID();
+        when(merchantRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> merchantService.getForAdmin(id)).isInstanceOf(NotFoundException.class);
     }
 }

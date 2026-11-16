@@ -202,10 +202,67 @@ Secrets are never committed: `.env` is git-ignored.
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_FULL_NAME` | First admin account, created on startup if it doesn't exist |
 | `FRONTEND_BASE_URL`, `PASSWORD_RESET_EXPIRY` | Web app address used in email links; reset link lifetime (seconds) |
 | `REFRESH_TOKEN_EXPIRY_REMEMBER_ME`, `REFRESH_TOKEN_EXPIRY_SESSION` | Session length with / without "Remember me" (seconds; default 30 days / 1 day) |
+| `WEBHOOK_SECRET_KEY` | AES-GCM key material for encrypting merchant webhook signing secrets (at least 32 characters) |
+| `WEBHOOK_ALLOW_PRIVATE_HOSTS` | Allow private or localhost webhook targets for development only (default `false`) |
+| `WEBHOOK_RETRY_DELAY_1` ... `WEBHOOK_RETRY_DELAY_5` | Webhook retry backoff delays (defaults: `1m`, `5m`, `30m`, `2h`, `6h`) |
 
 > [!IMPORTANT]
 > The values in `.env.example` are for local development only. Generate a strong `JWT_SECRET` and
 > `API_KEY_PEPPER` (`openssl rand -base64 48`) and unique passwords for any shared or hosted environment.
+
+## Merchant order API & webhooks
+
+Approved merchants can create orders with an API key and receive asynchronous, signed parcel status
+updates. Use `X-API-Key` on order requests, or exchange OAuth 2.0 client credentials at
+`POST /api/v1/oauth/token` for a short-lived Bearer token.
+
+| Method | Endpoint | Purpose |
+|--------|----------|---------|
+| `POST` | `/api/v1/orders` | Create a merchant order |
+| `GET` | `/api/v1/orders/{trackingNumber}` | Read an order owned by the merchant |
+| `GET` | `/api/v1/orders/{trackingNumber}/status` | Read the current order status |
+| `GET` / `PUT` | `/api/v1/merchant/webhook` | Read or update webhook settings |
+| `POST` | `/api/v1/merchant/webhook/rotate-secret` | Rotate the signing secret (shown once) |
+| `GET` | `/api/v1/merchant/webhook/deliveries` | List delivery attempts |
+| `POST` | `/api/v1/merchant/webhook/deliveries/{id}/retry` | Retry a failed delivery |
+| `POST` | `/api/v1/merchant/webhook/test` | Send a signed test event |
+
+Example order request:
+
+```bash
+curl -X POST http://localhost:8080/api/v1/orders \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: your-api-key" \
+  -d '{
+    "externalOrderReference": "STORE-10042",
+    "pickupAddress": {
+      "addressLine1": "10 Main Street",
+      "city": "Colombo",
+      "recipientName": "SwiftDrop Warehouse",
+      "phone": "+94112223344"
+    },
+    "dropoffAddress": {
+      "addressLine1": "25 Lake Road",
+      "city": "Kandy",
+      "recipientName": "Jane Customer",
+      "phone": "+94771234567"
+    },
+    "parcelType": "PARCEL",
+    "weightKg": 2
+  }'
+```
+
+Webhook payloads contain the event ID, event type, tracking number, external order reference,
+previous status, new status and occurrence time; they do not contain personal address or contact data.
+To verify a delivery, read the raw request body and compute lowercase hexadecimal HMAC-SHA256 using
+the signing secret over:
+
+```text
+X-SwiftDrop-Timestamp + "." + raw_request_body
+```
+
+Compare the result with `X-SwiftDrop-Signature` and reject stale timestamps to prevent replay attacks.
+The signing secret is displayed only when webhook settings are first created or rotated.
 
 ## Testing
 

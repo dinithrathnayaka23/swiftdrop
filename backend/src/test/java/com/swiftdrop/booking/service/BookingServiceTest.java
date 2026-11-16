@@ -12,6 +12,7 @@ import com.swiftdrop.booking.dto.request.BookingRequest;
 import com.swiftdrop.booking.dto.response.BookingConfirmationResponse;
 import com.swiftdrop.booking.dto.response.FeeEstimateResponse;
 import com.swiftdrop.common.exception.BadRequestException;
+import com.swiftdrop.config.api.ZoneApi;
 import com.swiftdrop.parcel.dto.NewParcel;
 import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
@@ -26,6 +27,7 @@ import com.swiftdrop.settings.service.SystemSettingsService;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,6 +52,9 @@ class BookingServiceTest {
 
     @Mock
     private SystemSettingsService settings;
+
+    @Mock
+    private ZoneApi zoneApi;
 
     @InjectMocks
     private BookingService service;
@@ -80,6 +85,14 @@ class BookingServiceTest {
                 new BigDecimal("650.00"), "LKR", ruleId,
                 List.of(new FeeLine("Base fee", new BigDecimal("350.00")),
                         new FeeLine("Extra weight (3 kg)", new BigDecimal("300.00"))));
+    }
+
+    private ParcelDetails savedParcel() {
+        return new ParcelDetails(
+                parcelId, "SD7KQ2MX9TRB4H", customerId, null, null, null, null, ParcelType.PARCEL,
+                new BigDecimal("3.2"), null, null, null, "Books", null, ParcelStatusCode.CREATED,
+                ruleId, new BigDecimal("650.00"), "LKR", Instant.parse("2026-11-05T05:00:00Z"),
+                Instant.now());
     }
 
     @Test
@@ -117,10 +130,7 @@ class BookingServiceTest {
     @Test
     void bookSavesTheParcelForTheCustomerWithTheServerFee() {
         when(feeApi.estimateFee(any(FeeRequest.class))).thenReturn(estimate());
-        when(parcelService.createParcel(any(NewParcel.class))).thenReturn(new ParcelDetails(
-                parcelId, "SD7KQ2MX9TRB4H", customerId, null, null, null, null, ParcelType.PARCEL,
-                new BigDecimal("3.2"), null, null, null, "Books", null, ParcelStatusCode.CREATED,
-                ruleId, new BigDecimal("650.00"), "LKR", Instant.parse("2026-11-05T05:00:00Z"), Instant.now()));
+        when(parcelService.createParcel(any(NewParcel.class))).thenReturn(savedParcel());
 
         BookingConfirmationResponse response = service.book(request("3.2", null), customerId);
 
@@ -137,6 +147,22 @@ class BookingServiceTest {
         assertThat(response.trackingNumber()).isEqualTo("SD7KQ2MX9TRB4H");
         assertThat(response.totalFee()).isEqualByComparingTo("650.00");
         assertThat(response.status()).isEqualTo(ParcelStatusCode.CREATED);
+    }
+
+    @Test
+    void bookStoresTheZoneThatCoversEachAddress() {
+        UUID colomboZone = UUID.randomUUID();
+        when(zoneApi.findZoneId("Colombo", "Colombo 03", null)).thenReturn(Optional.of(colomboZone));
+        when(zoneApi.findZoneId("Kandy", "Kandy", null)).thenReturn(Optional.empty());
+        when(feeApi.estimateFee(any(FeeRequest.class))).thenReturn(estimate());
+        when(parcelService.createParcel(any(NewParcel.class))).thenReturn(savedParcel());
+
+        service.book(request("3.2", null), customerId);
+
+        ArgumentCaptor<NewParcel> captor = ArgumentCaptor.forClass(NewParcel.class);
+        verify(parcelService).createParcel(captor.capture());
+        assertThat(captor.getValue().pickupAddress().zoneId()).isEqualTo(colomboZone);
+        assertThat(captor.getValue().dropoffAddress().zoneId()).isNull();
     }
 
     @Test

@@ -16,6 +16,7 @@ import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Demo data for the tracking screens while dispatch and the courier app (Members 6 and 7) don't
@@ -28,6 +29,7 @@ import org.springframework.stereotype.Service;
 public class DevTrackingDemoService {
 
     static final String FAILURE_REASON = "Demo: recipient not available";
+    static final String CLOSE_REASON = "Demo: delivery closed after a failed attempt";
     static final String RECIPIENT_NAME = "Demo recipient";
 
     private final ParcelService parcelService;
@@ -45,35 +47,55 @@ public class DevTrackingDemoService {
     }
 
     /**
-     * Moves the parcel one step along the normal flow (CREATED → … → DELIVERED), or to FAILED when
-     * {@code target} is FAILED.
+     * Moves the parcel one step along the normal flow (CREATED → … → DELIVERED; a FAILED_ATTEMPT
+     * parcel is retried back to CREATED), or fails it:
+     * <ul>
+     *   <li>{@code target} FAILED_ATTEMPT: the courier's failed attempt (after pickup).</li>
+     *   <li>{@code target} FAILED: closes a FAILED_ATTEMPT parcel; a parcel still on the way gets the
+     *       attempt <em>and</em> the close (two changes, two events), so one call still ends it.</li>
+     * </ul>
      *
      * @throws NotFoundException   if no parcel has this tracking number
-     * @throws BadRequestException if {@code target} is anything but FAILED
+     * @throws BadRequestException if {@code target} is anything but FAILED_ATTEMPT or FAILED
      * @throws ConflictException   if the parcel is in an end state, or can't fail yet (CREATED)
      */
+    @Transactional
     public void advance(String trackingNumber, ParcelStatusCode target, UUID adminUserId) {
         ParcelDetails parcel = parcelService.findByTrackingNumber(trackingNumber)
                 .orElseThrow(() -> new NotFoundException(PublicTrackingService.NOT_FOUND_MESSAGE));
-        if (target != null && target != ParcelStatusCode.FAILED) {
-            throw new BadRequestException("Only FAILED can be chosen; leave it out for the next normal status");
+        if (target != null && target != ParcelStatusCode.FAILED_ATTEMPT && target != ParcelStatusCode.FAILED) {
+            throw new BadRequestException(
+                    "Only FAILED_ATTEMPT or FAILED can be chosen; leave it out for the next normal status");
         }
         ParcelStatusCode current = parcel.currentStatus();
         if (current.isTerminal()) {
             throw new ConflictException("A parcel that is %s cannot change any more".formatted(current));
         }
-        ParcelStatusCode next = target != null ? target : nextNormalStatus(current);
-        parcelStatusService.changeStatus(parcel.id(), switch (next) {
-            case FAILED -> StatusChange.failed(adminUserId, FAILURE_REASON, null);
-            case DELIVERED -> StatusChange.delivered(adminUserId, RECIPIENT_NAME, null, null);
-            default -> StatusChange.to(next, adminUserId, null);
-        });
+        if (target == null) {
+            ParcelStatusCode next = nextNormalStatus(current);
+            parcelStatusService.changeStatus(parcel.id(), next == ParcelStatusCode.DELIVERED
+                    ? StatusChange.delivered(adminUserId, RECIPIENT_NAME, null, null)
+                    : StatusChange.to(next, adminUserId, null));
+            return;
+        }
+        // An attempt is recorded unless we're only closing one; the parcel module refuses it (409)
+        // from CREATED or from FAILED_ATTEMPT.
+        if (target == ParcelStatusCode.FAILED_ATTEMPT || current != ParcelStatusCode.FAILED_ATTEMPT) {
+            parcelStatusService.changeStatus(parcel.id(),
+                    StatusChange.failedAttempt(adminUserId, FAILURE_REASON, null));
+        }
+        if (target == ParcelStatusCode.FAILED) {
+            parcelStatusService.changeStatus(parcel.id(), StatusChange.failed(adminUserId, CLOSE_REASON, null));
+        }
     }
 
-    /** The step that isn't FAILED; every non-end status has exactly one. */
+    /**
+     * The step that isn't a failure: the next one on the way, or CREATED (a retry) after a failed
+     * attempt. Every non-end status has exactly one.
+     */
     static ParcelStatusCode nextNormalStatus(ParcelStatusCode current) {
         return current.nextStatuses().stream()
-                .filter(status -> status != ParcelStatusCode.FAILED)
+                .filter(status -> status != ParcelStatusCode.FAILED_ATTEMPT && status != ParcelStatusCode.FAILED)
                 .findFirst()
                 .orElseThrow();
     }

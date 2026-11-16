@@ -18,6 +18,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import javax.crypto.SecretKey;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /**
@@ -38,6 +39,9 @@ public class JwtService {
     private static final String EMAIL_VERIFICATION_TYPE = "email_verification";
     private static final String EMAIL_FINGERPRINT_CLAIM = "emf";
     private static final String REFRESH_TYPE = "refresh";
+    private static final String MERCHANT_API_TYPE = "merchant_api";
+    private static final String MERCHANT_ID_CLAIM = "merchant_id";
+    private static final String API_CREDENTIAL_ID_CLAIM = "api_credential_id";
     private static final String FINGERPRINT_CLAIM = "pwf";
     private static final String REMEMBER_ME_CLAIM = "rem";
     private static final int MIN_SECRET_BYTES = 32;
@@ -79,6 +83,37 @@ public class JwtService {
         return claims(token, ACCESS_TYPE)
                 .flatMap(claims -> rolesFrom(claims)
                         .map(roles -> new AuthenticatedUser(claims.getSubject(), roles)));
+    }
+
+    /** Issues a short-lived token for the merchant client-credentials flow. */
+    public String generateMerchantApiToken(UUID merchantId, UUID apiCredentialId, Duration lifetime) {
+        Instant now = Instant.now();
+        return Jwts.builder()
+                .issuer(properties.issuer())
+                .subject(merchantId.toString())
+                .claim(TYPE_CLAIM, MERCHANT_API_TYPE)
+                .claim(MERCHANT_ID_CLAIM, merchantId.toString())
+                .claim(API_CREDENTIAL_ID_CLAIM, apiCredentialId.toString())
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(now.plus(lifetime)))
+                .signWith(key)
+                .compact();
+    }
+
+    /** Returns merchant ids from a valid client-credentials token, or empty when it is invalid. */
+    public Optional<MerchantApiTokenClaims> parseMerchantApiToken(String token) {
+        return claims(token, MERCHANT_API_TYPE).flatMap(claims -> {
+            try {
+                return Optional.of(new MerchantApiTokenClaims(
+                        UUID.fromString(claims.get(MERCHANT_ID_CLAIM, String.class)),
+                        UUID.fromString(claims.get(API_CREDENTIAL_ID_CLAIM, String.class))));
+            } catch (IllegalArgumentException | NullPointerException ex) {
+                return Optional.empty();
+            }
+        });
+    }
+
+    public record MerchantApiTokenClaims(UUID merchantId, UUID apiCredentialId) {
     }
 
     /**
