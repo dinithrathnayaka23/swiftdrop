@@ -542,18 +542,26 @@ function adminDetail(sample: AdminSample, index: number): AdminParcelDetail {
 
 /** Dispatch changes made through the mock dispatch API, by parcel id (CREATED parcels only). */
 const dispatchOverrides = new Map<string, DispatchState>();
+/** Status changes made by the mock dispatch API (retry, close of a failed attempt). */
+const statusOverrides = new Map<string, ParcelStatusCode>();
 
 export function setMockDispatchState(parcelId: string, state: DispatchState): void {
   dispatchOverrides.set(parcelId, state);
 }
 
+export function setMockParcelStatus(parcelId: string, status: ParcelStatusCode): void {
+  statusOverrides.set(parcelId, status);
+}
+
 export function resetMockDispatchStates(): void {
   dispatchOverrides.clear();
+  statusOverrides.clear();
 }
 
 function adminParcels(): AdminParcelDetail[] {
   return adminSamples()
     .map(adminDetail)
+    .map((p) => ({ ...p, status: statusOverrides.get(p.id) ?? p.status }))
     .map((p) =>
       p.status === 'CREATED' && dispatchOverrides.has(p.id)
         ? { ...p, dispatchState: dispatchOverrides.get(p.id) }

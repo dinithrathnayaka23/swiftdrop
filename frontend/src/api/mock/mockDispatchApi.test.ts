@@ -1,6 +1,10 @@
 import { ApiRequestError } from '../errors';
 import { mockCouriersApi, resetMockCouriers } from './mockCouriersApi';
-import { mockDispatchApi as api } from './mockDispatchApi';
+import {
+  mockDispatchApi as api,
+  resetMockFailedDeliveries,
+  setMockDefaultFailedAction,
+} from './mockDispatchApi';
 import { mockParcelsApi, resetMockDispatchStates } from './mockParcelsApi';
 import { resetMockServiceAreas } from './mockServiceAreasApi';
 
@@ -11,6 +15,7 @@ const WAITING = 'a0000000-0000-4000-8000-000000000001'; // SD123456789, CREATED,
 const ALREADY_ASSIGNED = 'a0000000-0000-4000-8000-000000000002'; // SD987654321, CREATED, assigned
 const IN_TRANSIT = 'a0000000-0000-4000-8000-000000000003'; // SD456789123
 const WAITING_2 = 'a0000000-0000-4000-8000-000000000006'; // SD112233445
+const FAILED_ATTEMPT = 'a0000000-0000-4000-8000-000000000007'; // SD998877665
 
 async function courierId(name: string): Promise<string> {
   return (await mockCouriersApi.list({ search: name })).content[0].id;
@@ -33,6 +38,7 @@ describe('mockDispatchApi', () => {
     resetMockServiceAreas();
     resetMockCouriers();
     resetMockDispatchStates();
+    resetMockFailedDeliveries();
   });
 
   it('assigns a waiting parcel to an online courier', async () => {
@@ -117,6 +123,90 @@ describe('mockDispatchApi', () => {
       status: 'REASSIGNED',
       reason: 'Vehicle broke down',
     });
+  });
+
+  it('lists failed attempts and closed parcels, newest booking first', async () => {
+    const attention = await api.listFailed({ scope: 'ATTENTION' });
+    expect(attention.content.map((r) => r.trackingNumber)).toEqual(['SD998877665']);
+    expect(attention.content[0]).toMatchObject({
+      parcelStatus: 'FAILED_ATTEMPT',
+      failureReason: 'Recipient not available',
+      destinationCity: 'Kottawa',
+    });
+    const closed = await api.listFailed({ scope: 'CLOSED' });
+    expect(closed.content.map((r) => r.parcelStatus)).toEqual(['FAILED', 'FAILED']);
+    expect((await failure(api.listFailed({ scope: 'CLOSED', size: 51 }))).status).toBe(400);
+  });
+
+  it('retries a failed attempt: back to Unassigned, once only', async () => {
+    expect((await failure(api.retry(FAILED_ATTEMPT, 'x'.repeat(501)))).fieldErrors[0].field).toBe(
+      'note',
+    );
+    await expect(api.retry(FAILED_ATTEMPT, 'Home after 5 PM')).resolves.toEqual({
+      parcelId: FAILED_ATTEMPT,
+      status: 'CREATED',
+    });
+    expect(await unassignedIds()).toContain(FAILED_ATTEMPT);
+    expect((await api.listFailed({ scope: 'ATTENTION' })).content).toHaveLength(0);
+    expect((await failure(api.retry(FAILED_ATTEMPT))).message).toBe(
+      'Only a parcel whose delivery attempt failed can be retried or closed',
+    );
+    // Assigned again with the normal flow.
+    await expect(api.assign(FAILED_ATTEMPT, await courierId('Ramesh'))).resolves.toBeDefined();
+  });
+
+  it('closes a failed attempt with a reason; it moves to the closed list', async () => {
+    expect((await failure(api.close(FAILED_ATTEMPT, ' '))).fieldErrors[0]).toEqual({
+      field: 'reason',
+      message: 'Reason is required',
+    });
+    expect((await failure(api.close(WAITING, 'No'))).status).toBe(409);
+    expect((await failure(api.close('nope', 'No'))).status).toBe(404);
+
+    await expect(api.close(FAILED_ATTEMPT, ' Returned to sender ')).resolves.toEqual({
+      parcelId: FAILED_ATTEMPT,
+      status: 'FAILED',
+    });
+    const closed = (await api.listFailed({ scope: 'CLOSED' })).content;
+    expect(closed.find((r) => r.parcelId === FAILED_ATTEMPT)).toMatchObject({
+      failureReason: 'Returned to sender',
+    });
+  });
+
+  it('reports the default failed-delivery action', async () => {
+    await expect(api.defaultFailedAction()).resolves.toBe('RETRY_DELIVERY');
+    setMockDefaultFailedAction('RETURN_TO_SENDER');
+    await expect(api.defaultFailedAction()).resolves.toBe('RETURN_TO_SENDER');
+    expect((await api.overview()).defaultAction).toBe('RETURN_TO_SENDER');
+  });
+
+  it('builds the overview from the same data as the other mocks', async () => {
+    const overview = await api.overview();
+    const summary = await mockCouriersApi.summary();
+    const active = await api.activeDeliveries({ size: 50 });
+
+    expect(overview.kpis.unassignedParcels).toBe((await unassignedIds()).length);
+    expect(overview.kpis).toMatchObject({
+      couriersOnline: summary.online,
+      couriersOnBreak: summary.onBreak,
+      couriersTotal: summary.total,
+      activeDeliveries: active.page.totalElements,
+      needsDecision: 1,
+    });
+    expect(overview.todayStatus.inTransit + overview.todayStatus.outForDelivery).toBe(
+      overview.kpis.activeDeliveries,
+    );
+    expect(overview.todayStatus.completed).toBe(overview.kpis.completedToday);
+    expect(overview.courierWorkload).toHaveLength(5);
+    expect(overview.courierWorkload[0]).toMatchObject({ name: 'Ramesh Perera', todaysTotal: 15 });
+    const totals = overview.courierWorkload.map((c) => c.todaysTotal);
+    expect([...totals].sort((a, b) => b - a)).toEqual(totals);
+  });
+
+  it('assigning a waiting parcel lowers the unassigned count', async () => {
+    const before = (await api.overview()).kpis.unassignedParcels;
+    await api.assign(WAITING, await courierId('Ramesh'));
+    expect((await api.overview()).kpis.unassignedParcels).toBe(before - 1);
   });
 
   it('unassigns only before pickup, and the parcel waits for a courier again', async () => {

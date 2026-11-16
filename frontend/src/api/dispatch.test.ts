@@ -74,6 +74,64 @@ describe('dispatchApi (HTTP)', () => {
     expect(get).toHaveBeenCalledWith('/admin/dispatch/assignments/a1');
   });
 
+  it('lists failed deliveries and active deliveries with the query as parameters', async () => {
+    get.mockResolvedValue({ data: { content: [] } });
+
+    await api.listFailed({ scope: 'CLOSED', page: 2, size: 50 });
+    await api.activeDeliveries({ page: 0, size: 5 });
+
+    expect(get).toHaveBeenNthCalledWith(1, '/admin/dispatch/failed-deliveries', {
+      params: { scope: 'CLOSED', page: 2, size: 50 },
+    });
+    expect(get).toHaveBeenNthCalledWith(2, '/admin/dispatch/active-deliveries', {
+      params: { page: 0, size: 5 },
+    });
+  });
+
+  it('reads the overview and unwraps the default action', async () => {
+    get.mockResolvedValueOnce({ data: { kpis: {} } });
+    get.mockResolvedValueOnce({ data: { action: 'HOLD_FOR_COLLECTION' } });
+
+    await expect(api.overview()).resolves.toEqual({ kpis: {} });
+    await expect(api.defaultFailedAction()).resolves.toBe('HOLD_FOR_COLLECTION');
+
+    expect(get).toHaveBeenNthCalledWith(1, '/admin/dispatch/overview');
+    expect(get).toHaveBeenNthCalledWith(2, '/admin/dispatch/failed-deliveries/default-action');
+  });
+
+  it('retries with the note only when given, and closes with the reason', async () => {
+    post.mockResolvedValue({ data: { parcelId: 'p1', status: 'CREATED' } });
+
+    await expect(api.retry('p 1', 'Home after 5 PM')).resolves.toEqual({
+      parcelId: 'p1',
+      status: 'CREATED',
+    });
+    await api.retry('p1');
+    await api.close('p1', 'Returned to sender');
+
+    expect(post).toHaveBeenNthCalledWith(1, '/admin/dispatch/parcels/p%201/retry', {
+      note: 'Home after 5 PM',
+    });
+    expect(post).toHaveBeenNthCalledWith(2, '/admin/dispatch/parcels/p1/retry', {});
+    expect(post).toHaveBeenNthCalledWith(3, '/admin/dispatch/parcels/p1/close', {
+      reason: 'Returned to sender',
+    });
+  });
+
+  it('maps a 409 from retry or close to an ApiRequestError', async () => {
+    post.mockRejectedValue(
+      httpError(409, {
+        code: 'CONFLICT',
+        message: 'Only a parcel whose delivery attempt failed can be retried or closed',
+      }),
+    );
+
+    const error = await api.close('p1', 'x').catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(ApiRequestError);
+    expect(error).toMatchObject({ status: 409 });
+  });
+
   it('turns a 409 into an ApiRequestError with the backend message', async () => {
     post.mockRejectedValue(
       httpError(409, {
