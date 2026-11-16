@@ -54,7 +54,8 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
     @BeforeEach
     void bindEventQueue() {
         eventQueue = "swiftdrop.test.parcel-status." + UUID.randomUUID();
-        Queue queue = new Queue(eventQueue, false, false, false);
+        // Durable: RabbitMQ 4 rejects transient queues that aren't exclusive. Deleted after each test.
+        Queue queue = new Queue(eventQueue, true, false, false);
         amqpAdmin.declareQueue(queue);
         amqpAdmin.declareBinding(BindingBuilder.bind(queue)
                 .to(new TopicExchange(RabbitConfig.PARCEL_EVENTS_EXCHANGE))
