@@ -15,7 +15,10 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
-/** A notification sent (or queued) to a user or parcel contact. Table {@code notifications}. */
+/**
+ * A notification sent (or queued) to a user or parcel contact. Table
+ * {@code notifications}.
+ */
 @Entity
 @Table(name = "notifications")
 @Getter
@@ -28,15 +31,24 @@ public class Notification {
     @Column(name = "notification_id", nullable = false, updatable = false)
     private UUID id;
 
-    /** {@code users.user_id} (user module); {@code null} when the recipient has no account. */
+    /**
+     * {@code users.user_id} (user module); {@code null} when the recipient has no
+     * account.
+     */
     @Column(name = "user_id")
     private UUID userId;
 
-    /** {@code parcels.parcel_id} (parcel module), if the notification is about a parcel. */
+    /**
+     * {@code parcels.parcel_id} (parcel module), if the notification is about a
+     * parcel.
+     */
     @Column(name = "parcel_id")
     private UUID parcelId;
 
-    /** {@code parcel_status_history.status_history_id} (parcel module) that triggered it. */
+    /**
+     * {@code parcel_status_history.status_history_id} (parcel module) that
+     * triggered it.
+     */
     @Column(name = "status_history_id")
     private UUID statusHistoryId;
 
@@ -57,6 +69,12 @@ public class Notification {
     @Enumerated(EnumType.STRING)
     @Column(name = "delivery_status", nullable = false, length = 20)
     private NotificationDeliveryStatus deliveryStatus = NotificationDeliveryStatus.PENDING;
+
+    @Column(name = "is_read", nullable = false)
+    private boolean isRead = false;
+
+    @Column(name = "read_at")
+    private Instant readAt;
 
     @CreationTimestamp
     @Column(name = "created_at", nullable = false, updatable = false)

@@ -12,6 +12,9 @@ import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -63,7 +66,7 @@ class InfrastructureIT extends IntegrationTestBase {
                 String.class);
         assertThat(tables).containsExactlyInAnyOrder(
                 "users", "couriers", "addresses", "parcel_statuses", "parcels", "parcel_status_history",
-                "delivery_assignments", "delivery_receipts", "notifications", "merchants",
+                "delivery_assignments", "delivery_receipts", "notifications", "notification_preferences", "merchants",
                 "merchant_api_credentials", "merchant_webhooks", "webhook_deliveries", "pricing_rules",
                 "zone_pricing_adjustments", "delivery_zones", "zone_coverage_areas",
                                 // V1_001: Admin System Settings (one row).
@@ -86,15 +89,28 @@ class InfrastructureIT extends IntegrationTestBase {
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.WEBHOOK_QUEUE)).isNotNull();
         assertThat(amqpAdmin.getQueueInfo(RabbitConfig.DEAD_LETTER_QUEUE)).isNotNull();
 
-        var event = new ParcelStatusChangedEvent(UUID.randomUUID(), ParcelStatusChangedEvent.EVENT_TYPE,
-                ParcelStatusChangedEvent.SCHEMA_VERSION, UUID.randomUUID(), "SD-TEST-0001", null, "CREATED",
-                "PICKED_UP", 2, UUID.randomUUID(), UUID.randomUUID(), Instant.now());
-        rabbitTemplate.convertAndSend(RabbitConfig.PARCEL_EVENTS_EXCHANGE, RabbitConfig.PARCEL_STATUS_CHANGED_KEY,
-                event);
+        // The notification and webhook queues have consumers, so read the round trip from a temporary
+        // queue bound to the same exchange.
+        String testQueueName = "swiftdrop.test.events." + UUID.randomUUID();
+        Queue testQueue = new Queue(testQueueName, true, false, false);
+        amqpAdmin.declareQueue(testQueue);
+        try {
+            amqpAdmin.declareBinding(BindingBuilder.bind(testQueue)
+                    .to(new TopicExchange(RabbitConfig.PARCEL_EVENTS_EXCHANGE))
+                    .with(RabbitConfig.PARCEL_STATUS_CHANGED_KEY));
 
-        ParcelStatusChangedEvent received = rabbitTemplate.receiveAndConvert(RabbitConfig.NOTIFICATION_QUEUE, 5_000,
-                new ParameterizedTypeReference<>() { });
-        assertThat(received).isEqualTo(event);
+            var event = new ParcelStatusChangedEvent(UUID.randomUUID(), ParcelStatusChangedEvent.EVENT_TYPE,
+                    ParcelStatusChangedEvent.SCHEMA_VERSION, UUID.randomUUID(), "SD-TEST-0001", null, "CREATED",
+                    "PICKED_UP", 2, UUID.randomUUID(), UUID.randomUUID(), Instant.now());
+            rabbitTemplate.convertAndSend(RabbitConfig.PARCEL_EVENTS_EXCHANGE,
+                    RabbitConfig.PARCEL_STATUS_CHANGED_KEY, event);
+
+            ParcelStatusChangedEvent received = rabbitTemplate.receiveAndConvert(testQueueName, 10_000,
+                    new ParameterizedTypeReference<>() { });
+            assertThat(received).isEqualTo(event);
+        } finally {
+            amqpAdmin.deleteQueue(testQueueName);
+        }
     }
 
     @Test

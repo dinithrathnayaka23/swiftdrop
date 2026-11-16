@@ -27,6 +27,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.amqp.core.AmqpAdmin;
+import org.springframework.amqp.core.BindingBuilder;
+import org.springframework.amqp.core.Queue;
+import org.springframework.amqp.core.TopicExchange;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.ParameterizedTypeReference;
@@ -42,16 +45,26 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
 
     private UUID customerId;
     private UUID courierId;
+    private String eventQueue;
 
     /**
-     * Empty both queues to keep other tests' events out. The events are read from the notification
-     * queue, which has no consumer yet; WebhookDispatcher consumes the webhook queue.
+     * The notification and webhook queues have consumers, so each test reads the published events from
+     * its own temporary queue bound to the same exchange.
      */
     @BeforeEach
+    void bindEventQueue() {
+        eventQueue = "swiftdrop.test.parcel-status." + UUID.randomUUID();
+        // Durable: RabbitMQ 4 rejects transient queues that aren't exclusive. Deleted after each test.
+        Queue queue = new Queue(eventQueue, true, false, false);
+        amqpAdmin.declareQueue(queue);
+        amqpAdmin.declareBinding(BindingBuilder.bind(queue)
+                .to(new TopicExchange(RabbitConfig.PARCEL_EVENTS_EXCHANGE))
+                .with(RabbitConfig.PARCEL_STATUS_BINDING));
+    }
+
     @AfterEach
-    void emptyQueues() {
-        amqpAdmin.purgeQueue(RabbitConfig.NOTIFICATION_QUEUE);
-        amqpAdmin.purgeQueue(RabbitConfig.WEBHOOK_QUEUE);
+    void deleteEventQueue() {
+        amqpAdmin.deleteQueue(eventQueue);
     }
 
     @BeforeEach
@@ -74,9 +87,9 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
     }
 
     private ParcelStatusChangedEvent nextStatusEvent() {
-        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(RabbitConfig.NOTIFICATION_QUEUE, 5_000,
+        ParcelStatusChangedEvent event = rabbitTemplate.receiveAndConvert(eventQueue, 5_000,
                 new ParameterizedTypeReference<>() { });
-        assertThat(event).as("event on " + RabbitConfig.NOTIFICATION_QUEUE).isNotNull();
+        assertThat(event).as("event on " + eventQueue).isNotNull();
         return event;
     }
 
@@ -119,7 +132,7 @@ class ParcelStatusServiceIT extends IntegrationTestBase {
 
         assertThat(parcelService.getParcel(parcel.id()).currentStatus()).isEqualTo(ParcelStatusCode.CREATED);
         assertThat(statusService.getHistory(parcel.id())).hasSize(1);
-        assertThat(rabbitTemplate.receive(RabbitConfig.NOTIFICATION_QUEUE, 500)).isNull();
+        assertThat(rabbitTemplate.receive(eventQueue, 500)).isNull();
     }
 
     @Test
