@@ -20,6 +20,7 @@
  *   <li>{@code model} - JPA entities and enums</li>
  *   <li>{@code dto.request} / {@code dto.response} - API request and response records</li>
  *   <li>{@code mapper} - parcel data to DTO mapping</li>
+ *   <li>{@code storage} - proof-of-delivery photo files ({@code ProofStorage}); private to this module</li>
  *   <li>{@code exception} - module-specific exceptions extending common.exception classes</li>
  *   <li>{@code event} - RabbitMQ publishers/listeners for this module</li>
  * </ul>

@@ -1,4 +1,5 @@
 import { RefreshCw } from 'lucide-react';
+import { useLocation } from 'react-router';
 import LoadingState from '../../../components/feedback/LoadingState';
 import { EmptyState, ErrorState } from '../../../components/feedback/States';
 import Alert from '../../../components/ui/Alert';
@@ -6,7 +7,7 @@ import Button from '../../../components/ui/Button';
 import { courierApi } from '../api';
 import DeliveryCard from '../components/DeliveryCard';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
-import type { CourierDeliveryCounts } from '../types';
+import type { CourierDeliveryCounts, CourierNotice } from '../types';
 
 function CountTile({ label, value }: { label: string; value: number }) {
   return (
@@ -19,10 +20,11 @@ function CountTile({ label, value }: { label: string; value: number }) {
 
 function Counts({ counts }: { counts: CourierDeliveryCounts }) {
   return (
-    <div className="grid grid-cols-3 gap-2" aria-label="Delivery counts">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Delivery counts">
       <CountTile label="To pick up" value={counts.assigned} />
       <CountTile label="In progress" value={counts.inProgress} />
-      <CountTile label="Total" value={counts.total} />
+      <CountTile label="Open" value={counts.total} />
+      <CountTile label="Delivered today" value={counts.completedToday} />
     </div>
   );
 }
@@ -30,9 +32,15 @@ function Counts({ counts }: { counts: CourierDeliveryCounts }) {
 /** The courier's open deliveries, oldest first. Refreshes every minute and when the app regains focus. */
 export default function TodaysDeliveriesPage() {
   const { state, refresh, retry } = useAutoRefresh(() => courierApi.getToday());
+  const notice = (useLocation().state as Partial<CourierNotice> | null)?.notice;
 
   return (
     <section>
+      {notice && (
+        <Alert tone="success" className="mb-4">
+          {notice}
+        </Alert>
+      )}
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Today's Deliveries</h1>

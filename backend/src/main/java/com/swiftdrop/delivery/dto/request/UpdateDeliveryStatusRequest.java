@@ -6,7 +6,7 @@ import jakarta.validation.constraints.Size;
 
 /**
  * A plain step on the way to the recipient: PICKED_UP, IN_TRANSIT or OUT_FOR_DELIVERY. DELIVERED
- * and FAILED have their own endpoints (proof of delivery and the failed-delivery form).
+ * and FAILED_ATTEMPT have their own endpoints (proof of delivery and the failed-delivery form).
  */
 public record UpdateDeliveryStatusRequest(
         @NotNull(message = "Status is required") ParcelStatusCode status,

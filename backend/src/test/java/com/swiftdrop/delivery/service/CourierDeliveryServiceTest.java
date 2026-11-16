@@ -16,6 +16,7 @@ import com.swiftdrop.delivery.dto.request.UpdateDeliveryStatusRequest;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryDetailResponse;
 import com.swiftdrop.delivery.dto.response.CourierDeliveryItemResponse;
 import com.swiftdrop.delivery.dto.response.TodaysDeliveriesResponse;
+import com.swiftdrop.delivery.repository.DeliveryProofRepository;
 import com.swiftdrop.dispatch.api.DispatchApi;
 import com.swiftdrop.parcel.dto.AddressDetails;
 import com.swiftdrop.parcel.dto.ParcelDetails;
@@ -47,6 +48,8 @@ class CourierDeliveryServiceTest {
     @Mock private DispatchApi dispatchApi;
     @Mock private ParcelService parcelService;
     @Mock private ParcelStatusService parcelStatusService;
+    @Mock private DeliveryProofRepository deliveryProofRepository;
+    @Mock private CourierDay courierDay;
     @InjectMocks private CourierDeliveryService service;
 
     private static AddressDetails address(String name, String city) {
@@ -70,6 +73,10 @@ class CourierDeliveryServiceTest {
         // The parcel module returns them in no particular order.
         when(parcelService.findAllByIds(List.of(first.id(), second.id(), third.id())))
                 .thenReturn(List.of(third, first, second));
+        Instant midnight = Instant.parse("2026-11-14T18:30:00Z"); // 15 Nov, 00:00 in Colombo
+        when(courierDay.startOfToday()).thenReturn(midnight);
+        when(deliveryProofRepository.countByCourierUserIdAndCapturedAtGreaterThanEqual(COURIER, midnight))
+                .thenReturn(4L);
 
         TodaysDeliveriesResponse today = service.today(COURIER);
 
@@ -78,6 +85,7 @@ class CourierDeliveryServiceTest {
         assertThat(today.counts().total()).isEqualTo(3);
         assertThat(today.counts().assigned()).isEqualTo(1);
         assertThat(today.counts().inProgress()).isEqualTo(2);
+        assertThat(today.counts().completedToday()).isEqualTo(4);
     }
 
     @Test
@@ -112,9 +120,11 @@ class CourierDeliveryServiceTest {
         assertThat(empty.counts().total()).isZero();
     }
 
-    @Test
-    void anEndStateCountsInTheTotalOnlyAndHasNoActions() {
-        ParcelDetails delivered = parcel("SD1", ParcelStatusCode.DELIVERED);
+    @ParameterizedTest
+    @EnumSource(value = ParcelStatusCode.class, names = {"DELIVERED", "FAILED_ATTEMPT"})
+    void aFinishedDeliveryCountsInTheTotalOnlyAndHasNoActions(ParcelStatusCode finished) {
+        // Delivered or failed, but dispatch hasn't ended the assignment yet (it hears the event later).
+        ParcelDetails delivered = parcel("SD1", finished);
         when(dispatchApi.openParcelIds(COURIER)).thenReturn(List.of(delivered.id()));
         when(parcelService.findAllByIds(any())).thenReturn(List.of(delivered));
 
