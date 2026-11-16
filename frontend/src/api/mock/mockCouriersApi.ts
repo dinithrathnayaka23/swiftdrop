@@ -316,6 +316,20 @@ export function mockOpenAssignment(parcelId: string): MockAssignment | undefined
   return assignments.find((a) => a.parcelId === parcelId && a.endedAt === null);
 }
 
+/** Every courier and assignment, read-only (the overview and failed-delivery mocks count them). */
+export function mockAllCouriers(): readonly MockCourier[] {
+  return couriers;
+}
+
+export function mockAllAssignments(): readonly MockAssignment[] {
+  return assignments;
+}
+
+/** Today's midnight in Sri Lanka, as the mock's "today" starts. */
+export function mockSriLankaMidnight(): number {
+  return startOfToday();
+}
+
 export function mockAssignmentById(assignmentId: string): MockAssignment | undefined {
   return assignments.find((a) => a.id === assignmentId);
 }

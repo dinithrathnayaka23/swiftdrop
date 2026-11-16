@@ -329,4 +329,32 @@ class UserServiceTest {
 
         assertThat(user.getAccountStatus()).isEqualTo(AccountStatus.ACTIVE);
     }
+
+    // --- Own profile ---
+
+    @Test
+    void aUserUpdatesTheirOwnNameAndPhone() {
+        User user = stored(Role.CUSTOMER, AccountStatus.ACTIVE);
+        when(userRepository.saveAndFlush(user)).thenReturn(user);
+
+        var profile = userService.updateProfile(user.getId(), "  Nimal Silva ", " +94771234567 ");
+
+        assertThat(user.getFullName()).isEqualTo("Nimal Silva");
+        assertThat(user.getPhone()).isEqualTo("+94771234567");
+        assertThat(profile.fullName()).isEqualTo("Nimal Silva");
+        assertThat(profile.phone()).isEqualTo("+94771234567");
+        // Only name and phone change: email, role and status stay as they were.
+        assertThat(profile.email()).isEqualTo("nimal@example.com");
+        assertThat(profile.role()).isEqualTo(Role.CUSTOMER);
+        verify(eventPublisher, never()).publishEvent(any());
+    }
+
+    @Test
+    void updatingTheProfileOfAnUnknownUserFails() {
+        UUID id = UUID.randomUUID();
+        when(userRepository.findById(id)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> userService.updateProfile(id, "Nimal Silva", "+94771234567"))
+                .isInstanceOf(NotFoundException.class);
+    }
 }

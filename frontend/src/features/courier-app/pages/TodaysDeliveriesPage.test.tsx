@@ -32,7 +32,8 @@ describe('TodaysDeliveriesPage', () => {
     const counts = screen.getByLabelText('Delivery counts');
     expect(within(counts).getByText('To pick up').previousSibling).toHaveTextContent('2');
     expect(within(counts).getByText('In progress').previousSibling).toHaveTextContent('3');
-    expect(within(counts).getByText('Total').previousSibling).toHaveTextContent('5');
+    expect(within(counts).getByText('Open').previousSibling).toHaveTextContent('5');
+    expect(within(counts).getByText('Delivered today').previousSibling).toHaveTextContent('1');
   });
 
   it('shows where to pick up a parcel that is still waiting, and where to deliver the others', async () => {
@@ -50,7 +51,7 @@ describe('TodaysDeliveriesPage', () => {
 
   it('says when nothing is assigned', async () => {
     jest.spyOn(mockCourierApi, 'getToday').mockResolvedValue({
-      counts: { total: 0, assigned: 0, inProgress: 0 },
+      counts: { total: 0, assigned: 0, inProgress: 0, completedToday: 0 },
       deliveries: [],
     });
     renderPage();
