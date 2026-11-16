@@ -158,3 +158,92 @@ test('no matches shows an empty state', async () => {
 
   expect(await screen.findByText('No users found')).toBeInTheDocument();
 });
+
+test('filtering by status asks the API again from the first page', async () => {
+  render(<UserManagementPage />);
+  await screen.findByText('Kasun Perera');
+
+  await userEvent.selectOptions(screen.getByLabelText('Filter by status'), 'SUSPENDED');
+
+  await waitFor(() =>
+    expect(api.list).toHaveBeenLastCalledWith(
+      expect.objectContaining({ status: 'SUSPENDED', page: 0 }),
+    ),
+  );
+});
+
+test('a suspended user can be reactivated', async () => {
+  const suspended = user({ id: 'u9', fullName: 'Ruwan Silva', accountStatus: 'SUSPENDED' });
+  api.list.mockResolvedValue(page([suspended]));
+  api.changeStatus.mockResolvedValue({ ...suspended, accountStatus: 'ACTIVE' });
+  render(<UserManagementPage />);
+  await screen.findByText('Ruwan Silva');
+
+  expect(
+    within(rowOf('Ruwan Silva')).queryByRole('button', { name: 'Suspend' }),
+  ).not.toBeInTheDocument();
+  await userEvent.click(within(rowOf('Ruwan Silva')).getByRole('button', { name: 'Reactivate' }));
+  await userEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Reactivate' }),
+  );
+
+  expect(api.changeStatus).toHaveBeenCalledWith('u9', 'ACTIVE');
+});
+
+test('a merchant waiting for approval has no actions here', async () => {
+  api.list.mockResolvedValue(
+    page([
+      user({
+        id: 'u7',
+        fullName: 'Sunil Fernando',
+        role: 'MERCHANT',
+        accountStatus: 'PENDING_APPROVAL',
+      }),
+    ]),
+  );
+  render(<UserManagementPage />);
+  await screen.findByText('Sunil Fernando');
+
+  expect(within(rowOf('Sunil Fernando')).queryAllByRole('button')).toHaveLength(0);
+});
+
+test('cancelling the confirmation changes nothing', async () => {
+  render(<UserManagementPage />);
+  await screen.findByText('Kasun Perera');
+
+  await userEvent.click(within(rowOf('Kasun Perera')).getByRole('button', { name: 'Suspend' }));
+  await userEvent.click(
+    within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+  );
+
+  expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument();
+  expect(api.changeStatus).not.toHaveBeenCalled();
+});
+
+test('pages through long lists', async () => {
+  api.list.mockImplementation((filters) =>
+    Promise.resolve({
+      content: [filters.page === 1 ? NIMAL : KASUN],
+      page: { size: 10, number: filters.page ?? 0, totalElements: 15, totalPages: 2 },
+    }),
+  );
+  render(<UserManagementPage />);
+  await screen.findByText('Page 1 of 2');
+  expect(screen.getByRole('button', { name: 'Previous' })).toBeDisabled();
+
+  await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+
+  expect(await screen.findByText('Nimal Silva')).toBeInTheDocument();
+  expect(screen.getByText('Page 2 of 2')).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await userEvent.click(screen.getByRole('button', { name: 'Previous' }));
+  expect(await screen.findByText('Kasun Perera')).toBeInTheDocument();
+});
+
+test('the cards show "–" when the numbers cannot be loaded, and the list still works', async () => {
+  api.stats.mockRejectedValue(new Error('down'));
+  render(<UserManagementPage />);
+
+  expect(await screen.findByText('Kasun Perera')).toBeInTheDocument();
+  expect(screen.getAllByText('–').length).toBeGreaterThanOrEqual(4);
+});
