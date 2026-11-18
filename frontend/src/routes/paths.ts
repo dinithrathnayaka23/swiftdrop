@@ -47,7 +47,7 @@ export const PATHS = {
   // ---- Merchant ----
   merchantDashboard: '/merchant',
   merchantOrders: '/merchant/orders',
-  merchantOrderDetail: '/merchant/orders/:parcelId',
+  merchantOrderDetail: '/merchant/orders/:trackingNumber',
   merchantIntegration: '/merchant/integration',
   merchantDeliveryUpdates: '/merchant/delivery-updates',
   merchantProfile: '/merchant/profile',
