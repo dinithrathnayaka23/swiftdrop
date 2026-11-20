@@ -108,9 +108,15 @@ describe('CompletedDeliveriesPage', () => {
       }));
     renderPage();
 
-    fireEvent.click(await screen.findByRole('button', { name: '2' }));
+    // Wait for the first page before turning it (generous timeouts: the full suite runs in parallel).
+    expect(
+      await screen.findByText('SD000000000', undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '2' }));
 
-    expect(await screen.findByText('SD000000001')).toBeInTheDocument();
+    expect(
+      await screen.findByText('SD000000001', undefined, { timeout: 5000 }),
+    ).toBeInTheDocument();
     expect(getCompleted).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1 }));
   });
 });

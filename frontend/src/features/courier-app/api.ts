@@ -7,8 +7,10 @@ import type {
   CompletedDelivery,
   CourierApi,
   CourierDeliveryDetail,
+  CourierProfile,
   DeliverRequest,
   FailureReason,
+  SampleDelivery,
   TodaysDeliveries,
 } from './types';
 
@@ -89,6 +91,14 @@ const httpCourierApi: CourierApi = {
   // The URL is relative to /api/v1, like every other call; the photo comes back as a Blob.
   getProofPhoto: (proofPhotoUrl) =>
     request(() => apiClient.get<Blob>(proofPhotoUrl, { responseType: 'blob' })),
+
+  getProfile: () => request(() => apiClient.get<CourierProfile>('/courier/profile')),
+
+  changeStatus: (status) =>
+    request(() => apiClient.patch<CourierProfile>('/courier/profile/status', { status })),
+
+  addSampleDelivery: () =>
+    request(() => apiClient.post<SampleDelivery>('/courier/dev/sample-delivery')),
 };
 
 export const COMPLETED_PAGE_SIZE = 20;

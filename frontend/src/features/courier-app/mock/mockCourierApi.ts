@@ -7,6 +7,7 @@ import type {
   CourierApi,
   CourierDelivery,
   CourierDeliveryDetail,
+  CourierProfile,
   CourierStop,
   CourierTimelineEntry,
   FailureReason,
@@ -179,13 +180,47 @@ function seedCompleted(): CompletedDelivery[] {
   ];
 }
 
+/** The signed-in sample courier (their status can change). */
+function seedProfile(): Omit<CourierProfile, 'assigned' | 'inProgress' | 'completedToday'> {
+  return {
+    courierId: '5e6f7a8b-0000-4000-8000-000000000007',
+    fullName: 'Ramesh Perera',
+    email: 'ramesh.perera@example.com',
+    phone: '+94771234567',
+    vehicleType: 'Motorbike',
+    vehicleRegistration: 'WP CAB 1234',
+    status: 'ONLINE',
+    active: true,
+    serviceAreas: ['Colombo 01-07', 'Colombo Suburbs'],
+  };
+}
+
 let samples: Sample[] = seed();
 let completed: CompletedDelivery[] = seedCompleted();
+let profile = seedProfile();
+let sampleCount = 0;
 
 /** Puts the sample deliveries back as they were (for tests). */
 export function resetMockCourierData(): void {
   samples = seed();
   completed = seedCompleted();
+  profile = seedProfile();
+  sampleCount = 0;
+}
+
+/** The profile with today's numbers worked out from the samples. */
+function currentProfile(): CourierProfile {
+  const open = samples.filter((s) => NEXT[s.status].length > 0);
+  return {
+    ...profile,
+    serviceAreas: [...profile.serviceAreas],
+    assigned: open.filter((s) => s.status === 'CREATED').length,
+    inProgress: open.filter((s) => s.status !== 'CREATED').length,
+    completedToday: completed.filter(
+      (c) =>
+        c.outcome === 'DELIVERED' && localDay(c.completedAt) === localDay(new Date().toISOString()),
+    ).length,
+  };
 }
 
 /** Records a finished delivery for Completed Deliveries (newest first). */
@@ -442,5 +477,44 @@ export const mockCourierApi: CourierApi = {
       throw new ApiRequestError('Photo not found', { status: 404, code: 'NOT_FOUND' });
     }
     return new Blob([MOCK_PHOTO_SVG], { type: 'image/svg+xml' });
+  },
+
+  async getProfile() {
+    await delay(200);
+    return currentProfile();
+  },
+
+  async changeStatus(status) {
+    await delay(300);
+    if (status === 'ONLINE' && !profile.active) {
+      throw new ApiRequestError('This courier is deactivated and cannot go online', {
+        status: 409,
+        code: 'CONFLICT',
+      });
+    }
+    profile = { ...profile, status };
+    return currentProfile();
+  },
+
+  async addSampleDelivery() {
+    await delay(300);
+    sampleCount += 1;
+    const n = String(sampleCount).padStart(4, '0');
+    const sample: Sample = {
+      parcelId: `7b0c1a52-4d6e-4f1a-9c3b-${String(900000000000 + sampleCount)}`,
+      trackingNumber: `SD26112099${n.slice(-2)}`,
+      status: 'CREATED',
+      bookedHoursAgo: 0,
+      dropoff: stop('Kasun Perera', '+94771234567', '12 Galle Road', 'Colombo 03', 'Colombo'),
+      pickup: WAREHOUSE,
+      parcelType: 'PARCEL',
+      weightKg: 1.5,
+      contentDescription: 'Sample parcel',
+      deliveryInstructions: 'Call on arrival',
+    };
+    samples.push(sample);
+    // As the real helper does: an assignment needs the courier online.
+    profile = { ...profile, status: 'ONLINE' };
+    return { parcelId: sample.parcelId, trackingNumber: sample.trackingNumber };
   },
 };
