@@ -4,8 +4,11 @@ import LoadingState from '../../../components/feedback/LoadingState';
 import { EmptyState, ErrorState } from '../../../components/feedback/States';
 import Alert from '../../../components/ui/Alert';
 import Button from '../../../components/ui/Button';
+import { IS_DEV } from '../../../utils/env';
 import { courierApi } from '../api';
+import CourierProfileCard from '../components/CourierProfileCard';
 import DeliveryCard from '../components/DeliveryCard';
+import DevSampleDeliveryButton from '../components/DevSampleDeliveryButton';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 import type { CourierDeliveryCounts, CourierNotice } from '../types';
 
@@ -55,6 +58,11 @@ export default function TodaysDeliveriesPage() {
         >
           <RefreshCw className="size-4" aria-hidden="true" />
         </Button>
+      </div>
+
+      <div className="mt-5 flex flex-col gap-3">
+        <CourierProfileCard />
+        {IS_DEV && <DevSampleDeliveryButton onAdded={refresh} />}
       </div>
 
       <div className="mt-5">

@@ -161,6 +161,25 @@ describe('mockCourierApi', () => {
     expect(failedOnly.content.every((c) => c.outcome === 'FAILED_ATTEMPT')).toBe(true);
   });
 
+  it('keeps the courier profile with today’s numbers and its status', async () => {
+    const profile = await mockCourierApi.getProfile();
+    expect(profile).toEqual(
+      expect.objectContaining({ fullName: 'Ramesh Perera', status: 'ONLINE', assigned: 2 }),
+    );
+    expect((await mockCourierApi.changeStatus('OFFLINE')).status).toBe('OFFLINE');
+    expect((await mockCourierApi.getProfile()).status).toBe('OFFLINE');
+  });
+
+  it('adds a sample delivery to today’s list and sets the courier online', async () => {
+    await mockCourierApi.changeStatus('ON_BREAK');
+    const sample = await mockCourierApi.addSampleDelivery();
+
+    const today = await mockCourierApi.getToday();
+    expect(today.deliveries.map((d) => d.trackingNumber)).toContain(sample.trackingNumber);
+    expect(await mockCourierApi.getDelivery(sample.parcelId)).not.toBeNull();
+    expect((await mockCourierApi.getProfile()).status).toBe('ONLINE');
+  });
+
   it('only includes the pickup stop in the list while the parcel waits for pickup', async () => {
     const { deliveries } = await mockCourierApi.getToday();
     expect(deliveries.filter((d) => d.pickup !== null).map((d) => d.currentStatus)).toEqual([

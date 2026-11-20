@@ -153,6 +153,33 @@ export interface CompletedFilter {
   size?: number;
 }
 
+/** The courier's availability: only Online couriers get new deliveries. */
+export type CourierStatus = 'ONLINE' | 'ON_BREAK' | 'OFFLINE';
+
+/** The courier's own profile card (GET /courier/profile). */
+export interface CourierProfile {
+  courierId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  vehicleType: string;
+  vehicleRegistration: string;
+  status: CourierStatus;
+  /** False once the dispatcher has deactivated the courier (they can't go online). */
+  active: boolean;
+  /** Zone names; empty means the courier can be given parcels anywhere. */
+  serviceAreas: string[];
+  assigned: number;
+  inProgress: number;
+  completedToday: number;
+}
+
+/** Dev builds only: the sample delivery just given to the courier. */
+export interface SampleDelivery {
+  parcelId: string;
+  trackingNumber: string;
+}
+
 /**
  * The courier app's API, real or mock. Look-ups resolve to null when the delivery isn't the
  * courier's. Changes reject with an ApiRequestError (404 not theirs, 409 the parcel can't take that
@@ -174,4 +201,10 @@ export interface CourierApi {
   getCompleted(filter: CompletedFilter): Promise<Paged<CompletedDelivery>>;
   /** A proof photo (`proofPhotoUrl`), fetched with the sign-in token. */
   getProofPhoto(proofPhotoUrl: string): Promise<Blob>;
+  /** The signed-in courier's profile card. */
+  getProfile(): Promise<CourierProfile>;
+  /** Online / On break / Offline (409 when a deactivated courier asks to go online). */
+  changeStatus(status: CourierStatus): Promise<CourierProfile>;
+  /** Dev backend only: books a sample parcel and assigns it to the courier. */
+  addSampleDelivery(): Promise<SampleDelivery>;
 }
