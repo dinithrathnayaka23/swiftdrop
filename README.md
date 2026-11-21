@@ -13,13 +13,15 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4-FF6600?logo=rabbitmq&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-8-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?logo=kubernetes&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [Overview](#overview) •
 [Architecture](#architecture) •
 [Getting started](#getting-started) •
-[Development](#local-development) •
+[Kubernetes](#run-on-kubernetes) •
 [Testing](#testing) •
+[Docs](#documentation) •
 [Contributing](#contributing)
 
 </div>
@@ -38,12 +40,20 @@ SwiftDrop is a web platform that connects everyone involved in getting a parcel 
 | **Couriers** | See their jobs, update delivery status and record proof of delivery or failure reasons |
 | **Anyone** | Track a parcel publicly with its tracking number |
 
-Status changes flow through an event bus, so notifications (email, SMS, live updates) and merchant webhooks
-happen asynchronously without slowing down the core workflow.
+Status changes flow through RabbitMQ, so notifications (email, mock SMS, in-app), live tracking updates and
+merchant webhooks happen asynchronously without slowing down the core workflow.
 
-> [!NOTE]
-> The project is in its **foundation stage**: infrastructure, security baseline, module structure and the UI shell
-> are in place, and features are being built module by module.
+### Features
+
+| Area | What's built |
+|------|--------------|
+| **Customer** | Sign-up with email confirmation, **Sign in with Google** (OAuth 2.0), booking with a fee estimate before confirming, live tracking (SSE), delivery history, PDF receipt, notification preferences |
+| **Public tracking** | Mobile-friendly page at `/track/<tracking number>`, updating live |
+| **Merchant** | Registration with admin approval, API keys and OAuth 2.0 client credentials, order API, signed webhooks with automatic retry, dashboard of orders and their states |
+| **Courier** | Phone-first app: today's deliveries, status updates with a note, recipient name or photo proof, failure with a reason |
+| **Dispatcher / admin** | Unassigned parcels and assignment, courier workload, users, couriers, merchants, service areas and pricing rules, reports (deliveries per day, success/failure rate), live delivery tracking, system settings |
+| **AI assistant** (bonus) | Customer chatbot that answers "Where is my parcel?" or "How much to send 2 kg to Kandy?" by calling backend services as tools ([docs/assistant.md](docs/assistant.md)) |
+| **Kubernetes** (bonus) | Helm chart with ConfigMap, Secret, Services, StatefulSets and a Traefik Ingress ([docs/kubernetes.md](docs/kubernetes.md)) |
 
 ## Architecture
 
@@ -57,7 +67,7 @@ flowchart LR
 
     subgraph be["<b>backend</b> · Spring Boot"]
         direction TB
-        mods["identity · user · parcel · dispatch<br/>merchant · notification · config · reporting"]
+        mods["identity · user · usermanagement · booking · pricing<br/>parcel · dispatch · delivery · tracking · realtime<br/>merchant · notification · reporting · config · settings · assistant"]
         common["common: security · errors · messaging · logging"]
         mods --- common
     end
@@ -80,14 +90,18 @@ flowchart LR
 
 | Module | Responsibility |
 |--------|----------------|
-| `identity` | Sign-up, login, JWT issuing, Google OAuth |
-| `user` | Profiles, roles, merchant approval |
-| `parcel` | Booking, fee estimation, parcel lifecycle, public tracking |
-| `dispatch` | Courier assignment, status updates, proof of delivery and failures |
-| `merchant` | API keys, merchant order API, webhooks |
-| `notification` | Event consumers, email / SMS, live updates |
-| `config` | Delivery zones and pricing rules |
-| `reporting` | Operational and business reports |
+| `identity` | Sign-up, sign-in, email confirmation, password reset, JWT and sessions, Google sign-in |
+| `user`, `usermanagement` | Profiles, roles and account status, admin user management |
+| `booking`, `pricing` | Customer bookings, fee estimates, pricing rules |
+| `parcel` | Parcel lifecycle, status history, receipts, status events |
+| `dispatch` | Assignment, courier management and workload, failed deliveries |
+| `delivery` | Courier app API: today's deliveries, status updates, proof photos, failures |
+| `tracking`, `realtime` | Public tracking, live streams (SSE) for customers and the admin map |
+| `merchant` | Merchant portal, approval, API keys, OAuth client credentials, order API, webhooks with retry |
+| `notification` | Status-event consumer: email, mock SMS and in-app notifications, preferences |
+| `reporting` | Deliveries per day, success/failure rate and other reports |
+| `config`, `settings` | Service areas, system settings and maintenance mode |
+| `assistant` | AI delivery assistant (Gemini, with OpenRouter, Grok and offline fallbacks) |
 
 ## Tech stack
 
@@ -247,16 +261,18 @@ curl -X POST http://localhost:8080/api/v1/orders \
   -d '{
     "externalOrderReference": "STORE-10042",
     "pickupAddress": {
+      "contactName": "SwiftDrop Warehouse",
+      "contactPhone": "+94112223344",
       "addressLine1": "10 Main Street",
       "city": "Colombo",
-      "recipientName": "SwiftDrop Warehouse",
-      "phone": "+94112223344"
+      "district": "Colombo"
     },
     "dropoffAddress": {
+      "contactName": "Jane Customer",
+      "contactPhone": "+94771234567",
       "addressLine1": "25 Lake Road",
       "city": "Kandy",
-      "recipientName": "Jane Customer",
-      "phone": "+94771234567"
+      "district": "Kandy"
     },
     "parcelType": "PARCEL",
     "weightKg": 2
@@ -291,11 +307,28 @@ npm run build
 
 | Report | Location |
 |--------|----------|
-| Backend coverage (JaCoCo) | `backend/target/site/jacoco/index.html` |
+| Backend coverage (JaCoCo, unit + integration merged) | `backend/target/site/jacoco/index.html` |
 | Frontend coverage | `frontend/coverage/index.html` (`npm run test:coverage`) |
 
+**Latest results** (`main`, 22 November 2026): all 1,809 tests pass.
+
+| Suite | Tests | Coverage |
+|-------|------:|----------|
+| Backend unit (JUnit 6, Mockito) | 965 | Merged with integration: **95.2%** instructions, 94.9% lines, 80.9% branches |
+| Backend integration (Testcontainers: PostgreSQL, RabbitMQ, Redis) | 186 | (included above) |
+| Frontend (Jest, React Testing Library) | 658 | **83.4%** statements, 84.8% lines, 77.3% branches |
+
+Tests that match the assignment's testing requirements:
+
+- **Event flow:** `InfrastructureIT` (events round-trip through RabbitMQ), `ParcelStatusServiceIT` (every status change
+  publishes an event), `PublicLiveTrackingIT` (a status change reaches an open SSE stream), `WebhookIT` (signed webhooks
+  and retries), `NotificationEventListenerTest`.
+- **Authorization:** `CourierDeliveriesIT.aCourierCannotSeeAnotherCouriersParcel`, `MerchantPortalIT` (merchants see only
+  their own orders), `ApiKeyIT` (revoked keys and their OAuth tokens are refused), `AuthFlowIT`, `UserManagementIT`.
+
 Every pull request is checked by [GitHub Actions](.github/workflows/ci.yml): backend build and tests with coverage,
-frontend lint, format, test and build, and Docker image builds.
+frontend lint, format, test and build, Helm chart validation, and Docker image builds. Pushes to `main` also publish
+the images to GHCR.
 
 ## Project structure
 
@@ -304,7 +337,7 @@ swiftdrop/
 ├── backend/                         Spring Boot application
 │   ├── src/main/java/com/swiftdrop/
 │   │   ├── common/                  Shared: security (JWT), error handling, messaging, logging, CORS
-│   │   └── <module>/                identity, user, parcel, dispatch, merchant, notification, config, reporting
+│   │   └── <module>/                identity, booking, parcel, dispatch, delivery, merchant, notification, ...
 │   │       ├── controller/          REST endpoints
 │   │       ├── service/             Business logic, the module's public entry point
 │   │       ├── repository/          Data access (private to the module)
@@ -324,7 +357,7 @@ swiftdrop/
 │       ├── shared/                  Layouts, route guards and error pages
 │       ├── routes/                  Router, paths for every screen, feature registry
 │       └── context/  hooks/  types/  utils/
-├── docs/                            Contributing guide and API conventions
+├── docs/                            Module guides, API conventions, data model, Kubernetes
 ├── docker/                          Additional Docker configuration
 ├── infra/                           Helm chart (helm/swiftdrop) and Kubernetes deploy script (k8s/)
 ├── .github/                         CI workflow and PR template
@@ -357,7 +390,7 @@ Full conventions: [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md).
 
 ### Authentication
 
-Email and password sign-in with stateless JWTs (Google sign-in is planned).
+Email and password sign-in with short-lived JWTs, plus Sign in with Google for customers (`POST /api/v1/auth/google`).
 
 | Endpoint | Access | Purpose |
 |----------|--------|---------|
@@ -381,24 +414,41 @@ Email and password sign-in with stateless JWTs (Google sign-in is planned).
 
 **Maintenance mode** (System Settings): while it's on, every API call from anyone but the admin gets `503 MAINTENANCE_MODE`, only the admin portal accepts sign-ins, and the web app shows a maintenance page. The admin keeps full access to switch it off.
 
-Sessions: sign-in returns a 1-hour **access token** and a **refresh token**. The web app renews the access
+Sessions: sign-in returns a 15-minute **access token** (`JWT_EXPIRY`) and a **refresh token**. The web app renews the access
 token in the background, so users stay signed in while the refresh token is valid: **30 days with
 "Remember me"** (renewed on every use, kept after the browser closes) or **at most 1 day without it** (forgotten
 when the browser closes). Changing the password ends all existing sessions.
 
 Passwords are stored as BCrypt hashes. There is exactly one admin (enforced by a unique index), and its
-credentials are always `ADMIN_EMAIL` / `ADMIN_PASSWORD`: no self-registration and no password reset by email. Couriers will be created by admins (dispatch module).
+credentials are always `ADMIN_EMAIL` / `ADMIN_PASSWORD`: no self-registration and no password reset by email. Admins create couriers (`/api/v1/admin/couriers`).
 
 Each role has its own sign-in page, and the backend refuses a sign-in on the wrong one (`WRONG_SIGN_IN_PAGE`,
 only after the correct password): customers and merchants at `/login`, couriers at `/courier/login`, admins at
 `/admin/login`. Google sign-in is only on the main page, so staff always use their password.
 
+## Documentation
+
+| Topic | Guide |
+|-------|-------|
+| Data model and migrations | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) |
+| API conventions and errors | [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md) |
+| Module ownership | [docs/MODULE_OWNERSHIP.md](docs/MODULE_OWNERSHIP.md) |
+| Parcels and status flow | [docs/parcel.md](docs/parcel.md) |
+| Dispatch and assignment | [docs/dispatch.md](docs/dispatch.md) |
+| Courier app | [docs/courier-app.md](docs/courier-app.md) |
+| Public and live tracking | [docs/tracking.md](docs/tracking.md), [docs/realtime.md](docs/realtime.md) |
+| Merchant portal, API keys, webhooks | [docs/merchant-portal.md](docs/merchant-portal.md) |
+| Service areas and settings | [docs/config.md](docs/config.md) |
+| AI assistant | [docs/assistant.md](docs/assistant.md), [docs/assistant-eval.md](docs/assistant-eval.md) |
+| Kubernetes deployment | [docs/kubernetes.md](docs/kubernetes.md) |
+
 ## Contributing
 
-1. Branch from `main`: `feature/<short-name>`, `fix/<short-name>` or `chore/<short-name>`.
+1. Branch from `development`: `feature/<short-name>`, `fix/<short-name>` or `chore/<short-name>`.
 2. Write [Conventional Commits](https://www.conventionalcommits.org/), e.g. `feat(parcel): add fee estimate endpoint`.
 3. Add database changes as a **new** Flyway migration; never edit a merged one.
-4. Open a pull request using the template; CI must pass and at least one review is required.
+4. Open a pull request into `development` using the template; CI must pass and at least one review is required.
+   `development` is merged into `main` for releases.
 
 Read the full guide in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before your first pull request.
 
