@@ -8,8 +8,9 @@ import static org.mockito.Mockito.when;
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.SecurityErrorHandler;
 import com.swiftdrop.common.security.jwt.JwtService;
+import com.swiftdrop.merchant.api.ApiKeyApi;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import jakarta.servlet.FilterChain;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,7 +28,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 class ApiKeyAuthenticationFilterTest {
 
     @Mock
-    private MerchantApiKeyService merchantApiKeyService;
+    private ApiKeyApi apiKeyApi;
 
     @Mock
     private JwtService jwtService;
@@ -47,7 +48,7 @@ class ApiKeyAuthenticationFilterTest {
     private final MockHttpServletResponse response = new MockHttpServletResponse();
 
     private void filter() throws Exception {
-        new ApiKeyAuthenticationFilter(merchantApiKeyService, jwtService, securityErrorHandler)
+        new ApiKeyAuthenticationFilter(apiKeyApi, jwtService, securityErrorHandler)
                 .doFilter(request, response, chain);
     }
 
@@ -61,14 +62,14 @@ class ApiKeyAuthenticationFilterTest {
                 org.mockito.ArgumentMatchers.same(request),
                 org.mockito.ArgumentMatchers.same(response),
                 org.mockito.ArgumentMatchers.any());
-        verifyNoInteractions(merchantApiKeyService, chain);
+        verifyNoInteractions(apiKeyApi, chain);
     }
 
     @Test
     void invalidKeyIsRejectedBeforeTheChain() throws Exception {
         request.setRequestURI(ApiPaths.ORDERS + "/SD7KQ2MX9TRB4H");
         request.addHeader("X-API-Key", "invalid");
-        when(merchantApiKeyService.authenticate("invalid")).thenReturn(Optional.empty());
+        when(apiKeyApi.validate("invalid")).thenReturn(Optional.empty());
 
         filter();
 
@@ -83,13 +84,14 @@ class ApiKeyAuthenticationFilterTest {
     void validKeySetsMerchantPrincipalAndAuthority() throws Exception {
         request.setRequestURI(ApiPaths.ORDERS + "/SD7KQ2MX9TRB4H/status");
         request.addHeader("X-API-Key", "valid");
-        AuthenticatedMerchant merchant = new AuthenticatedMerchant(UUID.randomUUID(), UUID.randomUUID());
-        when(merchantApiKeyService.authenticate("valid")).thenReturn(Optional.of(merchant));
+        ValidatedApiKey key = new ValidatedApiKey(UUID.randomUUID(), UUID.randomUUID(), "key-123");
+        when(apiKeyApi.validate("valid")).thenReturn(Optional.of(key));
 
         filter();
 
         var authentication = SecurityContextHolder.getContext().getAuthentication();
-        assertThat(authentication.getPrincipal()).isEqualTo(merchant);
+        assertThat(authentication.getPrincipal())
+                .isEqualTo(new AuthenticatedMerchant(key.merchantId(), key.apiCredentialId(), key.keyId()));
         assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
                 .containsExactly("ROLE_MERCHANT_API");
         verify(chain).doFilter(request, response);
@@ -112,7 +114,7 @@ class ApiKeyAuthenticationFilterTest {
         assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
                 .containsExactly("ROLE_MERCHANT_API");
         verify(chain).doFilter(request, response);
-        verifyNoInteractions(merchantApiKeyService);
+        verifyNoInteractions(apiKeyApi);
     }
 
     @Test
@@ -122,6 +124,6 @@ class ApiKeyAuthenticationFilterTest {
         filter();
 
         verify(chain).doFilter(request, response);
-        verifyNoInteractions(merchantApiKeyService, securityErrorHandler);
+        verifyNoInteractions(apiKeyApi, securityErrorHandler);
     }
 }

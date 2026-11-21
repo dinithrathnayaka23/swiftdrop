@@ -10,12 +10,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.swiftdrop.common.security.SecurityConfig;
 import com.swiftdrop.common.security.SecurityErrorHandler;
 import com.swiftdrop.common.security.jwt.JwtService;
-import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
+import com.swiftdrop.merchant.api.ApiKeyApi;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import com.swiftdrop.merchant.dto.request.CreateOrderRequest;
 import com.swiftdrop.merchant.dto.response.OrderResponse;
 import com.swiftdrop.merchant.exception.MerchantNotApprovedException;
 import com.swiftdrop.merchant.model.MerchantApprovalStatus;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import com.swiftdrop.merchant.service.OrderApiService;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import java.util.Optional;
@@ -37,8 +37,8 @@ class OrderApiControllerWebMvcTest {
     static class SecurityTestConfig {
 
         @Bean
-        MerchantApiKeyService merchantApiKeyService() {
-            return mock(MerchantApiKeyService.class);
+        ApiKeyApi apiKeyApi() {
+            return mock(ApiKeyApi.class);
         }
 
         @Bean
@@ -56,7 +56,7 @@ class OrderApiControllerWebMvcTest {
     private MockMvc mockMvc;
 
     @Autowired
-    private MerchantApiKeyService merchantApiKeyService;
+    private ApiKeyApi apiKeyApi;
 
     @Autowired
     private OrderApiService orderApiService;
@@ -88,8 +88,8 @@ class OrderApiControllerWebMvcTest {
     }
 
     private void authenticateKey() {
-        when(merchantApiKeyService.authenticate("valid-key"))
-                .thenReturn(Optional.of(new AuthenticatedMerchant(merchantId, UUID.randomUUID(), "key-123")));
+        when(apiKeyApi.validate("valid-key"))
+                .thenReturn(Optional.of(new ValidatedApiKey(merchantId, UUID.randomUUID(), "key-123")));
     }
 
     @Test
@@ -134,7 +134,7 @@ class OrderApiControllerWebMvcTest {
 
     @Test
     void unapprovedMerchantReturns403() throws Exception {
-        when(merchantApiKeyService.authenticate("pending-key"))
+        when(apiKeyApi.validate("pending-key"))
                 .thenThrow(MerchantNotApprovedException.forStatus(MerchantApprovalStatus.PENDING));
 
         mockMvc.perform(post("/api/v1/orders")

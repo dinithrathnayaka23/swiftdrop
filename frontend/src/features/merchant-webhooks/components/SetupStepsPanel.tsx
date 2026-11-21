@@ -15,7 +15,7 @@ export default function SetupStepsPanel() {
       <ol className="space-y-5">
         <li className="flex gap-3">
           <StepNumber number={1} />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-medium text-slate-900">Create an API key</p>
             <p className="mt-1 text-sm text-slate-500">
               Generate a key for your approved merchant account and keep it on your server.
@@ -24,7 +24,7 @@ export default function SetupStepsPanel() {
         </li>
         <li className="flex gap-3">
           <StepNumber number={2} />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-medium text-slate-900">Configure a webhook</p>
             <p className="mt-1 text-sm text-slate-500">
               Add your HTTPS endpoint on the Delivery Updates page to receive signed status events.
@@ -33,7 +33,7 @@ export default function SetupStepsPanel() {
         </li>
         <li className="flex gap-3">
           <StepNumber number={3} />
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="font-medium text-slate-900">Create an order</p>
             <p className="mt-1 text-sm text-slate-500">
               Send your first order using the merchant API.

@@ -12,7 +12,8 @@ import static org.mockito.Mockito.when;
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
 import com.swiftdrop.merchant.config.MerchantApiKeyProperties;
-import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
+import com.swiftdrop.merchant.api.MerchantSummary;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import com.swiftdrop.merchant.dto.response.ApiKeyResponse;
 import com.swiftdrop.merchant.dto.response.GeneratedApiKeyResponse;
 import com.swiftdrop.merchant.exception.MerchantNotApprovedException;
@@ -31,6 +32,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -96,11 +99,43 @@ class MerchantApiKeyServiceTest {
         MerchantApiCredential credential = new MerchantApiCredential();
         String rawKey = storedKey(credential);
 
-        Optional<AuthenticatedMerchant> result = apiKeyService.authenticate(rawKey);
+        Optional<ValidatedApiKey> result = apiKeyService.validate(rawKey);
 
-        assertThat(result).contains(new AuthenticatedMerchant(
+        assertThat(result).contains(new ValidatedApiKey(
                 merchant.getId(), credential.getId(), credential.getKeyIdentifier()));
         assertThat(credential.getLastUsedAt()).isNotNull();
+    }
+
+    @Test
+    void validKeyGivesItsMerchantWithoutCredentials() {
+        merchant.setBusinessName("BrightMart");
+        String rawKey = storedKey(new MerchantApiCredential());
+
+        Optional<MerchantSummary> result = apiKeyService.getMerchantForKey(rawKey);
+
+        assertThat(result).hasValueSatisfying(summary -> {
+            assertThat(summary.id()).isEqualTo(merchant.getId());
+            assertThat(summary.businessName()).isEqualTo("BrightMart");
+            assertThat(summary.approved()).isTrue();
+        });
+    }
+
+    @Test
+    void invalidKeyGivesNoMerchant() {
+        MerchantApiCredential revoked = new MerchantApiCredential();
+        revoked.setRevokedAt(Instant.now().minusSeconds(1));
+
+        assertThat(apiKeyService.getMerchantForKey(storedKey(revoked))).isEmpty();
+        assertThat(apiKeyService.getMerchantForKey("not-a-key")).isEmpty();
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    void missingKeyIsRejectedWithoutADatabaseLookUp(String rawKey) {
+        assertThat(apiKeyService.validate(rawKey)).isEmpty();
+        assertThat(apiKeyService.getMerchantForKey(rawKey)).isEmpty();
+        verifyNoInteractions(credentialRepository);
     }
 
     @Test
@@ -109,7 +144,7 @@ class MerchantApiKeyServiceTest {
         Instant lastUsed = Instant.now().minusSeconds(10);
         credential.setLastUsedAt(lastUsed);
 
-        apiKeyService.authenticate(storedKey(credential));
+        apiKeyService.validate(storedKey(credential));
 
         assertThat(credential.getLastUsedAt()).isEqualTo(lastUsed);
     }
@@ -119,19 +154,19 @@ class MerchantApiKeyServiceTest {
         String rawKey = storedKey(new MerchantApiCredential());
         String tampered = rawKey.substring(0, rawKey.length() - 1) + (rawKey.endsWith("A") ? "B" : "A");
 
-        assertThat(apiKeyService.authenticate(tampered)).isEmpty();
+        assertThat(apiKeyService.validate(tampered)).isEmpty();
     }
 
     @Test
     void unknownKeyIsRejected() {
         when(credentialRepository.findWithMerchantByKeyIdentifier(any())).thenReturn(Optional.empty());
 
-        assertThat(apiKeyService.authenticate(codec.generate().rawKey())).isEmpty();
+        assertThat(apiKeyService.validate(codec.generate().rawKey())).isEmpty();
     }
 
     @Test
     void malformedKeyIsRejectedWithoutADatabaseLookUp() {
-        assertThat(apiKeyService.authenticate("Bearer something")).isEmpty();
+        assertThat(apiKeyService.validate("Bearer something")).isEmpty();
         verifyNoInteractions(credentialRepository);
     }
 
@@ -140,7 +175,7 @@ class MerchantApiKeyServiceTest {
         MerchantApiCredential credential = new MerchantApiCredential();
         credential.setRevokedAt(Instant.now().minus(Duration.ofHours(1)));
 
-        assertThat(apiKeyService.authenticate(storedKey(credential))).isEmpty();
+        assertThat(apiKeyService.validate(storedKey(credential))).isEmpty();
     }
 
     @Test
@@ -148,7 +183,7 @@ class MerchantApiKeyServiceTest {
         MerchantApiCredential credential = new MerchantApiCredential();
         credential.setExpiresAt(Instant.now().minusSeconds(1));
 
-        assertThat(apiKeyService.authenticate(storedKey(credential))).isEmpty();
+        assertThat(apiKeyService.validate(storedKey(credential))).isEmpty();
     }
 
     @ParameterizedTest
@@ -158,7 +193,7 @@ class MerchantApiKeyServiceTest {
         MerchantApiCredential credential = new MerchantApiCredential();
         String rawKey = storedKey(credential);
 
-        assertThatThrownBy(() -> apiKeyService.authenticate(rawKey))
+        assertThatThrownBy(() -> apiKeyService.validate(rawKey))
                 .isInstanceOf(MerchantNotApprovedException.class);
         assertThat(credential.getLastUsedAt()).isNull();
     }

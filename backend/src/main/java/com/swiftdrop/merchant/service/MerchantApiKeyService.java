@@ -2,11 +2,14 @@ package com.swiftdrop.merchant.service;
 
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.merchant.api.ApiKeyApi;
+import com.swiftdrop.merchant.api.MerchantSummary;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import com.swiftdrop.merchant.config.MerchantApiKeyProperties;
-import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
 import com.swiftdrop.merchant.dto.response.ApiKeyResponse;
 import com.swiftdrop.merchant.dto.response.GeneratedApiKeyResponse;
 import com.swiftdrop.merchant.mapper.ApiKeyMapper;
+import com.swiftdrop.merchant.mapper.MerchantMapper;
 import com.swiftdrop.merchant.model.MerchantApiCredential;
 import com.swiftdrop.merchant.repository.MerchantApiCredentialRepository;
 import com.swiftdrop.merchant.repository.MerchantRepository;
@@ -21,13 +24,14 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Merchant API keys: issues them and checks them on every order API call. The raw key is returned
- * once, when it is generated; only its hash is stored, and only key IDs are logged.
+ * Merchant API keys: issues them and, as {@link ApiKeyApi}, checks them on every order API call.
+ * The raw key is returned once, when it is generated; only its hash is stored, and only key IDs
+ * are logged.
  */
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class MerchantApiKeyService {
+public class MerchantApiKeyService implements ApiKeyApi {
 
     /** {@code last_used_at} is written at most this often, so a busy key doesn't cost a write per request. */
     static final Duration LAST_USED_PRECISION = Duration.ofMinutes(1);
@@ -97,13 +101,28 @@ public class MerchantApiKeyService {
         return new GeneratedApiKeyResponse(saved.getId(), key.keyId(), key.rawKey(), saved.getCreatedAt());
     }
 
-    /**
-     * Checks a key from the {@code X-API-Key} header. Empty when the key is malformed, unknown,
-     * wrong, revoked or expired: the caller answers 401 without saying which. A valid key of a
-     * merchant that is no longer approved throws {@link com.swiftdrop.merchant.exception.MerchantNotApprovedException} (403).
-     */
+    @Override
     @Transactional
-    public Optional<AuthenticatedMerchant> authenticate(String rawKey) {
+    public Optional<ValidatedApiKey> validate(String apiKey) {
+        return findValid(apiKey).map(credential -> new ValidatedApiKey(
+                credential.getMerchant().getId(), credential.getId(), credential.getKeyIdentifier()));
+    }
+
+    @Override
+    @Transactional
+    public Optional<MerchantSummary> getMerchantForKey(String apiKey) {
+        return findValid(apiKey).map(credential -> MerchantMapper.toSummary(credential.getMerchant()));
+    }
+
+    /**
+     * The active credential matching the raw key, or empty when the key is null, malformed, unknown,
+     * wrong, revoked or expired. A valid key of a merchant that is no longer approved throws
+     * {@link com.swiftdrop.merchant.exception.MerchantNotApprovedException} (403). Records the use.
+     */
+    private Optional<MerchantApiCredential> findValid(String rawKey) {
+        if (rawKey == null || rawKey.isBlank()) {
+            return Optional.empty();
+        }
         Instant now = Instant.now();
         Optional<MerchantApiCredential> found = codec.keyIdOf(rawKey)
                 .flatMap(credentialRepository::findWithMerchantByKeyIdentifier)
@@ -117,8 +136,7 @@ public class MerchantApiKeyService {
         if (credential.getLastUsedAt() == null || credential.getLastUsedAt().isBefore(now.minus(LAST_USED_PRECISION))) {
             credential.setLastUsedAt(now);
         }
-        return Optional.of(new AuthenticatedMerchant(
-                credential.getMerchant().getId(), credential.getId(), credential.getKeyIdentifier()));
+        return found;
     }
 
     /** Not found rather than forbidden for another merchant's key, so key IDs can't be probed. */

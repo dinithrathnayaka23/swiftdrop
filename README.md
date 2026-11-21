@@ -326,6 +326,7 @@ swiftdrop/
 - Base path: **`/api/v1`**. Interactive documentation at `/swagger-ui.html` (dev profile).
 - Authentication: `Authorization: Bearer <JWT>`. Roles: `CUSTOMER`, `MERCHANT`, `COURIER`, `DISPATCHER_ADMIN`.
 - Public endpoints: `/api/v1/auth/**`, `/api/v1/public/tracking/**`, `/api/v1/health`.
+- Merchant portal, API keys and the `ApiKeyApi` contract: [docs/merchant-portal.md](docs/merchant-portal.md).
 - Errors share one format:
 
 ```json

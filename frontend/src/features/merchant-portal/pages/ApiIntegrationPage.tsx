@@ -60,9 +60,10 @@ function KeysTable({
   onAction: (action: PendingAction) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-slate-200">
+    // relative: keeps the table's sr-only labels (position: absolute) inside this scroll box
+    <div className="relative overflow-x-auto rounded-xl border border-slate-200">
       <table className="w-full min-w-[640px] text-left text-sm">
-        <thead className="bg-slate-50 text-xs font-medium text-slate-600">
+        <thead className="bg-slate-50 text-xs font-medium whitespace-nowrap text-slate-600">
           <tr>
             <th scope="col" className="px-4 py-3 font-medium">
               Key
@@ -86,7 +87,9 @@ function KeysTable({
             const status = STATUS_STYLES[key.status];
             return (
               <tr key={key.apiCredentialId}>
-                <td className="px-4 py-3 font-mono text-slate-900">sd_{key.keyId}_••••</td>
+                <td className="px-4 py-3 font-mono whitespace-nowrap text-slate-900">
+                  sd_{key.keyId}_••••
+                </td>
                 <td className="px-4 py-3">
                   <span
                     className={cn(
@@ -97,11 +100,11 @@ function KeysTable({
                     {status.label}
                   </span>
                 </td>
-                <td className="px-4 py-3 text-slate-700">
+                <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                   {formatDate(key.createdAt)}
                   <span className="block text-xs text-slate-500">{formatTime(key.createdAt)}</span>
                 </td>
-                <td className="px-4 py-3 text-slate-700">
+                <td className="px-4 py-3 whitespace-nowrap text-slate-700">
                   {key.lastUsedAt ? formatRelative(key.lastUsedAt) : 'Never'}
                 </td>
                 <td className="px-4 py-3">
@@ -186,7 +189,7 @@ export default function ApiIntegrationPage() {
       {newKey && <NewKeyBanner apiKey={newKey} onDone={() => setNewKey(null)} />}
       {error && <Alert tone="error">{error}</Alert>}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_420px]">
+      <div className="grid grid-cols-1 gap-6 2xl:grid-cols-[minmax(0,1fr)_420px] 2xl:items-start">
         <SectionCard
           title="API Keys"
           subtitle="Send a key in the X-API-Key header of every order API request."
