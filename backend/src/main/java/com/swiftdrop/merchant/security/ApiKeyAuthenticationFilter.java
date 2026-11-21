@@ -78,8 +78,10 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
         if (authorization == null || !authorization.startsWith("Bearer ")) {
             return null;
         }
+        // The token's key may have been revoked, or its merchant suspended, since it was issued.
         return jwtService.parseMerchantApiToken(authorization.substring("Bearer ".length()))
-                .map(token -> new AuthenticatedMerchant(token.merchantId(), token.apiCredentialId()))
+                .flatMap(token -> apiKeyApi.validateCredential(token.merchantId(), token.apiCredentialId()))
+                .map(key -> new AuthenticatedMerchant(key.merchantId(), key.apiCredentialId(), key.keyId()))
                 .orElse(null);
     }
 

@@ -1,6 +1,7 @@
 package com.swiftdrop.merchant.api;
 
 import java.util.Optional;
+import java.util.UUID;
 
 /**
  * Public API for merchant API keys (scope: Member 8, used by Member 9's order API and webhooks).
@@ -24,4 +25,11 @@ public interface ApiKeyApi {
 
     /** The approved merchant that owns this key. */
     Optional<MerchantSummary> getMerchantForKey(String apiKey);
+
+    /**
+     * Checks the key behind an issued OAuth access token by its id, with the same rules as
+     * {@link #validate(String)}: empty once the key is revoked or expired (or isn't this merchant's),
+     * and 403 once the merchant is no longer approved. So a token stops working with its key.
+     */
+    Optional<ValidatedApiKey> validateCredential(UUID merchantId, UUID apiCredentialId);
 }
