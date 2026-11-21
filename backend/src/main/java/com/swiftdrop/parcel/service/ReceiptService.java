@@ -37,9 +37,14 @@ public class ReceiptService {
         return "SDR-" + (trackingNumber.startsWith("SD") ? trackingNumber.substring(2) : trackingNumber);
     }
 
-    /** The URL the receipt is downloaded from, stored as the receipt's {@code document_url}. */
+    /** The URL a customer downloads the receipt from, stored as the receipt's {@code document_url}. */
     static String documentUrl(UUID parcelId) {
         return ApiPaths.API_V1 + "/customer/parcels/" + parcelId + "/receipt";
+    }
+
+    /** The URL a merchant downloads the receipt from, stored as the receipt's {@code document_url}. */
+    static String merchantDocumentUrl(String trackingNumber) {
+        return ApiPaths.API_V1 + "/merchant/orders/" + trackingNumber + "/receipt";
     }
 
     /**
@@ -52,8 +57,29 @@ public class ReceiptService {
         Parcel parcel = parcelRepository.findWithDetailsById(parcelId)
                 .filter(found -> customerUserId.equals(found.getCustomerUserId()))
                 .orElseThrow(() -> new NotFoundException("Delivery not found"));
+        return receipt(parcel, documentUrl(parcelId));
+    }
 
-        receiptRepository.insertIfAbsent(parcelId, receiptNumber(parcel.getTrackingNumber()), documentUrl(parcelId));
+    /**
+     * The receipt of one of the merchant's own orders, by tracking number (case and surrounding
+     * spaces are ignored).
+     *
+     * @throws NotFoundException if there is no such order, or it is another merchant's order or a
+     *                           customer booking (the same answer, so tracking numbers can't be probed)
+     */
+    @Transactional
+    public ReceiptDocument receiptForMerchant(UUID merchantId, String trackingNumber) {
+        Parcel parcel = parcelRepository.findByTrackingNumber(ParcelService.normalizeTrackingNumber(trackingNumber))
+                .filter(found -> merchantId.equals(found.getMerchantId()))
+                .flatMap(found -> parcelRepository.findWithDetailsById(found.getId()))
+                .orElseThrow(() -> new NotFoundException("Order not found"));
+        return receipt(parcel, merchantDocumentUrl(parcel.getTrackingNumber()));
+    }
+
+    /** Records the receipt number on the first download and draws the PDF. */
+    private ReceiptDocument receipt(Parcel parcel, String documentUrl) {
+        UUID parcelId = parcel.getId();
+        receiptRepository.insertIfAbsent(parcelId, receiptNumber(parcel.getTrackingNumber()), documentUrl);
         DeliveryReceipt receipt = receiptRepository.findByParcelId(parcelId).orElseThrow();
 
         byte[] pdf = renderer.render(new ReceiptContent(receipt.getReceiptNumber(), receipt.getGeneratedAt(),
