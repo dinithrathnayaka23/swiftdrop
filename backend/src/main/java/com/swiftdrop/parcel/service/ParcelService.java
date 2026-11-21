@@ -1,9 +1,14 @@
 package com.swiftdrop.parcel.service;
 
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.createdBetween;
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.hasStatus;
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.merchantSearch;
+import static com.swiftdrop.parcel.repository.ParcelSpecifications.ownedByMerchant;
 import static com.swiftdrop.parcel.service.Texts.trimToNull;
 
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.parcel.dto.MerchantParcelFilter;
 import com.swiftdrop.parcel.dto.NewAddress;
 import com.swiftdrop.parcel.dto.NewParcel;
 import com.swiftdrop.parcel.dto.ParcelDetails;
@@ -32,8 +37,10 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 /**
  * Public API of the parcel module for creating and finding parcels. Other modules use this, never
@@ -160,6 +167,23 @@ public class ParcelService {
     public Page<ParcelDetails> listByMerchant(UUID merchantId, Pageable pageable) {
         return parcelRepository.findByMerchantId(merchantId, withDefaultSort(pageable))
                 .map(ParcelMapper::toDetails);
+    }
+
+    /**
+     * The merchant's orders that match every given filter, newest first unless {@code pageable} has
+     * a sort. LIKE wildcards in the search text match themselves.
+     */
+    @Transactional(readOnly = true)
+    public Page<ParcelDetails> listByMerchant(UUID merchantId, MerchantParcelFilter filter, Pageable pageable) {
+        Specification<Parcel> spec = ownedByMerchant(merchantId)
+                .and(createdBetween(filter.createdFrom(), filter.createdTo()));
+        if (StringUtils.hasText(filter.search())) {
+            spec = spec.and(merchantSearch(filter.search()));
+        }
+        if (filter.status() != null) {
+            spec = spec.and(hasStatus(List.of(filter.status().name())));
+        }
+        return parcelRepository.findAll(spec, withDefaultSort(pageable)).map(ParcelMapper::toDetails);
     }
 
     /**
