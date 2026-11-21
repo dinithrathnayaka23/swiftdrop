@@ -4,6 +4,7 @@ import type {
   ApiKey,
   GeneratedApiKey,
   MerchantOrderDetail,
+  MerchantOrderFilters,
   MerchantOrderSummary,
   MerchantProfile,
   Paged,
@@ -16,10 +17,19 @@ export const merchantPortalApi = {
   /** Number of the merchant's orders per status (every status, 0 when none). */
   getOrderCounts: () => request(() => apiClient.get<StatusCounts>('/merchant/orders/counts')),
 
-  /** The merchant's orders, newest first. */
-  listOrders: (page: number, size: number) =>
+  /** The merchant's orders, newest first, matching every given filter. 400 for a bad filter. */
+  listOrders: (page: number, size: number, filters: MerchantOrderFilters = {}) =>
     request(() =>
-      apiClient.get<Paged<MerchantOrderSummary>>('/merchant/orders', { params: { page, size } }),
+      apiClient.get<Paged<MerchantOrderSummary>>('/merchant/orders', {
+        params: {
+          page,
+          size,
+          search: filters.search || undefined,
+          status: filters.status || undefined,
+          from: filters.from || undefined,
+          to: filters.to || undefined,
+        },
+      }),
     ),
 
   /** One order with its timeline; null when it doesn't exist or isn't this merchant's. */

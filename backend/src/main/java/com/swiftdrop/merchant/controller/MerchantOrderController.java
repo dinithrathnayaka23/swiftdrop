@@ -2,6 +2,7 @@ package com.swiftdrop.merchant.controller;
 
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.AuthenticatedUser;
+import com.swiftdrop.merchant.dto.request.MerchantOrderFilter;
 import com.swiftdrop.merchant.dto.response.MerchantOrderDetailResponse;
 import com.swiftdrop.merchant.dto.response.MerchantOrderSummaryResponse;
 import com.swiftdrop.merchant.service.MerchantAccessService;
@@ -34,11 +35,21 @@ public class MerchantOrderController {
         return orderService.counts(merchantIdOf(user));
     }
 
+    /**
+     * The merchant's orders, newest first. Every filter is optional and they combine: {@code search}
+     * (tracking number, order reference, recipient or city), {@code status}, and the creation days
+     * {@code from} and {@code to} ({@code yyyy-MM-dd}, both included). Bad values answer 400.
+     */
     @GetMapping
     public PagedModel<MerchantOrderSummaryResponse> list(@AuthenticationPrincipal AuthenticatedUser user,
+                                                         @RequestParam(required = false) String search,
+                                                         @RequestParam(required = false) String status,
+                                                         @RequestParam(required = false) String from,
+                                                         @RequestParam(required = false) String to,
                                                          @RequestParam(defaultValue = "0") int page,
                                                          @RequestParam(defaultValue = "10") int size) {
-        return new PagedModel<>(orderService.list(merchantIdOf(user), page, size));
+        return new PagedModel<>(orderService.list(merchantIdOf(user),
+                new MerchantOrderFilter(search, status, from, to), page, size));
     }
 
     /** 404 when the order doesn't exist or belongs to someone else. */

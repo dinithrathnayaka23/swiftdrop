@@ -17,15 +17,11 @@ import {
 } from '../../shared-parcels/parcelDisplay';
 import { useApiData } from '../../shared-parcels/useApiData';
 import { merchantPortalApi } from '../api';
-import type { MerchantOrderSummary } from '../types';
+import OrderFilters from '../components/OrderFilters';
+import { filtersFromParams, hasFilters, pageFromParams, toParams } from '../orderFilters';
+import type { MerchantOrderFilters, MerchantOrderSummary } from '../types';
 
 const PAGE_SIZE = 10;
-
-/** Zero-based page from "?page=" (one-based in the URL, as people read it). */
-function pageFromParams(params: URLSearchParams): number {
-  const page = Number(params.get('page'));
-  return Number.isInteger(page) && page > 1 ? page - 1 : 0;
-}
 
 function OrdersTable({ rows }: { rows: MerchantOrderSummary[] }) {
   return (
@@ -101,15 +97,30 @@ function OrdersTable({ rows }: { rows: MerchantOrderSummary[] }) {
   );
 }
 
-/** Every order the merchant sent to SwiftDrop, newest first, ten per page. */
+/**
+ * Every order the merchant sent to SwiftDrop, newest first, ten per page. Search, status and dates
+ * are kept in the address, so a filtered list can be bookmarked or shared.
+ */
 export default function OrdersPage() {
   const [params, setParams] = useSearchParams();
   const page = pageFromParams(params);
-  const orders = useApiData(`orders-${page}`, () => merchantPortalApi.listOrders(page, PAGE_SIZE));
+  const filters = filtersFromParams(params);
+  const filtered = hasFilters(filters);
+  const orders = useApiData(JSON.stringify({ page, ...filters }), () =>
+    merchantPortalApi.listOrders(page, PAGE_SIZE, filters),
+  );
 
   function goTo(next: number) {
-    setParams(next > 0 ? { page: String(next + 1) } : {});
+    setParams(toParams(filters, next));
   }
+
+  /** A changed filter starts again at the first page. Typing replaces the history entry. */
+  function changeFilters(next: MerchantOrderFilters) {
+    const typing = next.search !== filters.search;
+    setParams(toParams(next), { replace: typing });
+  }
+
+  const total = orders.status === 'success' ? orders.data.page.totalElements : 0;
 
   return (
     <div className="mx-auto max-w-7xl space-y-6">
@@ -122,10 +133,12 @@ export default function OrdersPage() {
         title="All Orders"
         subtitle={
           orders.status === 'success'
-            ? `${orders.data.page.totalElements} order${orders.data.page.totalElements === 1 ? '' : 's'}`
+            ? `${total} ${filtered ? 'matching ' : ''}order${total === 1 ? '' : 's'}`
             : undefined
         }
       >
+        <OrderFilters filters={filters} onChange={changeFilters} />
+
         {orders.status === 'loading' && (
           <div className="space-y-2" aria-busy="true" aria-label="Loading orders">
             {Array.from({ length: 6 }, (_, i) => (
@@ -149,21 +162,33 @@ export default function OrdersPage() {
         {orders.status === 'success' && orders.data.content.length === 0 && (
           <StateView
             icon={PackageOpen}
-            title={page === 0 ? 'No orders yet' : 'No orders on this page'}
+            title={
+              page > 0
+                ? 'No orders on this page'
+                : filtered
+                  ? 'No orders match your filters'
+                  : 'No orders yet'
+            }
             message={
-              page === 0
-                ? 'Orders you send through the SwiftDrop API will show up here.'
-                : 'This page is past the end of your orders.'
+              page > 0
+                ? 'This page is past the end of your orders.'
+                : filtered
+                  ? 'Try another search, status or date range.'
+                  : 'Orders you send through the SwiftDrop API will show up here.'
             }
             actions={
-              page === 0 ? (
-                <ButtonLink to={PATHS.merchantIntegration} size="sm">
-                  Set up the API
-                </ButtonLink>
-              ) : (
+              page > 0 ? (
                 <Button variant="outline" size="sm" onClick={() => goTo(0)}>
                   Go to the first page
                 </Button>
+              ) : filtered ? (
+                <Button variant="outline" size="sm" onClick={() => changeFilters({})}>
+                  Clear filters
+                </Button>
+              ) : (
+                <ButtonLink to={PATHS.merchantIntegration} size="sm">
+                  Set up the API
+                </ButtonLink>
               )
             }
           />

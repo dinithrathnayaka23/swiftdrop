@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.entry;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -13,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.exception.ConflictException;
 import com.swiftdrop.common.exception.NotFoundException;
+import com.swiftdrop.parcel.dto.MerchantParcelFilter;
 import com.swiftdrop.parcel.dto.NewAddress;
 import com.swiftdrop.parcel.dto.NewParcel;
 import com.swiftdrop.parcel.dto.ParcelDetails;
@@ -43,6 +45,7 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class ParcelServiceTest {
@@ -336,5 +339,17 @@ class ParcelServiceTest {
         when(parcelRepository.findByMerchantId(merchantId, bySize)).thenReturn(Page.empty(bySize));
 
         assertThat(parcelService.listByMerchant(merchantId, bySize)).isEmpty();
+    }
+
+    @Test
+    void filteredMerchantListIsNewestFirstWhenNoSortIsGiven() {
+        Pageable expected = PageRequest.of(0, 10, ParcelService.DEFAULT_SORT);
+        when(parcelRepository.findAll(any(Specification.class), eq(expected)))
+                .thenReturn(new PageImpl<>(List.of(savedParcel("SD7KQ2MX9TRB4H")), expected, 1));
+
+        Page<ParcelDetails> page = parcelService.listByMerchant(merchantId,
+                new MerchantParcelFilter("kandy", ParcelStatusCode.CREATED, null, null), PageRequest.of(0, 10));
+
+        assertThat(page.getContent()).extracting(ParcelDetails::trackingNumber).containsExactly("SD7KQ2MX9TRB4H");
     }
 }

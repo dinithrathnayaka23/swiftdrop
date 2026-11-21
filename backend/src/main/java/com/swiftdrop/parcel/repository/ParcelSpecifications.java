@@ -38,6 +38,10 @@ public final class ParcelSpecifications {
         return (root, query, cb) -> cb.equal(root.get("customerUserId"), customerUserId);
     }
 
+    public static Specification<Parcel> ownedByMerchant(UUID merchantId) {
+        return (root, query, cb) -> cb.equal(root.get("merchantId"), merchantId);
+    }
+
     public static Specification<Parcel> hasStatus(Collection<String> statusCodes) {
         return (root, query, cb) -> root.get("currentStatus").get("statusCode").in(statusCodes);
     }
@@ -69,6 +73,16 @@ public final class ParcelSpecifications {
                 cb.like(cb.lower(root.get("trackingNumber")), pattern, '\\'),
                 cb.like(cb.lower(root.get("dropoffAddress").get("city")), pattern, '\\'),
                 cb.like(cb.lower(root.get("externalOrderReference")), pattern, '\\'));
+    }
+
+    /** Part of the tracking number, order reference, recipient name or delivery city (merchant list). */
+    public static Specification<Parcel> merchantSearch(String term) {
+        String pattern = likePattern(term);
+        return (root, query, cb) -> cb.or(
+                cb.like(cb.lower(root.get("trackingNumber")), pattern, '\\'),
+                cb.like(cb.lower(root.get("externalOrderReference")), pattern, '\\'),
+                cb.like(cb.lower(root.get("dropoffAddress").get("contactName")), pattern, '\\'),
+                cb.like(cb.lower(root.get("dropoffAddress").get("city")), pattern, '\\'));
     }
 
     /**
