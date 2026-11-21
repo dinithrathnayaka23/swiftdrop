@@ -1,0 +1,10 @@
+apiVersion: v2
+name: swiftdrop
+description: >-
+  SwiftDrop parcel delivery platform: Spring Boot API, React web app, PostgreSQL,
+  RabbitMQ, Redis and Mailpit.
+type: application
+version: 0.1.0
+# Default image tag for the backend and frontend (CI publishes it from the v1.0.0 git tag).
+appVersion: "1.0.0"
+home: https://github.com/dinithrathnayaka23/swiftdrop
