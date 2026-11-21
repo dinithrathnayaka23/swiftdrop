@@ -13,13 +13,15 @@
 ![RabbitMQ](https://img.shields.io/badge/RabbitMQ-4-FF6600?logo=rabbitmq&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-8-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Helm-326CE5?logo=kubernetes&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 [Overview](#overview) •
 [Architecture](#architecture) •
 [Getting started](#getting-started) •
-[Development](#local-development) •
+[Kubernetes](#run-on-kubernetes) •
 [Testing](#testing) •
+[Docs](#documentation) •
 [Contributing](#contributing)
 
 </div>
@@ -38,12 +40,20 @@ SwiftDrop is a web platform that connects everyone involved in getting a parcel 
 | **Couriers** | See their jobs, update delivery status and record proof of delivery or failure reasons |
 | **Anyone** | Track a parcel publicly with its tracking number |
 
-Status changes flow through an event bus, so notifications (email, SMS, live updates) and merchant webhooks
-happen asynchronously without slowing down the core workflow.
+Status changes flow through RabbitMQ, so notifications (email, mock SMS, in-app), live tracking updates and
+merchant webhooks happen asynchronously without slowing down the core workflow.
 
-> [!NOTE]
-> The project is in its **foundation stage**: infrastructure, security baseline, module structure and the UI shell
-> are in place, and features are being built module by module.
+### Features
+
+| Area | What's built |
+|------|--------------|
+| **Customer** | Sign-up with email confirmation, **Sign in with Google** (OAuth 2.0), booking with a fee estimate before confirming, live tracking (SSE), delivery history, PDF receipt, notification preferences |
+| **Public tracking** | Mobile-friendly page at `/track/<tracking number>`, updating live |
+| **Merchant** | Registration with admin approval, API keys and OAuth 2.0 client credentials, order API, signed webhooks with automatic retry, dashboard of orders and their states |
+| **Courier** | Phone-first app: today's deliveries, status updates with a note, recipient name or photo proof, failure with a reason |
+| **Dispatcher / admin** | Unassigned parcels and assignment, courier workload, users, couriers, merchants, service areas and pricing rules, reports (deliveries per day, success/failure rate), live delivery tracking, system settings |
+| **AI assistant** (bonus) | Customer chatbot that answers "Where is my parcel?" or "How much to send 2 kg to Kandy?" by calling backend services as tools ([docs/assistant.md](docs/assistant.md)) |
+| **Kubernetes** (bonus) | Helm chart with ConfigMap, Secret, Services, StatefulSets and a Traefik Ingress ([docs/kubernetes.md](docs/kubernetes.md)) |
 
 ## Architecture
 
@@ -399,12 +409,29 @@ Each role has its own sign-in page, and the backend refuses a sign-in on the wro
 only after the correct password): customers and merchants at `/login`, couriers at `/courier/login`, admins at
 `/admin/login`. Google sign-in is only on the main page, so staff always use their password.
 
+## Documentation
+
+| Topic | Guide |
+|-------|-------|
+| Data model and migrations | [docs/DATA_MODEL.md](docs/DATA_MODEL.md) |
+| API conventions and errors | [docs/API_CONVENTIONS.md](docs/API_CONVENTIONS.md) |
+| Module ownership | [docs/MODULE_OWNERSHIP.md](docs/MODULE_OWNERSHIP.md) |
+| Parcels and status flow | [docs/parcel.md](docs/parcel.md) |
+| Dispatch and assignment | [docs/dispatch.md](docs/dispatch.md) |
+| Courier app | [docs/courier-app.md](docs/courier-app.md) |
+| Public and live tracking | [docs/tracking.md](docs/tracking.md), [docs/realtime.md](docs/realtime.md) |
+| Merchant portal, API keys, webhooks | [docs/merchant-portal.md](docs/merchant-portal.md) |
+| Service areas and settings | [docs/config.md](docs/config.md) |
+| AI assistant | [docs/assistant.md](docs/assistant.md), [docs/assistant-eval.md](docs/assistant-eval.md) |
+| Kubernetes deployment | [docs/kubernetes.md](docs/kubernetes.md) |
+
 ## Contributing
 
-1. Branch from `main`: `feature/<short-name>`, `fix/<short-name>` or `chore/<short-name>`.
+1. Branch from `development`: `feature/<short-name>`, `fix/<short-name>` or `chore/<short-name>`.
 2. Write [Conventional Commits](https://www.conventionalcommits.org/), e.g. `feat(parcel): add fee estimate endpoint`.
 3. Add database changes as a **new** Flyway migration; never edit a merged one.
-4. Open a pull request using the template; CI must pass and at least one review is required.
+4. Open a pull request into `development` using the template; CI must pass and at least one review is required.
+   `development` is merged into `main` for releases.
 
 Read the full guide in [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) before your first pull request.
 
