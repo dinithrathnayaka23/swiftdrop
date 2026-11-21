@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.security.AuthenticatedUser;
 import com.swiftdrop.common.security.Role;
+import com.swiftdrop.merchant.dto.request.MerchantOrderFilter;
 import com.swiftdrop.merchant.exception.MerchantNotApprovedException;
 import com.swiftdrop.merchant.model.MerchantApprovalStatus;
 import com.swiftdrop.merchant.service.MerchantAccessService;
@@ -42,15 +43,26 @@ class MerchantOrderControllerTest {
     @Test
     void everyCallIsScopedToTheSignedInUsersMerchant() {
         when(merchantAccessService.requireApprovedMerchant(userId)).thenReturn(merchantId);
-        when(orderService.list(merchantId, 2, 25)).thenReturn(Page.empty());
+        when(orderService.list(merchantId, MerchantOrderFilter.none(), 2, 25)).thenReturn(Page.empty());
 
         controller.counts(user);
-        controller.list(user, 2, 25);
+        controller.list(user, null, null, null, null, 2, 25);
         controller.get(user, "SD-20261112-ABC123");
 
         verify(orderService).counts(merchantId);
-        verify(orderService).list(merchantId, 2, 25);
+        verify(orderService).list(merchantId, MerchantOrderFilter.none(), 2, 25);
         verify(orderService).get(merchantId, "SD-20261112-ABC123");
+    }
+
+    @Test
+    void everyFilterIsPassedOnAsSent() {
+        when(merchantAccessService.requireApprovedMerchant(userId)).thenReturn(merchantId);
+        MerchantOrderFilter filter = new MerchantOrderFilter("ORD-1", "IN_TRANSIT", "2026-11-01", "2026-11-30");
+        when(orderService.list(merchantId, filter, 0, 10)).thenReturn(Page.empty());
+
+        controller.list(user, "ORD-1", "IN_TRANSIT", "2026-11-01", "2026-11-30", 0, 10);
+
+        verify(orderService).list(merchantId, filter, 0, 10);
     }
 
     @Test
@@ -58,7 +70,7 @@ class MerchantOrderControllerTest {
         when(merchantAccessService.requireApprovedMerchant(userId))
                 .thenThrow(MerchantNotApprovedException.forStatus(MerchantApprovalStatus.SUSPENDED));
 
-        assertThatThrownBy(() -> controller.list(user, 0, 10)).isInstanceOf(MerchantNotApprovedException.class);
+        assertThatThrownBy(() -> controller.list(user, null, null, null, null, 0, 10)).isInstanceOf(MerchantNotApprovedException.class);
         verifyNoInteractions(orderService);
     }
 }
