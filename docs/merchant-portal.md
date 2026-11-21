@@ -103,6 +103,7 @@ Other modules check keys only through `com.swiftdrop.merchant.api.ApiKeyApi`, ne
 ```java
 Optional<ValidatedApiKey> validate(String apiKey);          // merchantId, apiCredentialId, keyId
 Optional<MerchantSummary> getMerchantForKey(String apiKey); // the approved merchant behind the key
+Optional<ValidatedApiKey> validateCredential(UUID merchantId, UUID apiCredentialId); // key behind an OAuth token
 ```
 
 | Key | Result |
@@ -117,7 +118,8 @@ Used by:
   API). It sets an `AuthenticatedMerchant` principal with the `ROLE_MERCHANT_API` authority.
 - `OAuthTokenController`: `POST /api/v1/oauth/token` with `grant_type=client_credentials`,
   `client_id=<keyId>` and `client_secret=<raw key>`. Returns a 15-minute Bearer token for the
-  order API.
+  order API. Each call with the token checks its key again (`validateCredential`), so the token
+  stops working as soon as the key is revoked (401) or the merchant is suspended (403).
 - `SecurityConfig`: registers the filter only when an `ApiKeyApi` bean exists.
 
 ## Try it locally
@@ -139,8 +141,8 @@ Interactive documentation is at `/swagger-ui.html` (dev profile), under the `mer
 
 | Test | Covers |
 | --- | --- |
-| `MerchantApiKeyServiceTest` | Create, limit, list, revoke, rotate; `validate` and `getMerchantForKey` for valid, wrong, unknown, malformed, missing, revoked, expired and unapproved keys |
-| `ApiKeyAuthenticationFilterTest` | Missing or invalid key → 401 before the controller; valid key → merchant principal; OAuth Bearer token |
+| `MerchantApiKeyServiceTest` | Create, limit, list, revoke, rotate; `validate` and `getMerchantForKey` for valid, wrong, unknown, malformed, missing, revoked, expired and unapproved keys; `validateCredential` for active, revoked, expired, another merchant's and unapproved |
+| `ApiKeyAuthenticationFilterTest` | Missing or invalid key → 401 before the controller; valid key → merchant principal; OAuth Bearer token, and a revoked key's token → 401 |
 | `OAuthTokenControllerTest` | Token for valid client credentials; wrong `client_id` → 401 |
 | `OrderApiControllerWebMvcTest` | Order API through the real security chain, including 403 for an unapproved merchant |
 | `MerchantApiKeyControllerTest`, `MerchantOrderControllerTest`, `MerchantProfileControllerTest` | Portal endpoints and their validation |
@@ -152,4 +154,15 @@ Interactive documentation is at `/swagger-ui.html` (dev profile), under the `mer
 | `MerchantAccountStatusListenerTest`, `MerchantSuspensionIT` | Merchant status follows its account; suspending blocks the portal and API key at once (old access token included), reactivating restores them |
 | `MerchantAccessGate.test.tsx`, `AccountNotActivePage.test.tsx`, `client.test.ts` | The page replaces error cards, sign out, check again, pending copy; which 403s the API client reports |
 
-More integration tests against a real database are planned (milestone M5).
+### Integration tests
+
+They run with `mvn verify` against real PostgreSQL, RabbitMQ and Redis (Testcontainers, so Docker
+must be running). Shared set-up is in `MerchantIntegrationTestBase`.
+
+| Test | Covers |
+| --- | --- |
+| `MerchantPortalIT` | Profile view and update (and a refused update that changes nothing), dashboard counts, orders list and details with the timeline, another merchant's order and receipt → 404, who may use the portal (401, 403 for a customer, pending, rejected, no merchant), page limits |
+| `ApiKeyIT` | Key shown once and stored only as a hash, use on the order API and `last_used_at`, revoke (→ 401) and revoking twice, rotate, the two-key limit, another merchant's key, bad keys, OAuth token issued and refused, a token stops working when its key is revoked or the merchant is suspended |
+| `MerchantOrderApiIT` | Create an order with an API key or OAuth token (fee from the pricing rule, no personal data in the response), follow its status, see it in the portal, a repeated order reference returns the same order, another merchant → 404, validation, missing key, suspended merchant |
+| `WebhookIT` | A status change reaches the merchant's HTTPS endpoint through RabbitMQ, signed (`X-SwiftDrop-Signature`) and without personal data; the delivery log; a failure is retried after the backoff and then delivered; after the last retry it's `FAILED` and the merchant can retry it; test event; secret rotation; endpoint rules. The endpoint is a local HTTPS server with a certificate made by the test. |
+| `MerchantOrderSearchIT`, `MerchantOrderReceiptIT`, `MerchantSuspensionIT` | Orders filters, receipt download and suspension (see above) |

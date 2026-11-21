@@ -210,6 +210,47 @@ class MerchantApiKeyServiceTest {
     }
 
     @Test
+    void activeCredentialOfAnOAuthTokenIsValidAndRecordsTheUse() {
+        MerchantApiCredential credential = ownedCredential();
+
+        assertThat(apiKeyService.validateCredential(merchant.getId(), credential.getId())).contains(
+                new ValidatedApiKey(merchant.getId(), credential.getId(), credential.getKeyIdentifier()));
+        assertThat(credential.getLastUsedAt()).isNotNull();
+    }
+
+    @Test
+    void revokedOrExpiredCredentialOfAnOAuthTokenIsRejected() {
+        MerchantApiCredential revoked = ownedCredential();
+        revoked.setRevokedAt(Instant.now().minusSeconds(1));
+        MerchantApiCredential expired = ownedCredential();
+        expired.setExpiresAt(Instant.now().minusSeconds(1));
+
+        assertThat(apiKeyService.validateCredential(merchant.getId(), revoked.getId())).isEmpty();
+        assertThat(apiKeyService.validateCredential(merchant.getId(), expired.getId())).isEmpty();
+    }
+
+    @Test
+    void credentialOfAnotherMerchantOrMissingIdsIsRejected() {
+        UUID credentialId = UUID.randomUUID();
+        UUID otherMerchant = UUID.randomUUID();
+        when(credentialRepository.findByIdAndMerchantId(credentialId, otherMerchant)).thenReturn(Optional.empty());
+
+        assertThat(apiKeyService.validateCredential(otherMerchant, credentialId)).isEmpty();
+        assertThat(apiKeyService.validateCredential(null, credentialId)).isEmpty();
+        assertThat(apiKeyService.validateCredential(otherMerchant, null)).isEmpty();
+    }
+
+    @Test
+    void credentialOfAMerchantThatIsNotApprovedIsForbidden() {
+        merchant.setApprovalStatus(MerchantApprovalStatus.SUSPENDED);
+        MerchantApiCredential credential = ownedCredential();
+
+        assertThatThrownBy(() -> apiKeyService.validateCredential(merchant.getId(), credential.getId()))
+                .isInstanceOf(MerchantNotApprovedException.class);
+        assertThat(credential.getLastUsedAt()).isNull();
+    }
+
+    @Test
     void listShowsEachKeysStatusButNeverAHash() {
         MerchantApiCredential active = new MerchantApiCredential();
         active.setKeyIdentifier("aaaaaaaaaaaaaaaa");

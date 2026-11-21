@@ -105,16 +105,36 @@ class ApiKeyAuthenticationFilterTest {
         UUID credentialId = UUID.randomUUID();
         when(jwtService.parseMerchantApiToken("merchant-token"))
                 .thenReturn(Optional.of(new JwtService.MerchantApiTokenClaims(merchantId, credentialId)));
+        when(apiKeyApi.validateCredential(merchantId, credentialId))
+                .thenReturn(Optional.of(new ValidatedApiKey(merchantId, credentialId, "key-123")));
 
         filter();
 
         var authentication = SecurityContextHolder.getContext().getAuthentication();
         assertThat(authentication.getPrincipal())
-                .isEqualTo(new AuthenticatedMerchant(merchantId, credentialId));
+                .isEqualTo(new AuthenticatedMerchant(merchantId, credentialId, "key-123"));
         assertThat(authentication.getAuthorities()).extracting(GrantedAuthority::getAuthority)
                 .containsExactly("ROLE_MERCHANT_API");
         verify(chain).doFilter(request, response);
-        verifyNoInteractions(apiKeyApi);
+    }
+
+    @Test
+    void bearerTokenOfARevokedKeyIsRejectedBeforeTheChain() throws Exception {
+        request.setRequestURI(ApiPaths.ORDERS + "/SD7KQ2MX9TRB4H/status");
+        request.addHeader("Authorization", "Bearer merchant-token");
+        UUID merchantId = UUID.randomUUID();
+        UUID credentialId = UUID.randomUUID();
+        when(jwtService.parseMerchantApiToken("merchant-token"))
+                .thenReturn(Optional.of(new JwtService.MerchantApiTokenClaims(merchantId, credentialId)));
+        when(apiKeyApi.validateCredential(merchantId, credentialId)).thenReturn(Optional.empty());
+
+        filter();
+
+        verify(securityErrorHandler).commence(
+                org.mockito.ArgumentMatchers.same(request),
+                org.mockito.ArgumentMatchers.same(response),
+                org.mockito.ArgumentMatchers.any());
+        verifyNoInteractions(chain);
     }
 
     @Test
