@@ -307,11 +307,28 @@ npm run build
 
 | Report | Location |
 |--------|----------|
-| Backend coverage (JaCoCo) | `backend/target/site/jacoco/index.html` |
+| Backend coverage (JaCoCo, unit + integration merged) | `backend/target/site/jacoco/index.html` |
 | Frontend coverage | `frontend/coverage/index.html` (`npm run test:coverage`) |
 
+**Latest results** (`main`, 22 November 2026): all 1,809 tests pass.
+
+| Suite | Tests | Coverage |
+|-------|------:|----------|
+| Backend unit (JUnit 6, Mockito) | 965 | Merged with integration: **95.2%** instructions, 94.9% lines, 80.9% branches |
+| Backend integration (Testcontainers: PostgreSQL, RabbitMQ, Redis) | 186 | (included above) |
+| Frontend (Jest, React Testing Library) | 658 | **83.4%** statements, 84.8% lines, 77.3% branches |
+
+Tests that match the assignment's testing requirements:
+
+- **Event flow:** `InfrastructureIT` (events round-trip through RabbitMQ), `ParcelStatusServiceIT` (every status change
+  publishes an event), `PublicLiveTrackingIT` (a status change reaches an open SSE stream), `WebhookIT` (signed webhooks
+  and retries), `NotificationEventListenerTest`.
+- **Authorization:** `CourierDeliveriesIT.aCourierCannotSeeAnotherCouriersParcel`, `MerchantPortalIT` (merchants see only
+  their own orders), `ApiKeyIT` (revoked keys and their OAuth tokens are refused), `AuthFlowIT`, `UserManagementIT`.
+
 Every pull request is checked by [GitHub Actions](.github/workflows/ci.yml): backend build and tests with coverage,
-frontend lint, format, test and build, and Docker image builds.
+frontend lint, format, test and build, Helm chart validation, and Docker image builds. Pushes to `main` also publish
+the images to GHCR.
 
 ## Project structure
 
