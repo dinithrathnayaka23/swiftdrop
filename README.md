@@ -247,16 +247,18 @@ curl -X POST http://localhost:8080/api/v1/orders \
   -d '{
     "externalOrderReference": "STORE-10042",
     "pickupAddress": {
+      "contactName": "SwiftDrop Warehouse",
+      "contactPhone": "+94112223344",
       "addressLine1": "10 Main Street",
       "city": "Colombo",
-      "recipientName": "SwiftDrop Warehouse",
-      "phone": "+94112223344"
+      "district": "Colombo"
     },
     "dropoffAddress": {
+      "contactName": "Jane Customer",
+      "contactPhone": "+94771234567",
       "addressLine1": "25 Lake Road",
       "city": "Kandy",
-      "recipientName": "Jane Customer",
-      "phone": "+94771234567"
+      "district": "Kandy"
     },
     "parcelType": "PARCEL",
     "weightKg": 2
