@@ -13,6 +13,7 @@ import com.swiftdrop.merchant.exception.MerchantNotApprovedException;
 import com.swiftdrop.merchant.model.MerchantApprovalStatus;
 import com.swiftdrop.merchant.service.MerchantAccessService;
 import com.swiftdrop.merchant.service.MerchantOrderService;
+import com.swiftdrop.parcel.service.ReceiptService.ReceiptDocument;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -21,6 +22,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 
 @ExtendWith(MockitoExtension.class)
@@ -63,6 +67,31 @@ class MerchantOrderControllerTest {
         controller.list(user, "ORD-1", "IN_TRANSIT", "2026-11-01", "2026-11-30", 0, 10);
 
         verify(orderService).list(merchantId, filter, 0, 10);
+    }
+
+    @Test
+    void receiptIsAPdfDownloadForTheSignedInMerchant() {
+        when(merchantAccessService.requireApprovedMerchant(userId)).thenReturn(merchantId);
+        when(orderService.receipt(merchantId, "SD7KQ2MX9TRB4H"))
+                .thenReturn(new ReceiptDocument("receipt-SD7KQ2MX9TRB4H.pdf", new byte[] {'%', 'P'}));
+
+        ResponseEntity<byte[]> response = controller.receipt(user, "SD7KQ2MX9TRB4H");
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_PDF);
+        assertThat(response.getHeaders().getFirst(HttpHeaders.CONTENT_DISPOSITION))
+                .isEqualTo("attachment; filename=\"receipt-SD7KQ2MX9TRB4H.pdf\"");
+        assertThat(response.getHeaders().getCacheControl()).isEqualTo("no-store");
+        assertThat(response.getBody()).containsExactly('%', 'P');
+    }
+
+    @Test
+    void merchantThatIsNotApprovedCannotDownloadReceipts() {
+        when(merchantAccessService.requireApprovedMerchant(userId))
+                .thenThrow(MerchantNotApprovedException.forStatus(MerchantApprovalStatus.PENDING));
+
+        assertThatThrownBy(() -> controller.receipt(user, "SD1")).isInstanceOf(MerchantNotApprovedException.class);
+        verifyNoInteractions(orderService);
     }
 
     @Test
