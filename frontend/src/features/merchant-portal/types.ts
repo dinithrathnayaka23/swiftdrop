@@ -17,6 +17,15 @@ export interface MerchantOrderSummary {
   createdAt: string;
 }
 
+/** Filters of the orders list. All optional; dates are yyyy-MM-dd and both ends are included. */
+export interface MerchantOrderFilters {
+  /** Part of the tracking number, order reference, recipient name or delivery city. */
+  search?: string;
+  status?: ParcelStatusCode;
+  from?: string;
+  to?: string;
+}
+
 export interface MerchantOrderAddress {
   contactName: string;
   contactPhone: string;
