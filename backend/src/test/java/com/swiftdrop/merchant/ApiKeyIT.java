@@ -1,6 +1,7 @@
 package com.swiftdrop.merchant;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import java.net.http.HttpResponse;
 import java.time.Instant;
@@ -70,9 +71,9 @@ class ApiKeyIT extends MerchantIntegrationTestBase {
         assertThat(revoked.get("status").asString()).isEqualTo("REVOKED");
         assertError(withApiKey(UNKNOWN_ORDER, null, apiKey), 401, "UNAUTHORIZED");
 
-        // Revoking again keeps the first revocation time (stored to the microsecond).
+        // Revoking again keeps the first revocation time. The database rounds it to the microsecond.
         assertThat(Instant.parse(ok(revoke(merchant, id), 200).get("revokedAt").asString()))
-                .isEqualTo(Instant.parse(revoked.get("revokedAt").asString()).truncatedTo(ChronoUnit.MICROS));
+                .isCloseTo(Instant.parse(revoked.get("revokedAt").asString()), within(1, ChronoUnit.MICROS));
     }
 
     @Test
