@@ -1,0 +1,165 @@
+# SwiftDrop Helm chart values.
+#
+# Install one release per namespace. The Services keep their docker-compose names
+# (backend, frontend, postgres, rabbitmq, redis, mailpit), because the frontend's nginx
+# proxies /api to http://backend:8080 and the backend connects to the others by name.
+#
+# Secrets: create them with infra/k8s/deploy.sh (reads the repo-root .env) and set
+# secrets.existingSecret, or fill secrets.values from a values file you never commit.
+
+backend:
+  image:
+    repository: ghcr.io/dinithrathnayaka23/swiftdrop-backend
+    tag: ""                 # empty = Chart appVersion
+    pullPolicy: IfNotPresent
+  # Keep at 1. WebhookRetryJob runs on every instance without a lock, so two replicas
+  # would send each due webhook retry twice. Add ShedLock (or SKIP LOCKED) before scaling.
+  replicas: 1
+  # e.g. a hash of an existingSecret, so a changed Secret restarts the pod (deploy.sh sets one).
+  podAnnotations: {}
+  # Courier proof-of-delivery photos (LocalFileProofStorage). ReadWriteOnce is enough for one pod.
+  proofStorage:
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 250m
+      memory: 768Mi
+    limits:
+      memory: 1536Mi
+
+frontend:
+  image:
+    repository: ghcr.io/dinithrathnayaka23/swiftdrop-frontend
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicas: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+postgres:
+  image: postgres:18-alpine
+  database: swiftdrop
+  storage: 5Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+rabbitmq:
+  image: rabbitmq:4.4-management-alpine
+  storage: 2Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+
+redis:
+  image: redis:8.6-alpine
+  storage: 1Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+
+# Catches every email the app sends (nothing is delivered). Turn off and set
+# config.MAIL_HOST etc. to send real mail.
+mailpit:
+  enabled: true
+  image: axllent/mailpit:v1.32
+  # Expose the Mailpit UI on the ingress under /mailpit. It has no login: keep it off
+  # anywhere the public can reach.
+  ingress: false
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 128Mi
+
+# Wait-for-dependencies init container on the backend.
+initImage: busybox:1.37
+
+# "" = the cluster's default StorageClass.
+storageClass: ""
+
+ingress:
+  enabled: true
+  className: traefik
+  # "" = any host (fine for a local cluster). Set your domain for a real deployment.
+  host: ""
+  annotations: {}
+  tls:
+    enabled: false
+    # kubectl create secret tls swiftdrop-tls --cert=... --key=...  (or cert-manager)
+    secretName: swiftdrop-tls
+
+# Non-secret backend settings (rendered into the swiftdrop-config ConfigMap).
+# Empty values are left out, so the backend's own default applies.
+config:
+  JAVA_OPTS: "-XX:MaxRAMPercentage=75.0"
+  JWT_EXPIRY: "900"
+  AUTH_COOKIE_SECURE: "true"
+  RATE_LIMIT_ENABLED: "true"
+  # Never true outside local development: webhooks could then target cluster-internal hosts.
+  WEBHOOK_ALLOW_PRIVATE_HOSTS: "false"
+  WEBHOOK_RETRY_DELAY_1: 1m
+  WEBHOOK_RETRY_DELAY_2: 5m
+  WEBHOOK_RETRY_DELAY_3: 30m
+  WEBHOOK_RETRY_DELAY_4: 2h
+  WEBHOOK_RETRY_DELAY_5: 6h
+  PASSWORD_RESET_EXPIRY: "1800"
+  PASSWORD_RESET_RESEND_COOLDOWN: "60"
+  REFRESH_TOKEN_EXPIRY_REMEMBER_ME: "2592000"
+  REFRESH_TOKEN_EXPIRY_SESSION: "86400"
+  ADMIN_FULL_NAME: SwiftDrop Admin
+  # Public OAuth client ID. Add the ingress URL to its Authorized JavaScript origins.
+  GOOGLE_CLIENT_ID: ""
+  # "" = the in-cluster Mailpit.
+  MAIL_HOST: ""
+  MAIL_PORT: "1025"
+  MAIL_SMTP_AUTH: "false"
+  MAIL_STARTTLS: "false"
+  MAIL_FROM: no-reply@swiftdrop.local
+  MAIL_FROM_NAME: SwiftDrop
+  # "" = derived from ingress.host and ingress.tls (http(s)://<host>).
+  FRONTEND_URL: ""
+  FRONTEND_BASE_URL: ""
+  # AI assistant. "" = offline rules mode. Keys go in the Secret (SWIFTDROP_ASSISTANT_APIKEY...).
+  SWIFTDROP_ASSISTANT_PROVIDER: ""
+  SWIFTDROP_ASSISTANT_MODEL: ""
+  SWIFTDROP_ASSISTANT_BASEURL: ""
+  SWIFTDROP_ASSISTANT_OPENROUTER_MODEL: ""
+  SWIFTDROP_ASSISTANT_GROK_MODEL: ""
+
+secrets:
+  # Name of a Secret you created yourself (deploy.sh creates "swiftdrop-secrets").
+  # When set, secrets.values is ignored and the chart creates no Secret.
+  existingSecret: ""
+  # Only used when existingSecret is empty. Never commit real values.
+  values:
+    POSTGRES_USER: ""
+    POSTGRES_PASSWORD: ""
+    RABBITMQ_USER: ""
+    RABBITMQ_PASSWORD: ""
+    REDIS_PASSWORD: ""
+    JWT_SECRET: ""            # min 32 characters
+    API_KEY_PEPPER: ""        # min 32 characters; changing it invalidates every API key
+    WEBHOOK_SECRET_KEY: ""    # min 32 characters
+    ADMIN_EMAIL: ""
+    ADMIN_PASSWORD: ""
+    # Optional
+    MAIL_USERNAME: ""
+    MAIL_PASSWORD: ""
+    SWIFTDROP_ASSISTANT_APIKEY: ""
+    SWIFTDROP_ASSISTANT_OPENROUTER_APIKEY: ""
+    SWIFTDROP_ASSISTANT_GROK_APIKEY: ""
