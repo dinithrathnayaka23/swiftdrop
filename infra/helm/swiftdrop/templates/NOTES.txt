@@ -1,0 +1,22 @@
+SwiftDrop is deploying to namespace {{ .Release.Namespace }}.
+
+Watch it start (the backend takes a minute or two):
+  kubectl get pods -n {{ .Release.Namespace }} -w
+
+{{- if .Values.ingress.enabled }}
+
+Web app:   {{ include "swiftdrop.publicUrl" . }}/
+API:       {{ include "swiftdrop.publicUrl" . }}/api/v1
+{{- if and .Values.mailpit.enabled .Values.mailpit.ingress }}
+Mailpit:   {{ include "swiftdrop.publicUrl" . }}/mailpit/
+{{- end }}
+{{- end }}
+
+Admin sign-in: {{ include "swiftdrop.publicUrl" . }}/admin/login with ADMIN_EMAIL / ADMIN_PASSWORD from the Secret.
+
+RabbitMQ UI:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/rabbitmq 15672:15672   then http://localhost:15672
+{{- if and .Values.mailpit.enabled (not .Values.mailpit.ingress) }}
+Mailpit UI:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/mailpit 8025:8025      then http://localhost:8025/mailpit/
+{{- end }}

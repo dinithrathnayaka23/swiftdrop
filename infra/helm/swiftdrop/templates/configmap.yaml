@@ -1,0 +1,30 @@
+{{- $computed := dict
+      "POSTGRES_DB" .Values.postgres.database
+      "SPRING_DATASOURCE_URL" (printf "jdbc:postgresql://postgres:5432/%s" .Values.postgres.database)
+      "RABBITMQ_HOST" "rabbitmq"
+      "RABBITMQ_PORT" "5672"
+      "REDIS_HOST" "redis"
+      "REDIS_PORT" "6379"
+      "PROOF_STORAGE_DIR" "/data/proofs"
+      "FRONTEND_URL" (include "swiftdrop.publicUrl" .)
+      "FRONTEND_BASE_URL" (include "swiftdrop.publicUrl" .) -}}
+{{- if .Values.mailpit.enabled }}
+{{- $_ := set $computed "MAIL_HOST" "mailpit" }}
+{{- else if not .Values.config.MAIL_HOST }}
+{{- fail "mailpit.enabled is false: set config.MAIL_HOST (and the other MAIL_* settings)" }}
+{{- end }}
+{{- /* Values set in .Values.config win; empty ones fall back to the computed defaults. */}}
+{{- $data := merge (deepCopy .Values.config) $computed }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: swiftdrop-config
+  labels:
+    {{- include "swiftdrop.labels" (dict "root" $ "component" "backend") | nindent 4 }}
+data:
+  {{- range $key := keys $data | sortAlpha }}
+  {{- $value := index $data $key | toString }}
+  {{- if ne $value "" }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
+  {{- end }}

@@ -1,0 +1,29 @@
+# Local cluster (kind or Docker Desktop): images built on this machine, no TLS,
+# served at http://localhost. Used by infra/k8s/deploy.sh.
+backend:
+  image:
+    repository: swiftdrop-backend
+    tag: local
+    pullPolicy: IfNotPresent
+
+frontend:
+  image:
+    repository: swiftdrop-frontend
+    tag: local
+    pullPolicy: IfNotPresent
+  replicas: 1
+
+postgres:
+  storage: 1Gi
+
+rabbitmq:
+  storage: 1Gi
+
+redis:
+  storage: 256Mi
+
+mailpit:
+  ingress: true    # http://localhost/mailpit/
+
+ingress:
+  host: ""

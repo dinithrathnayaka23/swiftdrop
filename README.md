@@ -97,7 +97,7 @@ flowchart LR
 | **Frontend** | React 19, TypeScript 6, Vite 8, Tailwind CSS 4, React Router 8, Axios |
 | **Data & messaging** | PostgreSQL 18, Flyway, RabbitMQ 4, Redis 8 |
 | **Testing** | JUnit 6, Mockito, Spring Boot Test, Spring Security Test, Testcontainers, JaCoCo, Jest, React Testing Library |
-| **Tooling** | Maven Wrapper, ESLint, Prettier, Docker Compose, GitHub Actions |
+| **Tooling** | Maven Wrapper, ESLint, Prettier, Docker Compose, Kubernetes, Helm, Traefik, GitHub Actions |
 
 ## Getting started
 
@@ -144,6 +144,17 @@ Credentials for PostgreSQL, RabbitMQ and Redis are the ones in your `.env`.
 > backend on the `dev` profile, create and advance sample parcels as shown in [docs/tracking.md](docs/tracking.md).
 
 Stop everything with `docker compose down` (add `-v` to also delete the database and broker data).
+
+### Run on Kubernetes
+
+A Helm chart in `infra/helm/swiftdrop` deploys the same stack (ConfigMap, Secret, Deployments, StatefulSets
+with volumes, Services and a Traefik Ingress). On a local kind cluster:
+
+```bash
+infra/k8s/deploy.sh --create-kind   # then open http://localhost
+```
+
+Setup, Docker Desktop, real clusters and limits: [docs/kubernetes.md](docs/kubernetes.md).
 
 ## Local development
 
@@ -315,6 +326,7 @@ swiftdrop/
 │       └── context/  hooks/  types/  utils/
 ├── docs/                            Contributing guide and API conventions
 ├── docker/                          Additional Docker configuration
+├── infra/                           Helm chart (helm/swiftdrop) and Kubernetes deploy script (k8s/)
 ├── .github/                         CI workflow and PR template
 ├── docker-compose.yml               Full stack
 ├── docker-compose.dev.yml           Hot-reload override
