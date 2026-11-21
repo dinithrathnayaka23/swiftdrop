@@ -1,0 +1,60 @@
+{{- if .Values.mailpit.enabled }}
+{{- $ctx := dict "root" $ "component" "mailpit" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: mailpit
+  labels:
+    {{- include "swiftdrop.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "swiftdrop.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: smtp
+      port: 1025
+      targetPort: smtp
+    - name: http
+      port: 8025
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mailpit
+  labels:
+    {{- include "swiftdrop.labels" $ctx | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "swiftdrop.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "swiftdrop.labels" $ctx | nindent 8 }}
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: mailpit
+          image: {{ .Values.mailpit.image }}
+          env:
+            # The UI and its API live under /mailpit/, so the ingress can route that path to it.
+            - name: MP_WEBROOT
+              value: /mailpit/
+          ports:
+            - name: smtp
+              containerPort: 1025
+            - name: http
+              containerPort: 8025
+          readinessProbe:
+            tcpSocket:
+              port: smtp
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: smtp
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.mailpit.resources | nindent 12 }}
+{{- end }}
