@@ -6,8 +6,8 @@ import static org.mockito.Mockito.when;
 
 import com.swiftdrop.common.exception.UnauthorizedException;
 import com.swiftdrop.common.security.jwt.JwtService;
-import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
+import com.swiftdrop.merchant.api.ApiKeyApi;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -20,7 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class OAuthTokenControllerTest {
 
     @Mock
-    private MerchantApiKeyService merchantApiKeyService;
+    private ApiKeyApi apiKeyApi;
 
     @Mock
     private JwtService jwtService;
@@ -30,9 +30,9 @@ class OAuthTokenControllerTest {
 
     @Test
     void issuesFifteenMinuteBearerTokenForValidClientCredentials() {
-        AuthenticatedMerchant merchant = new AuthenticatedMerchant(
+        ValidatedApiKey merchant = new ValidatedApiKey(
                 UUID.randomUUID(), UUID.randomUUID(), "key-123");
-        when(merchantApiKeyService.authenticate("secret")).thenReturn(Optional.of(merchant));
+        when(apiKeyApi.validate("secret")).thenReturn(Optional.of(merchant));
         when(jwtService.generateMerchantApiToken(
                 merchant.merchantId(), merchant.apiCredentialId(), OAuthTokenController.TOKEN_LIFETIME))
                 .thenReturn("signed-token");
@@ -46,9 +46,9 @@ class OAuthTokenControllerTest {
 
     @Test
     void rejectsWrongClientId() {
-        AuthenticatedMerchant merchant = new AuthenticatedMerchant(
+        ValidatedApiKey merchant = new ValidatedApiKey(
                 UUID.randomUUID(), UUID.randomUUID(), "key-123");
-        when(merchantApiKeyService.authenticate("secret")).thenReturn(Optional.of(merchant));
+        when(apiKeyApi.validate("secret")).thenReturn(Optional.of(merchant));
 
         assertThatThrownBy(() -> controller.token("client_credentials", "wrong-key", "secret"))
                 .isInstanceOf(UnauthorizedException.class);

@@ -3,9 +3,9 @@ package com.swiftdrop.merchant.controller;
 import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.exception.UnauthorizedException;
 import com.swiftdrop.common.security.jwt.JwtService;
-import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
+import com.swiftdrop.merchant.api.ApiKeyApi;
+import com.swiftdrop.merchant.api.ValidatedApiKey;
 import com.swiftdrop.merchant.dto.response.OAuthTokenResponse;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import java.time.Duration;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -26,7 +26,7 @@ public class OAuthTokenController {
     static final String CLIENT_CREDENTIALS_GRANT = "client_credentials";
     static final Duration TOKEN_LIFETIME = Duration.ofMinutes(15);
 
-    private final MerchantApiKeyService merchantApiKeyService;
+    private final ApiKeyApi apiKeyApi;
     private final JwtService jwtService;
 
     @PostMapping(value = "/token", consumes = MediaType.APPLICATION_FORM_URLENCODED_VALUE)
@@ -66,11 +66,11 @@ public class OAuthTokenController {
             throw invalidCredentials();
         }
 
-        AuthenticatedMerchant merchant = merchantApiKeyService.authenticate(clientSecret)
-                .filter(authenticated -> clientId.equals(authenticated.keyId()))
+        ValidatedApiKey key = apiKeyApi.validate(clientSecret)
+                .filter(validated -> clientId.equals(validated.keyId()))
                 .orElseThrow(OAuthTokenController::invalidCredentials);
         String token = jwtService.generateMerchantApiToken(
-                merchant.merchantId(), merchant.apiCredentialId(), TOKEN_LIFETIME);
+                key.merchantId(), key.apiCredentialId(), TOKEN_LIFETIME);
         return new OAuthTokenResponse(token, "Bearer", TOKEN_LIFETIME.toSeconds());
     }
 
