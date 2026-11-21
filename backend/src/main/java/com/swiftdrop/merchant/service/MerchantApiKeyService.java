@@ -114,6 +114,19 @@ public class MerchantApiKeyService implements ApiKeyApi {
         return findValid(apiKey).map(credential -> MerchantMapper.toSummary(credential.getMerchant()));
     }
 
+    @Override
+    @Transactional
+    public Optional<ValidatedApiKey> validateCredential(UUID merchantId, UUID apiCredentialId) {
+        if (merchantId == null || apiCredentialId == null) {
+            return Optional.empty();
+        }
+        Instant now = Instant.now();
+        return checkedUse(credentialRepository.findByIdAndMerchantId(apiCredentialId, merchantId)
+                .filter(credential -> isActive(credential, now)), now)
+                .map(credential -> new ValidatedApiKey(
+                        credential.getMerchant().getId(), credential.getId(), credential.getKeyIdentifier()));
+    }
+
     /**
      * The active credential matching the raw key, or empty when the key is null, malformed, unknown,
      * wrong, revoked or expired. A valid key of a merchant that is no longer approved throws
@@ -124,10 +137,14 @@ public class MerchantApiKeyService implements ApiKeyApi {
             return Optional.empty();
         }
         Instant now = Instant.now();
-        Optional<MerchantApiCredential> found = codec.keyIdOf(rawKey)
+        return checkedUse(codec.keyIdOf(rawKey)
                 .flatMap(credentialRepository::findWithMerchantByKeyIdentifier)
                 .filter(credential -> codec.matches(rawKey, credential.getApiKeyHash()))
-                .filter(credential -> isActive(credential, now));
+                .filter(credential -> isActive(credential, now)), now);
+    }
+
+    /** Throws 403 when the active credential's merchant is no longer approved; records the use. */
+    private Optional<MerchantApiCredential> checkedUse(Optional<MerchantApiCredential> found, Instant now) {
         if (found.isEmpty()) {
             return Optional.empty();
         }
