@@ -19,6 +19,25 @@ API and webhooks). Frontend folder: `merchant-portal`. Table: `merchant_api_cred
 | `REJECTED`, `SUSPENDED` | `ACCOUNT_DISABLED` | "This merchant account is not active…" (one message, so the reason isn't revealed) |
 | A `MERCHANT` user with no merchant | `FORBIDDEN` | "No merchant account is linked to this user" |
 
+### Suspension
+
+The admin suspends a merchant from **User Management** (the contact person's account).
+`MerchantAccountStatusListener` keeps the merchant in step once that change is committed:
+
+| Account change | Merchant |
+| --- | --- |
+| → `SUSPENDED` or `DEACTIVATED` | `APPROVED` → `SUSPENDED` |
+| → `ACTIVE` | `SUSPENDED` → `APPROVED` |
+| Anything else | Unchanged (pending and rejected merchants are decided through merchant approval) |
+
+So a suspension takes effect at once: the portal and the order API (API keys and OAuth tokens)
+answer 403 `ACCOUNT_DISABLED`, even for an access token issued before the suspension.
+
+In the browser, the API client reports a signed-in 403 with `ACCOUNT_DISABLED` or
+`ACCOUNT_PENDING_APPROVAL` (`setAccountBlockedHandler`). `MerchantAccessGate`, around the
+merchant area, then replaces the whole portal with one **account not active** page (sign out,
+check again, contact support) instead of an error card on every screen.
+
 ## Screens
 
 | Path | Screen | Data |
@@ -130,5 +149,7 @@ Interactive documentation is at `/swagger-ui.html` (dev profile), under the `mer
 | `OrdersPage.test.tsx`, `orderFilters.test.ts` | Search delay, status chips, date range, filters and page in the address, page reset, empty and error states |
 | `MerchantOrderReceiptIT`, `ReceiptServiceTest` | Receipt download: own order PDF recorded once, another merchant's order, customer booking, unknown number, unapproved merchant, customer role |
 | `OrderDetailsPage.test.tsx`, `useLiveOrder.test.ts` | Live status (newer update shown at once, stale ignored, quiet reload, reconnect, failed reload, paused), receipt download and its error |
+| `MerchantAccountStatusListenerTest`, `MerchantSuspensionIT` | Merchant status follows its account; suspending blocks the portal and API key at once (old access token included), reactivating restores them |
+| `MerchantAccessGate.test.tsx`, `AccountNotActivePage.test.tsx`, `client.test.ts` | The page replaces error cards, sign out, check again, pending copy; which 403s the API client reports |
 
 More integration tests against a real database are planned (milestone M5).

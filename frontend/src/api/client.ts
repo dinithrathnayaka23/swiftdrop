@@ -43,6 +43,29 @@ export function setMaintenanceHandler(handler: (() => void) | null): void {
   maintenanceHandler = handler;
 }
 
+/** Error codes of a signed-in account that may no longer use its area (403). */
+export const ACCOUNT_BLOCKED_CODES = ['ACCOUNT_DISABLED', 'ACCOUNT_PENDING_APPROVAL'] as const;
+
+export interface AccountBlock {
+  code: (typeof ACCOUNT_BLOCKED_CODES)[number];
+  /** The server's message, safe to show. */
+  message: string;
+}
+
+let accountBlockedHandler: ((block: AccountBlock) => void) | null = null;
+
+/**
+ * Registered by an area that can be blocked (the merchant portal): called when a signed-in
+ * request is refused because the account isn't active any more, e.g. the merchant was suspended.
+ */
+export function setAccountBlockedHandler(handler: ((block: AccountBlock) => void) | null): void {
+  accountBlockedHandler = handler;
+}
+
+function isAccountBlockedCode(code: string | undefined): code is AccountBlock['code'] {
+  return (ACCOUNT_BLOCKED_CODES as readonly (string | undefined)[]).includes(code);
+}
+
 /**
  * - renewed: new access token (and a new session cookie);
  * - expired: the session is over (signed out, expired, password changed): sign in again;
@@ -88,9 +111,22 @@ apiClient.interceptors.response.use(
     const isAuthEndpoint = request?.url?.startsWith('/auth/') ?? false;
 
     // Maintenance switched on while the app was open: show the maintenance page.
-    const body = error.response?.data as { code?: string } | undefined;
+    const body = error.response?.data as { code?: string; message?: string } | undefined;
     if (error.response?.status === 503 && body?.code === 'MAINTENANCE_MODE') {
       maintenanceHandler?.();
+      return Promise.reject(error);
+    }
+
+    // The signed-in account was suspended (or isn't approved): let its area show a clear page.
+    // A 403 from /auth/** (a blocked sign-in) is handled by the sign-in page itself.
+    const code = body?.code;
+    if (
+      error.response?.status === 403 &&
+      sentToken &&
+      !isAuthEndpoint &&
+      isAccountBlockedCode(code)
+    ) {
+      accountBlockedHandler?.({ code, message: body?.message ?? '' });
       return Promise.reject(error);
     }
 
