@@ -8,6 +8,7 @@ import { getToken, loadSession, saveSession } from '../utils/sessionStorage';
 import {
   apiClient,
   refreshSession,
+  setAccountBlockedHandler,
   setSessionUpdatedHandler,
   setUnauthorizedHandler,
 } from './client';
@@ -151,5 +152,67 @@ describe('refreshSession', () => {
     fakeBackend(refresh);
 
     await expect(refreshSession()).resolves.toMatchObject({ status: expected });
+  });
+});
+
+describe('blocked account', () => {
+  const onBlocked = jest.fn();
+
+  /** Every request answers with this status and error body. */
+  function answerWith(status: number, data: unknown) {
+    apiClient.defaults.adapter = (config) =>
+      Promise.reject(
+        new AxiosError(String(status), 'ERR_BAD_RESPONSE', config, null, {
+          data,
+          status,
+          statusText: '',
+          headers: {},
+          config,
+        }),
+      );
+  }
+
+  beforeEach(() => {
+    onBlocked.mockReset();
+    setAccountBlockedHandler(onBlocked);
+    saveSession({ token: 'valid', user }, true);
+  });
+
+  afterEach(() => setAccountBlockedHandler(null));
+
+  it.each(['ACCOUNT_DISABLED', 'ACCOUNT_PENDING_APPROVAL'])(
+    'reports a signed-in request refused with %s, and still fails the request',
+    async (code) => {
+      answerWith(403, { code, message: 'This merchant account is not active.' });
+
+      await expect(apiClient.get('/merchant/profile')).rejects.toBeInstanceOf(AxiosError);
+
+      expect(onBlocked).toHaveBeenCalledWith({
+        code,
+        message: 'This merchant account is not active.',
+      });
+    },
+  );
+
+  it('ignores other 403s', async () => {
+    answerWith(403, { code: 'FORBIDDEN', message: 'Access denied' });
+
+    await expect(apiClient.get('/merchant/profile')).rejects.toBeInstanceOf(AxiosError);
+    expect(onBlocked).not.toHaveBeenCalled();
+  });
+
+  it('leaves a blocked sign-in to the sign-in page', async () => {
+    answerWith(403, { code: 'ACCOUNT_DISABLED', message: 'Disabled' });
+
+    await expect(apiClient.post('/auth/login', {})).rejects.toBeInstanceOf(AxiosError);
+    expect(onBlocked).not.toHaveBeenCalled();
+  });
+
+  it('ignores requests sent without a token', async () => {
+    saveSession({ token: '', user }, true);
+    answerWith(403, { code: 'ACCOUNT_DISABLED', message: 'Disabled' });
+
+    await expect(apiClient.get('/public/settings')).rejects.toBeInstanceOf(AxiosError);
+    expect(onBlocked).not.toHaveBeenCalled();
   });
 });

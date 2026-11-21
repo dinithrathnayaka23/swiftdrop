@@ -1,6 +1,7 @@
 import { Suspense } from 'react';
 import { Route, Routes } from 'react-router';
 import LoadingState from '../components/feedback/LoadingState';
+import MerchantAccessGate from '../features/merchant-portal/components/MerchantAccessGate';
 import NotFoundPage from '../shared/errors/NotFoundPage';
 import GuestRoute from '../shared/guards/GuestRoute';
 import MaintenanceGate from '../shared/guards/MaintenanceGate';
@@ -52,9 +53,12 @@ export default function AppRoutes() {
           </Route>
 
           <Route element={<ProtectedRoute allowedRoles={['MERCHANT']} />}>
-            <Route element={<DashboardLayout />}>
-              {render(routesFor('merchant'))}
-              <Route path={`${PATHS.merchantDashboard}/*`} element={<NotFoundPage />} />
+            {/* A suspended merchant sees one "account not active" page instead of error cards */}
+            <Route element={<MerchantAccessGate />}>
+              <Route element={<DashboardLayout />}>
+                {render(routesFor('merchant'))}
+                <Route path={`${PATHS.merchantDashboard}/*`} element={<NotFoundPage />} />
+              </Route>
             </Route>
           </Route>
 
