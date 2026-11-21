@@ -8,10 +8,15 @@ import com.swiftdrop.merchant.dto.response.MerchantOrderSummaryResponse;
 import com.swiftdrop.merchant.service.MerchantAccessService;
 import com.swiftdrop.merchant.service.MerchantOrderService;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
+import com.swiftdrop.parcel.service.ReceiptService.ReceiptDocument;
 import java.util.Map;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.web.PagedModel;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -57,6 +62,19 @@ public class MerchantOrderController {
     public MerchantOrderDetailResponse get(@AuthenticationPrincipal AuthenticatedUser user,
                                            @PathVariable String trackingNumber) {
         return orderService.get(merchantIdOf(user), trackingNumber);
+    }
+
+    /** The order's receipt as a PDF download; 404 when the order isn't this merchant's. */
+    @GetMapping("/{trackingNumber}/receipt")
+    public ResponseEntity<byte[]> receipt(@AuthenticationPrincipal AuthenticatedUser user,
+                                          @PathVariable String trackingNumber) {
+        ReceiptDocument receipt = orderService.receipt(merchantIdOf(user), trackingNumber);
+        return ResponseEntity.ok()
+                .contentType(MediaType.APPLICATION_PDF)
+                .header(HttpHeaders.CONTENT_DISPOSITION,
+                        ContentDisposition.attachment().filename(receipt.fileName()).build().toString())
+                .header(HttpHeaders.CACHE_CONTROL, "no-store")
+                .body(receipt.pdf());
     }
 
     private UUID merchantIdOf(AuthenticatedUser user) {

@@ -22,6 +22,8 @@ import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.model.ParcelType;
 import com.swiftdrop.parcel.service.ParcelService;
 import com.swiftdrop.parcel.service.ParcelStatusService;
+import com.swiftdrop.parcel.service.ReceiptService;
+import com.swiftdrop.parcel.service.ReceiptService.ReceiptDocument;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
@@ -49,6 +51,7 @@ class MerchantOrderServiceTest {
 
     @Mock private ParcelService parcelService;
     @Mock private ParcelStatusService parcelStatusService;
+    @Mock private ReceiptService receiptService;
     @InjectMocks private MerchantOrderService orderService;
 
     private static final MerchantParcelFilter NO_FILTER = new MerchantParcelFilter(null, null, null, null);
@@ -241,6 +244,21 @@ class MerchantOrderServiceTest {
 
         assertThatThrownBy(() -> orderService.get(merchantId, "SD-20261112-ABC123"))
                 .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void receiptIsTheParcelModulesReceiptForThisMerchant() {
+        ReceiptDocument document = new ReceiptDocument("receipt-SD1.pdf", new byte[] {1});
+        when(receiptService.receiptForMerchant(merchantId, "SD1")).thenReturn(document);
+
+        assertThat(orderService.receipt(merchantId, "SD1")).isSameAs(document);
+    }
+
+    @Test
+    void receiptOfAnotherMerchantsOrderIsNotFound() {
+        when(receiptService.receiptForMerchant(merchantId, "SD1")).thenThrow(new NotFoundException("Order not found"));
+
+        assertThatThrownBy(() -> orderService.receipt(merchantId, "SD1")).isInstanceOf(NotFoundException.class);
     }
 
     @Test
