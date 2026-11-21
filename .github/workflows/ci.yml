@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
 
 concurrency:
@@ -81,3 +82,74 @@ jobs:
         run: |
           cp .env.example .env
           docker compose build
+
+  helm:
+    name: Helm chart (lint, render, schema)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: azure/setup-helm@v5
+
+      - name: Lint
+        run: helm lint infra/helm/swiftdrop --set secrets.existingSecret=swiftdrop-secrets
+
+      # Renders the local and a production-like setup, then checks every manifest against the Kubernetes schema.
+      - name: Render and validate
+        run: |
+          long=$(printf 'x%.0s' {1..40})
+          helm template swiftdrop infra/helm/swiftdrop -f infra/helm/swiftdrop/values-local.yaml \
+            --set secrets.existingSecret=swiftdrop-secrets > local.yaml
+          helm template swiftdrop infra/helm/swiftdrop \
+            --set ingress.host=swiftdrop.example.com,ingress.tls.enabled=true \
+            --set secrets.values.POSTGRES_USER=u,secrets.values.POSTGRES_PASSWORD=p \
+            --set secrets.values.RABBITMQ_USER=u,secrets.values.RABBITMQ_PASSWORD=p \
+            --set secrets.values.REDIS_PASSWORD=p,secrets.values.ADMIN_EMAIL=admin@example.com \
+            --set "secrets.values.ADMIN_PASSWORD=p,secrets.values.JWT_SECRET=$long" \
+            --set "secrets.values.API_KEY_PEPPER=$long,secrets.values.WEBHOOK_SECRET_KEY=$long" > prod.yaml
+          docker run --rm -v "$PWD:/d" ghcr.io/yannh/kubeconform:v0.7.0 -strict -summary /d/local.yaml /d/prod.yaml
+
+  # Images for the Kubernetes chart: ghcr.io/<owner>/swiftdrop-{backend,frontend}.
+  # main pushes "latest" and "sha-<commit>"; a v1.2.3 tag pushes "1.2.3" (the chart's appVersion).
+  publish:
+    name: Publish images to GHCR
+    runs-on: ubuntu-latest
+    needs: [docker, helm]
+    if: github.event_name == 'push'
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        component: [backend, frontend]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: docker/setup-buildx-action@v4
+
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/swiftdrop-${{ matrix.component }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=sha-
+            type=semver,pattern={{version}}
+
+      - uses: docker/build-push-action@v7
+        with:
+          context: ${{ matrix.component }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VITE_API_BASE_URL=/api/v1
+            VITE_USE_MOCK_API=false
+          cache-from: type=gha,scope=${{ matrix.component }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.component }}
