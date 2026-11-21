@@ -1,0 +1,52 @@
+{{- $ctx := dict "root" $ "component" "frontend" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  labels:
+    {{- include "swiftdrop.labels" $ctx | nindent 4 }}
+spec:
+  selector:
+    {{- include "swiftdrop.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  labels:
+    {{- include "swiftdrop.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels:
+      {{- include "swiftdrop.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "swiftdrop.labels" $ctx | nindent 8 }}
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: frontend
+          image: {{ include "swiftdrop.image" (dict "root" $ "image" .Values.frontend.image) }}
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
