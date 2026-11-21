@@ -4,7 +4,7 @@ import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.security.jwt.JwtAuthenticationFilter;
 import com.swiftdrop.common.security.jwt.JwtService;
 import com.swiftdrop.merchant.security.ApiKeyAuthenticationFilter;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
+import com.swiftdrop.merchant.api.ApiKeyApi;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.context.annotation.Bean;
@@ -57,7 +57,7 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http,
                                                    JwtService jwtService,
-                                                   ObjectProvider<MerchantApiKeyService> merchantApiKeyServiceProvider,
+                                                   ObjectProvider<ApiKeyApi> apiKeyApiProvider,
                                                    SecurityErrorHandler errorHandler,
                                                    @Value("${swiftdrop.security.public-api-docs:false}")
                                                    boolean publicApiDocs) throws Exception {
@@ -80,10 +80,10 @@ public class SecurityConfig {
                     auth.anyRequest().authenticated();
                 })
                 .addFilterBefore(new JwtAuthenticationFilter(jwtService), UsernamePasswordAuthenticationFilter.class);
-        MerchantApiKeyService merchantApiKeyService = merchantApiKeyServiceProvider.getIfAvailable();
-        if (merchantApiKeyService != null) {
+        ApiKeyApi apiKeyApi = apiKeyApiProvider.getIfAvailable();
+        if (apiKeyApi != null) {
             http.addFilterBefore(
-                    new ApiKeyAuthenticationFilter(merchantApiKeyService, jwtService, errorHandler),
+                    new ApiKeyAuthenticationFilter(apiKeyApi, jwtService, errorHandler),
                     JwtAuthenticationFilter.class);
         }
         return http.build();

@@ -4,8 +4,8 @@ import com.swiftdrop.common.api.ApiPaths;
 import com.swiftdrop.common.exception.ApiException;
 import com.swiftdrop.common.security.SecurityErrorHandler;
 import com.swiftdrop.common.security.jwt.JwtService;
+import com.swiftdrop.merchant.api.ApiKeyApi;
 import com.swiftdrop.merchant.dto.AuthenticatedMerchant;
-import com.swiftdrop.merchant.service.MerchantApiKeyService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -22,22 +22,22 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * Authenticates merchant order API requests with the {@code X-API-Key} header.
  *
  * <p>Registered directly in the security chain rather than as a servlet filter, so it only runs
- * for the versioned merchant order API.
+ * for the versioned merchant order API. Keys are checked only through {@link ApiKeyApi}.
  */
 public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String API_KEY_HEADER = "X-API-Key";
     private static final String MERCHANT_API_AUTHORITY = "ROLE_MERCHANT_API";
 
-    private final MerchantApiKeyService merchantApiKeyService;
+    private final ApiKeyApi apiKeyApi;
     private final JwtService jwtService;
     private final SecurityErrorHandler securityErrorHandler;
 
     public ApiKeyAuthenticationFilter(
-            MerchantApiKeyService merchantApiKeyService,
+            ApiKeyApi apiKeyApi,
             JwtService jwtService,
             SecurityErrorHandler securityErrorHandler) {
-        this.merchantApiKeyService = merchantApiKeyService;
+        this.apiKeyApi = apiKeyApi;
         this.jwtService = jwtService;
         this.securityErrorHandler = securityErrorHandler;
     }
@@ -69,7 +69,9 @@ public class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     private AuthenticatedMerchant authenticate(HttpServletRequest request) {
         String apiKey = request.getHeader(API_KEY_HEADER);
         if (apiKey != null && !apiKey.isBlank()) {
-            return merchantApiKeyService.authenticate(apiKey).orElse(null);
+            return apiKeyApi.validate(apiKey)
+                    .map(key -> new AuthenticatedMerchant(key.merchantId(), key.apiCredentialId(), key.keyId()))
+                    .orElse(null);
         }
 
         String authorization = request.getHeader("Authorization");
