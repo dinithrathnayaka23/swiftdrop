@@ -11,6 +11,8 @@ import com.swiftdrop.parcel.dto.ParcelDetails;
 import com.swiftdrop.parcel.model.ParcelStatusCode;
 import com.swiftdrop.parcel.service.ParcelService;
 import com.swiftdrop.parcel.service.ParcelStatusService;
+import com.swiftdrop.parcel.service.ReceiptService;
+import com.swiftdrop.parcel.service.ReceiptService.ReceiptDocument;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.format.DateTimeParseException;
@@ -42,6 +44,7 @@ public class MerchantOrderService {
 
     private final ParcelService parcelService;
     private final ParcelStatusService parcelStatusService;
+    private final ReceiptService receiptService;
 
     /** Number of the merchant's orders per status (every status, 0 when none), for the dashboard. */
     @Transactional(readOnly = true)
@@ -89,6 +92,14 @@ public class MerchantOrderService {
                 .filter(found -> merchantId.equals(found.merchantId()))
                 .orElseThrow(() -> new NotFoundException("Order not found"));
         return MerchantOrderMapper.toDetail(parcel, parcelStatusService.getHistory(parcel.id()));
+    }
+
+    /**
+     * The receipt PDF of one of the merchant's orders, drawn by the parcel module. Another
+     * merchant's order or a customer booking is reported as not found.
+     */
+    public ReceiptDocument receipt(UUID merchantId, String trackingNumber) {
+        return receiptService.receiptForMerchant(merchantId, trackingNumber);
     }
 
     private static ParcelStatusCode parseStatus(String value) {

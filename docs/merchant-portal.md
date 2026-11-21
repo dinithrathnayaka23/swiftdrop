@@ -25,7 +25,7 @@ API and webhooks). Frontend folder: `merchant-portal`. Table: `merchant_api_cred
 | --- | --- | --- |
 | `/merchant` | Dashboard | Profile, order counts per status, 5 most recent orders, integration status (API keys and webhook) |
 | `/merchant/orders` | Orders | Paged list, newest first. Search box, status chips and a creation date range. The filters and the page are kept in the address (`?search=&status=&from=&to=&page=`), so a filtered list can be bookmarked or shared. A changed filter goes back to page 1. |
-| `/merchant/orders/:trackingNumber` | Order Details | Addresses, parcel, fee, progress timeline, failure reason |
+| `/merchant/orders/:trackingNumber` | Order Details | Addresses, parcel, fee, progress timeline, failure reason. Receipt PDF download. Live status: follows the parcel's public stream (`/public/tracking/{trackingNumber}/stream`, Member 5's `useLiveUpdates`), shows a newer status at once and then reloads the order quietly; it also reloads after a reconnect. |
 | `/merchant/profile` | Business Profile | View; edit contact email, phone and address |
 | `/merchant/integration` | API Integration | API keys (create, revoke, rotate) and setup steps |
 
@@ -42,6 +42,7 @@ All endpoints need `Authorization: Bearer <JWT>` with the `MERCHANT` role and an
 | GET | `/api/v1/merchant/orders/counts` | Orders per parcel status |
 | GET | `/api/v1/merchant/orders?page=0&size=10` | Paged orders, newest first. `page` ≥ 0, `size` 1–100, otherwise 400. Optional filters, combined with AND (see below). |
 | GET | `/api/v1/merchant/orders/{trackingNumber}` | One order. 404 if it doesn't exist or belongs to another merchant. |
+| GET | `/api/v1/merchant/orders/{trackingNumber}/receipt` | The order's receipt PDF (`receipt-<trackingNumber>.pdf`, `Cache-Control: no-store`), drawn by `ReceiptService.receiptForMerchant` with the current status. The first download records the receipt number. 404 for another merchant's order, a customer booking or an unknown number. |
 | GET | `/api/v1/merchant/api-keys` | The merchant's keys, newest first (never the secret) |
 | POST | `/api/v1/merchant/api-keys` | Creates a key. **The only response that contains the raw key.** 409 at the active-key limit. |
 | POST | `/api/v1/merchant/api-keys/{apiCredentialId}/revoke` | Stops the key working at once. Revoking twice changes nothing. |
@@ -127,5 +128,7 @@ Interactive documentation is at `/swagger-ui.html` (dev profile), under the `mer
 | `MerchantAccessServiceTest`, `MerchantOrderServiceTest`, `MerchantProfileServiceTest` | Approval checks and merchant scoping; each orders filter, combinations, day boundaries and every bad value |
 | `MerchantOrderSearchIT` | Orders filters over HTTP against PostgreSQL: each search field, LIKE wildcards, other merchants' orders, day boundaries, combined filters, paging totals, 400 messages |
 | `OrdersPage.test.tsx`, `orderFilters.test.ts` | Search delay, status chips, date range, filters and page in the address, page reset, empty and error states |
+| `MerchantOrderReceiptIT`, `ReceiptServiceTest` | Receipt download: own order PDF recorded once, another merchant's order, customer booking, unknown number, unapproved merchant, customer role |
+| `OrderDetailsPage.test.tsx`, `useLiveOrder.test.ts` | Live status (newer update shown at once, stale ignored, quiet reload, reconnect, failed reload, paused), receipt download and its error |
 
 More integration tests against a real database are planned (milestone M5).

@@ -1,8 +1,10 @@
-import { ArrowLeft, CircleX, MapPin, MoveRight, PackageSearch } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { ArrowLeft, CircleX, Download, MapPin, MoveRight, PackageSearch } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { getErrorMessage } from '../../../api/errors';
 import { Link, useParams } from 'react-router';
 import LoadingState from '../../../components/feedback/LoadingState';
 import StateView from '../../../components/feedback/StateView';
+import Alert from '../../../components/ui/Alert';
 import Button from '../../../components/ui/Button';
 import ButtonLink from '../../../components/ui/ButtonLink';
 import { PATHS } from '../../../routes/paths';
@@ -21,9 +23,13 @@ import {
   latestFailureReason,
   PARCEL_TYPE_LABELS,
 } from '../../shared-parcels/parcelDisplay';
+import { saveBlob } from '../../shared-parcels/download';
 import { useApiData } from '../../shared-parcels/useApiData';
+import LiveIndicator from '../../shared-live/LiveIndicator';
+import type { LiveConnectionState } from '../../shared-live/types';
 import { merchantPortalApi } from '../api';
 import type { MerchantOrderAddress, MerchantOrderDetail } from '../types';
+import { useLiveOrder } from '../useLiveOrder';
 
 function AddressCard({ title, address }: { title: string; address: MerchantOrderAddress | null }) {
   return (
@@ -71,7 +77,45 @@ function DetailRows({ rows }: { rows: [string, ReactNode][] }) {
   );
 }
 
-function Details({ order }: { order: MerchantOrderDetail }) {
+/** Downloads the order's receipt PDF, drawn by the server with the current status. */
+function ReceiptButton({
+  trackingNumber,
+  onError,
+}: {
+  trackingNumber: string;
+  onError: (message: string | null) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+
+  async function download() {
+    setBusy(true);
+    onError(null);
+    try {
+      const blob = await merchantPortalApi.downloadReceipt(trackingNumber);
+      saveBlob(blob, `receipt-${trackingNumber}.pdf`);
+    } catch (err) {
+      onError(getErrorMessage(err));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Button variant="outline" loading={busy} onClick={() => void download()}>
+      {!busy && <Download className="size-4" aria-hidden="true" />}
+      Download Receipt
+    </Button>
+  );
+}
+
+function Details({
+  order,
+  connection,
+}: {
+  order: MerchantOrderDetail;
+  connection: LiveConnectionState;
+}) {
+  const [receiptError, setReceiptError] = useState<string | null>(null);
   const failureReason = latestFailureReason(order.timeline);
   const delivered = [...order.timeline].reverse().find((entry) => entry.status === 'DELIVERED');
 
@@ -96,8 +140,14 @@ function Details({ order }: { order: MerchantOrderDetail }) {
             Created {formatDate(order.createdAt)}, {formatTime(order.createdAt)}
           </p>
         </div>
-        <StatusPill visual={statusVisual(order.status)} />
+        <div className="flex flex-wrap items-center gap-3">
+          <LiveIndicator state={connection} />
+          <StatusPill visual={statusVisual(order.status)} />
+          <ReceiptButton trackingNumber={order.trackingNumber} onError={setReceiptError} />
+        </div>
       </header>
+
+      {receiptError && <Alert tone="error">Could not download the receipt: {receiptError}</Alert>}
 
       {failureReason && (
         <p role="status" className="rounded-lg bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -156,7 +206,16 @@ function Details({ order }: { order: MerchantOrderDetail }) {
   );
 }
 
-/** One of the merchant's orders: addresses, parcel details, progress and status history. */
+/** The order, kept up to date from its live status stream. */
+function LiveOrderDetails({ initial }: { initial: MerchantOrderDetail }) {
+  const { order, connection } = useLiveOrder(initial);
+  return <Details order={order} connection={connection} />;
+}
+
+/**
+ * One of the merchant's orders: addresses, parcel details, progress and status history, with live
+ * status changes and the receipt download.
+ */
 export default function OrderDetailsPage() {
   const { trackingNumber = '' } = useParams();
   const order = useApiData(trackingNumber, () => merchantPortalApi.getOrder(trackingNumber));
@@ -190,5 +249,5 @@ export default function OrderDetailsPage() {
     );
   }
 
-  return <Details order={order.data} />;
+  return <LiveOrderDetails key={order.data.trackingNumber} initial={order.data} />;
 }

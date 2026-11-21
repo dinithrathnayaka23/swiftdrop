@@ -46,6 +46,14 @@ export const merchantPortalApi = {
     }
   },
 
+  /** The order's receipt PDF; 404 when it doesn't exist or isn't this merchant's. */
+  downloadReceipt: (trackingNumber: string) =>
+    request(() =>
+      apiClient.get<Blob>(`/merchant/orders/${encodeURIComponent(trackingNumber)}/receipt`, {
+        responseType: 'blob',
+      }),
+    ),
+
   /** All API keys, newest first, including revoked and expired ones. */
   listApiKeys: () => request(() => apiClient.get<ApiKey[]>('/merchant/api-keys')),
 
